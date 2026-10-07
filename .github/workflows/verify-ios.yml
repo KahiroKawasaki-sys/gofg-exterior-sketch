@@ -29,3 +29,14 @@ jobs:
           -configuration Debug -destination 'generic/platform=iOS Simulator'
           -derivedDataPath "$RUNNER_TEMP/gofg-derived"
           CODE_SIGNING_ALLOWED=NO build
+
+      - name: iPad and iPhone WKWebView integration tests
+        run: python3 scripts/verify-simulators.py
+      - name: Preserve simulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-evidence
+          path: ${{ runner.temp }}/gofg-simulator-results
+          retention-days: 14
+          if-no-files-found: ignore

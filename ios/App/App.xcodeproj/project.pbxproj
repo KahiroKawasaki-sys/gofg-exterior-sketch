@@ -18,6 +18,9 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		299C8B7228D043B1977C9DE1 /* SketchViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55EF2206D9F470497FF8400 /* SketchViewController.swift */; };
 		EC38459E12F0436FA7063D44 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 83307E9C61AA46ECB51D8C87 /* PrivacyInfo.xcprivacy */; };
+		AC9A451EB9894D65A4C45D38 /* NativeTests.mdimporter in Copy Files */ = {isa = PBXBuildFile; fileRef = 1214D2FE4AFC46548C5EA8AF /* NativeTests.mdimporter */; };
+		893676088F2A478987EEC769 /* SketchIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 466AB1C315E44D92A0D1810D /* SketchIntegrationTests.swift */; };
+		A981104F43154F8BBB429DE6 /* site-plan.pdf in Resources */ = {isa = PBXBuildFile; fileRef = CDB614051E194D80994072E0 /* site-plan.pdf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +37,9 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		E55EF2206D9F470497FF8400 /* SketchViewController.swift */ = {isa = PBXFileReference; name = "SketchViewController.swift"; path = "SketchViewController.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 		83307E9C61AA46ECB51D8C87 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; name = "PrivacyInfo.xcprivacy"; path = "App/PrivacyInfo.xcprivacy"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		1214D2FE4AFC46548C5EA8AF /* NativeTests.mdimporter */ = {isa = PBXFileReference; name = "NativeTests.mdimporter"; path = "NativeTests.mdimporter"; sourceTree = BUILT_PRODUCTS_DIR; fileEncoding = undefined; lastKnownFileType = undefined; explicitFileType = "wrapper.cfbundle"; includeInIndex = 0; };
+		466AB1C315E44D92A0D1810D /* SketchIntegrationTests.swift */ = {isa = PBXFileReference; name = "SketchIntegrationTests.swift"; path = "NativeTests/SketchIntegrationTests.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
+		CDB614051E194D80994072E0 /* site-plan.pdf */ = {isa = PBXFileReference; name = "site-plan.pdf"; path = "NativeTests/site-plan.pdf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -42,6 +48,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8C793FEE7B12450DBE3BB42D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -62,6 +75,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				1214D2FE4AFC46548C5EA8AF /* NativeTests.mdimporter */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -115,6 +129,23 @@
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
 		};
+		4E7672AE437847B3AC16653A /* "NativeTests" */ = {
+			isa = PBXNativeTarget;
+			name = "NativeTests";
+			productName = "NativeTests";
+			productReference = 1214D2FE4AFC46548C5EA8AF;
+			productType = "com.apple.product-type.bundle.unit-test";
+			buildConfigurationList = 97425BCD25AF4D078F313597;
+			buildPhases = (
+				05631BB10691464EBF324F42 /* Sources */,
+				8C793FEE7B12450DBE3BB42D /* Frameworks */,
+				02E619AB199947E784DAB9CF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -148,6 +179,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				4E7672AE437847B3AC16653A /* "NativeTests" */,
 			);
 		};
 /* End PBXProject section */
@@ -167,6 +199,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		02E619AB199947E784DAB9CF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A981104F43154F8BBB429DE6 /* site-plan.pdf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -177,6 +217,14 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				299C8B7228D043B1977C9DE1 /* SketchViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		05631BB10691464EBF324F42 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				893676088F2A478987EEC769 /* SketchIntegrationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -354,6 +402,48 @@
 			};
 			name = Release;
 		};
+		C586F7FB095640F8838CCA37 /* Debug */ = {
+			name = Debug;
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_NAME = "NativeTests";
+				SKIP_INSTALL = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.kawakahi.gofgsketch.NativeTests";
+				GENERATE_INFOPLIST_FILE = YES;
+				SWIFT_VERSION = 5.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				CODE_SIGN_STYLE = Automatic;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/App";
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				PRODUCT_MODULE_NAME = NativeTests;
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)/PackageFrameworks";
+			};
+		};
+		F8B536731B7A4786985109E9 /* Release */ = {
+			name = Release;
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_NAME = "NativeTests";
+				SKIP_INSTALL = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.kawakahi.gofgsketch.NativeTests";
+				GENERATE_INFOPLIST_FILE = YES;
+				SWIFT_VERSION = 5.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				CODE_SIGN_STYLE = Automatic;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/App";
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				PRODUCT_MODULE_NAME = NativeTests;
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)/PackageFrameworks";
+			};
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -371,6 +461,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		97425BCD25AF4D078F313597 /* Build configuration list for PBXNativeTarget "NativeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C586F7FB095640F8838CCA37 /* Debug */,
+				F8B536731B7A4786985109E9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

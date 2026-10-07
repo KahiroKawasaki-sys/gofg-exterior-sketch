@@ -23,3 +23,5 @@ ios/App/App/config.xml
 *.mobileprovision
 ios/App/CapApp-SPM/.build/
 .DS_Store
+__pycache__/
+*.py[cod]

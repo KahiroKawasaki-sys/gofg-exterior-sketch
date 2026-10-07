@@ -50,7 +50,7 @@ it('Webは従来のa downloadを使い、ネイティブプラグインを呼ば
   const create = vi.fn(() => 'blob:local'), revoke = vi.fn();
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: create });
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revoke });
-  let downloaded = ''; vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () { downloaded = this.download; });
+  let downloaded = ''; vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { downloaded = this.download; });
   expect(await saveFile(new Blob(['x']), '図面.pdf')).toBe('saved'); expect(downloaded).toBe('図面.pdf');
   expect(mocks.write).not.toHaveBeenCalled(); expect(mocks.share).not.toHaveBeenCalled();
   vi.advanceTimersByTime(30000); expect(revoke).toHaveBeenCalledWith('blob:local');
