@@ -138,3 +138,12 @@ rhythm-health を参考に、次の 2 つを作る。
 - native判定をplatform.tsへ集約。書出しはCache保存→共有シート、キャンセルと失敗時も一時ファイルを片付ける。
 - native専用CSSでセーフエリアとキーボードを扱う。WKWebViewのページ拡大・スクロール・手書き変換を無効化し、キャンバス内の2本指操作は維持する。
 - シミュレータとApple Pencil実機の確認結果は区別して記録する。Windows単体でiOS検証済みとは扱わない。
+
+### 2026-10-07 CI初回の修正と本人作業の更新
+
+- 非公開リポジトリ作成とpush完了：https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch （PRIVATEをAPIで確認）。
+- 79単体テスト成功。テスト側の型注記を修正し、Webとアプリ用ビルドを成功確認。
+- Mac CIの最初のビルドは、PrivacyInfo.xcprivacyへの参照が実際の保存先と違って停止した。SOURCE_ROOTからの正しい相対パスへ修正。不要な生成画像とセットアップ用スクリプトを整理。
+- Xcode生成補助ライブラリがテスト製品に誤った拡張子を付けたため、NativeTests.xctestへ修正。アプリ実装の動作とは別のビルド構成の問題。
+- 本人が「おまえがやってくんない？」と指示。AppleのApp ID／アプリ作成とGitHubの設定操作はCodexが行う範囲に更新。Appleログインは本人入力待ち。秘密情報を読み取らないルールは維持。
+- 初回testflight（upload=false）は未設定シークレット4項目のチェックで停止。IPA生成・Appleアップロードなし。

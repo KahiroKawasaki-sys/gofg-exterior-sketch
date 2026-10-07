@@ -18,7 +18,7 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		299C8B7228D043B1977C9DE1 /* SketchViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55EF2206D9F470497FF8400 /* SketchViewController.swift */; };
 		EC38459E12F0436FA7063D44 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 83307E9C61AA46ECB51D8C87 /* PrivacyInfo.xcprivacy */; };
-		AC9A451EB9894D65A4C45D38 /* NativeTests.mdimporter in Copy Files */ = {isa = PBXBuildFile; fileRef = 1214D2FE4AFC46548C5EA8AF /* NativeTests.mdimporter */; };
+		AC9A451EB9894D65A4C45D38 /* NativeTests.xctest in Copy Files */ = {isa = PBXBuildFile; fileRef = 1214D2FE4AFC46548C5EA8AF /* NativeTests.xctest */; };
 		893676088F2A478987EEC769 /* SketchIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 466AB1C315E44D92A0D1810D /* SketchIntegrationTests.swift */; };
 		A981104F43154F8BBB429DE6 /* site-plan.pdf in Resources */ = {isa = PBXBuildFile; fileRef = CDB614051E194D80994072E0 /* site-plan.pdf */; };
 /* End PBXBuildFile section */
@@ -35,11 +35,11 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
-		E55EF2206D9F470497FF8400 /* SketchViewController.swift */ = {isa = PBXFileReference; name = "SketchViewController.swift"; path = "SketchViewController.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
-		83307E9C61AA46ECB51D8C87 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; name = "PrivacyInfo.xcprivacy"; path = "App/PrivacyInfo.xcprivacy"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
-		1214D2FE4AFC46548C5EA8AF /* NativeTests.mdimporter */ = {isa = PBXFileReference; name = "NativeTests.mdimporter"; path = "NativeTests.mdimporter"; sourceTree = BUILT_PRODUCTS_DIR; fileEncoding = undefined; lastKnownFileType = undefined; explicitFileType = "wrapper.cfbundle"; includeInIndex = 0; };
-		466AB1C315E44D92A0D1810D /* SketchIntegrationTests.swift */ = {isa = PBXFileReference; name = "SketchIntegrationTests.swift"; path = "NativeTests/SketchIntegrationTests.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
-		CDB614051E194D80994072E0 /* site-plan.pdf */ = {isa = PBXFileReference; name = "site-plan.pdf"; path = "NativeTests/site-plan.pdf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		E55EF2206D9F470497FF8400 /* SketchViewController.swift */ = {isa = PBXFileReference; name = "SketchViewController.swift"; path = "SketchViewController.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; includeInIndex = 0; };
+		83307E9C61AA46ECB51D8C87 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; name = "PrivacyInfo.xcprivacy"; path = "App/PrivacyInfo.xcprivacy"; sourceTree = SOURCE_ROOT; lastKnownFileType = unknown; includeInIndex = 0; };
+		1214D2FE4AFC46548C5EA8AF /* NativeTests.xctest */ = {isa = PBXFileReference; name = "NativeTests.xctest"; path = "NativeTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; explicitFileType = "wrapper.cfbundle"; includeInIndex = 0; };
+		466AB1C315E44D92A0D1810D /* SketchIntegrationTests.swift */ = {isa = PBXFileReference; name = "SketchIntegrationTests.swift"; path = "NativeTests/SketchIntegrationTests.swift"; sourceTree = SOURCE_ROOT; fileEncoding = 4; lastKnownFileType = sourcecode.swift; includeInIndex = 0; };
+		CDB614051E194D80994072E0 /* site-plan.pdf */ = {isa = PBXFileReference; name = "site-plan.pdf"; path = "NativeTests/site-plan.pdf"; sourceTree = SOURCE_ROOT; lastKnownFileType = unknown; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,7 +75,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
-				1214D2FE4AFC46548C5EA8AF /* NativeTests.mdimporter */,
+				1214D2FE4AFC46548C5EA8AF /* NativeTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
