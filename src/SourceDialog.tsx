@@ -1,0 +1,15 @@
+import {useEffect,useState} from 'react';
+import {prepareImage,type Source,type SourceImage} from './io';
+export function SourceDialog({source,hasPlan,apply,cancel}:{source:Source;hasPlan:boolean;apply:(image:SourceImage,page:number,mode:'new'|'replace',calibrate:boolean)=>Promise<void>;cancel:()=>void}){
+ const [page,setPage]=useState(1),[rotation,setRotation]=useState(0),[crop,setCrop]=useState({left:0,top:0,right:0,bottom:0}),[base,setBase]=useState<SourceImage|null>(null),[preview,setPreview]=useState<SourceImage|null>(null),[mode,setMode]=useState<'new'|'replace'>(hasPlan?'replace':'new'),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ useEffect(()=>{let active=true;setBase(null);setPreview(null);setError('');source.render(page).then(v=>{if(active)setBase(v);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[source,page]);
+ useEffect(()=>{let active=true;setPreview(null);if(base)prepareImage(base,rotation,crop).then(v=>{if(active){setPreview(v);setError('');}}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[base,rotation,crop]);
+ const commit=async(calibrate:boolean)=>{if(!preview)return;setBusy(true);try{await apply(preview,page,mode,calibrate);}catch(e){setError(e instanceof Error?e.message:'取り込みに失敗しました');}finally{setBusy(false);}};
+ return <><p>下絵を整えてから、その上に描き始めます。原本も保存します。</p>{hasPlan&&<label className="field"><span>取り込み先</span><select aria-label="下絵の取り込み先" value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="replace">現在の案件の下絵にする（描いた内容を保持）</option><option value="new">新しい案件として作る</option></select></label>}
+ <div className="settings-row"><label className="field"><span>PDFのページ</span><select value={page} onChange={e=>setPage(Number(e.target.value))}>{Array.from({length:Math.min(source.pages,1000)},(_,i)=><option key={i} value={i+1}>{i+1} / {source.pages}ページ</option>)}</select></label><label className="field"><span>向き</span><select value={rotation} onChange={e=>setRotation(Number(e.target.value))}>{[0,90,180,270].map(v=><option key={v} value={v}>{v}°回転</option>)}</select></label></div>
+ <details><summary>余白を切り抜く</summary><div className="crop-fields">{([['left','左'],['right','右'],['top','上'],['bottom','下']] as const).map(([key,label])=><label className="field" key={key}><span>{label}の余白（%）</span><input type="number" min="0" max="90" value={crop[key]} onChange={e=>setCrop({...crop,[key]:Number(e.target.value)})}/></label>)}</div></details>
+ <div className="source-preview">{preview?<img src={preview.src} alt="取り込む下絵のプレビュー"/>:<span>{error?'読み込みを確認してください':'下絵を準備中…'}</span>}</div>{error&&<p role="alert" className="inline-error">{error}</p>}
+ <button className="primary full" disabled={!preview||busy} onClick={()=>void commit(false)}>{busy?'取り込み中…':'この下絵で描き始める'}</button>
+ {mode==='new'&&<button className="full" disabled={!preview||busy} onClick={()=>void commit(true)}>基準寸法を設定してから始める</button>}
+ <button className="full" disabled={busy} onClick={cancel}>キャンセル</button><p className="small-note">{mode==='replace'?'既存の線・部品の実寸は保持します。差し替え後は設定の「下絵だけの基準寸法」で縮尺を照合してください。下絵は取り消し可能です。':'寸法は後から設定できます。寸法未設定でも手描きと出力ができます。'}</p></>;
+}

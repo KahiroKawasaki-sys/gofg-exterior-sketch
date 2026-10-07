@@ -1,0 +1,9 @@
+<!doctype html><html lang="ja"><head><meta charset="UTF-8"><title>lib</title></head><body style="margin:0;background:#fff"><div id="r"></div><script type="module">
+import {builtinLibrary,symbolMarkup} from '/src/v3/library.ts';
+import {TEXTURES,builtinTexture} from '/src/v3/textures.ts';
+const L=builtinLibrary();
+let h='<svg width="0" height="0" style="position:absolute"><defs>'+L.map(symbolMarkup).join('')+'</defs></svg><div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px;font:10px sans-serif">';
+for(const l of L){const k=Math.min(110/l.w,110/l.h,1.4);h+=`<div style="width:120px;text-align:center"><svg width="${l.w*k}" height="${l.h*k}" viewBox="0 0 ${l.vw} ${l.vh}" style="color:#222"><use href="#lib-${l.id}"/></svg><div>${l.name}</div></div>`;}
+for(const t of TEXTURES){h+=`<div style="width:120px;text-align:center"><img src="${builtinTexture(t.id)}" width="110"><div>${t.name}</div></div>`}
+document.getElementById('r').innerHTML=h+'</div>';
+</script></body></html>
