@@ -31,7 +31,7 @@ final class SketchViewController: CAPBridgeViewController, UIScribbleInteraction
     private func disableScribble(in view: UIView) {
         // UIIndirectScribbleInteraction is imported as a generic class by recent SDKs.
         // Identify the public Objective-C class without depending on its delegate type.
-        let indirect = NSClassFromString("UIIndirectScribbleInteraction")
+        let indirect: AnyClass? = NSClassFromString("UIIndirectScribbleInteraction")
         for interaction in view.interactions {
             let isIndirect = indirect.map { (interaction as? NSObject)?.isKind(of: $0) == true } ?? false
             guard interaction is UIScribbleInteraction || isIndirect else { continue }

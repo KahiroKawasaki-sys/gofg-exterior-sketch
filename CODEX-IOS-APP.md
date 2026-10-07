@@ -147,3 +147,12 @@ rhythm-health を参考に、次の 2 つを作る。
 - Xcode生成補助ライブラリがテスト製品に誤った拡張子を付けたため、NativeTests.xctestへ修正。アプリ実装の動作とは別のビルド構成の問題。
 - 本人が「おまえがやってくんない？」と指示。AppleのApp ID／アプリ作成とGitHubの設定操作はCodexが行う範囲に更新。Appleログインは本人入力待ち。秘密情報を読み取らないルールは維持。
 - 初回testflight（upload=false）は未設定シークレット4項目のチェックで停止。IPA生成・Appleアップロードなし。
+
+### 2026-10-08 Apple登録とシミュレータの検証
+
+- 本人のAppleログイン後、App ID com.kawakahi.gofgsketchを登録。Developer上の説明は英数字制約があるためGofg Exterior Sketch。
+- App Store Connectに外構スケッチ／日本語／SKU gofg-exterior-sketchを作成。https://appstoreconnect.apple.com/apps/6820144141/distribution/info
+- 利用者一覧は本人のAccount Holder兼管理者1名だけ。アプリ作成によって他者への共有は増えていない。
+- Mac上でnpm ci、79テスト、Webビルド、アプリビルド、cap sync、署名なしiOSシミュレータビルド成功。
+- シミュレータ操作テストの93行目が停止。ページ拡大用の認識器が存在しない場合まで「有効」と扱っていた検証を修正。存在する場合は引き続き無効を要求する。
+- 操作テスト失敗時にも診断JSON・画面証拠を保存するよう検証スクリプトを更新。次回からCIのログで失敗理由を確認できる。

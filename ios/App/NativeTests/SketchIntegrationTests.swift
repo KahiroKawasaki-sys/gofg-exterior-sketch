@@ -18,6 +18,7 @@ final class SketchIntegrationTests: XCTestCase {
         try waitJS("!!document.querySelector('.v3-home') || !!document.querySelector('.v3-stage')")
     }
 
+    @discardableResult
     func js(_ code: String) throws -> Any? {
         let done = expectation(description: "WKWebView JavaScript")
         var result: Any?, failure: Error?
@@ -90,7 +91,8 @@ final class SketchIntegrationTests: XCTestCase {
         XCTAssertEqual(web.url?.host, "localhost")
         XCTAssertFalse(web.scrollView.isScrollEnabled)
         XCTAssertFalse(web.scrollView.bounces)
-        XCTAssertFalse(web.scrollView.pinchGestureRecognizer?.isEnabled ?? true)
+        // A missing recognizer also means page pinch is disabled.
+        XCTAssertFalse(web.scrollView.pinchGestureRecognizer?.isEnabled ?? false)
         XCTAssertFalse(web.allowsBackForwardNavigationGestures)
         XCTAssertFalse(controller.scribbleInteraction(UIScribbleInteraction(delegate: controller), shouldBeginAt: .zero))
         snapshot("home")
