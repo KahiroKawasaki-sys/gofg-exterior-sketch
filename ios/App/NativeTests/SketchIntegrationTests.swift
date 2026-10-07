@@ -34,7 +34,9 @@ final class SketchIntegrationTests: XCTestCase {
             if (try js(expression) as? Bool) == true { return }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
-        XCTFail("Timed out waiting for: \(expression)")
+        snapshot("timeout")
+        let visibleState = (try? js("document.body.innerText.slice(-2400)")) as? String ?? "unavailable"
+        XCTFail("Timed out waiting for: \(expression); visible state: \(visibleState)")
     }
 
     func click(_ label: String) throws {
@@ -94,6 +96,25 @@ final class SketchIntegrationTests: XCTestCase {
         """)
     }
 
+    func selectPhotoArea() throws {
+        // Fill starts a fresh selection. Brush then extends that selected area.
+        try click("塗りつぶし追加")
+        try waitJS("[...document.querySelectorAll('.v3-pbtn.on')].some(b => b.textContent === '塗りつぶし追加')")
+        try js("""
+        (() => {
+          const svg = document.querySelector('.v3-svg'), image = document.querySelector('.v3-stage image').getBoundingClientRect();
+          const original = svg.setPointerCapture; svg.setPointerCapture = () => {};
+          for (const type of ['pointerdown','pointerup']) svg.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:78,pointerType:'pen',clientX:image.left+image.width*0.3,clientY:image.top+image.height*0.5,button:0,pressure:0.5}));
+          svg.setPointerCapture = original; return true;
+        })()
+        """)
+        try waitJS("document.querySelector('.v3-toast')?.textContent.includes('選択範囲を追加') === true || document.querySelector('.v3-toast')?.textContent.includes('輪郭の内側') === true")
+        try click("選択ブラシ")
+        try waitJS("[...document.querySelectorAll('.v3-pbtn.on')].some(b => b.textContent === '選択ブラシ')")
+        try syntheticPenStroke()
+        try waitJS("document.querySelector('.v3-badge')?.textContent.startsWith('選択中') === true")
+    }
+
     func testPersistenceAfterRelaunch() throws {
         try waitJS("!!document.querySelector('.v3-doc')")
         snapshot("home-after-process-relaunch")
@@ -122,29 +143,40 @@ final class SketchIntegrationTests: XCTestCase {
         try fileInput(0, data: pdf, name: "site-plan.pdf", mime: "application/pdf")
         try waitJS("!!document.querySelector('.v3-stage image[href^=\"data:image\"]')")
         try click("パネル") // Close the initial object panel for a full canvas snapshot.
+        try waitJS("!document.querySelector('.v3-side')")
+        try click("表示を全体に合わせる")
+        try waitJS("(() => { const svg = document.querySelector('.v3-svg').getBoundingClientRect(); const image = document.querySelector('.v3-stage image').getBoundingClientRect(); return image.left >= svg.left && image.right <= svg.right && image.top >= svg.top && image.bottom <= svg.bottom; })()")
         snapshot("pdf-underlay")
 
         let offset = web.scrollView.contentOffset
         try syntheticPenStroke()
         XCTAssertEqual(web.scrollView.contentOffset, offset)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         snapshot("drawing")
 
         // Exercise all four editor inputs in addition to both home inputs.
         try fileInput(0, data: pdf, name: "site-plan-replaced.pdf", mime: "application/pdf")
+        // The fixture has two pages; use the same page chooser as a person.
+        try waitJS("!!document.querySelector('[role=dialog][aria-label=\"ページを選ぶ\"]')")
+        snapshot("pdf-page-chooser")
+        try click("読み込む")
         try waitJS("document.querySelector('.v3-toast')?.textContent.includes('下絵を読み込みました') === true")
         let sampleImage = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image { context in
             UIColor.systemGreen.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
         }
         let photo = try XCTUnwrap(sampleImage.pngData())
-        try click("AIツール"); try click("選択ブラシ"); try syntheticPenStroke()
+        try click("AIツール")
+        try waitJS("document.querySelector('.v3-phead')?.textContent.includes('AIツール') === true")
+        try selectPhotoArea()
         try fileInput(1, data: photo, name: "site-photo.png", mime: "image/png")
         try waitJS("document.querySelector('.v3-side')?.textContent.includes('site-photo') === true")
-        try syntheticPenStroke()
+        try selectPhotoArea()
         try fileInput(2, data: photo, name: "camera-shot.png", mime: "image/png")
         try waitJS("document.querySelector('.v3-side')?.textContent.includes('camera-shot') === true")
         snapshot("photo-and-camera-inputs")
         try click("設定")
+        try waitJS("document.querySelector('.v3-phead')?.textContent.includes('設定') === true")
         XCTAssertTrue((try js("!document.querySelector('a[href=\"?v=2\"]')") as? Bool) == true)
         let png = try shareFile("PNG", extension: "png")
         XCTAssertEqual(Array(png.prefix(8)), [137,80,78,71,13,10,26,10])
