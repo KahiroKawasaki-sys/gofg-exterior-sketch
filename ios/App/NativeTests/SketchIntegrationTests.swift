@@ -66,12 +66,33 @@ final class SketchIntegrationTests: XCTestCase {
         let iterator = try XCTUnwrap(FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil))
         let url = try XCTUnwrap(iterator.allObjects.compactMap { $0 as? URL }.first { $0.pathExtension == ext })
         let data = try Data(contentsOf: url)
-        activity.dismiss(animated: false)
+        let dismissed = expectation(description: "Share sheet dismissed")
+        activity.dismiss(animated: false) { dismissed.fulfill() }
+        wait(for: [dismissed], timeout: 10)
         activity.completionWithItemsHandler?(nil, false, nil, nil)
-        try waitJS("document.querySelector('.v3-toast')?.textContent.includes('キャンセル') ?? true")
+        // Await this share's cleanup, rather than a toast left by the previous share.
+        let cleanupDeadline = Date().addingTimeInterval(10)
+        while Date() < cleanupDeadline {
+            if (try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)).isEmpty { break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).isEmpty)
+        XCTAssertNil(controller.presentedViewController)
         return data
     }
 
+
+    func syntheticPenStroke() throws {
+        try js("""
+        (() => {
+          const svg = document.querySelector('.v3-svg'); const r = svg.getBoundingClientRect();
+          const original = svg.setPointerCapture; svg.setPointerCapture = () => {};
+          const send = (type,x,y,p) => { const e = new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:77,pointerType:'pen',clientX:r.left+x,clientY:r.top+y,button:0,pressure:p}); e.getCoalescedEvents = () => [e]; svg.dispatchEvent(e); };
+          send('pointerdown',80,100,0.1); send('pointermove',120,140,0.3); send('pointermove',180,180,0.9); send('pointerup',220,220,0.5);
+          svg.setPointerCapture = original; return true;
+        })()
+        """)
+    }
 
     func testPersistenceAfterRelaunch() throws {
         try waitJS("!!document.querySelector('.v3-doc')")
@@ -104,17 +125,25 @@ final class SketchIntegrationTests: XCTestCase {
         snapshot("pdf-underlay")
 
         let offset = web.scrollView.contentOffset
-        try js("""
-        (() => {
-          const svg = document.querySelector('.v3-svg'); const r = svg.getBoundingClientRect();
-          const original = svg.setPointerCapture; svg.setPointerCapture = () => {};
-          const send = (type,x,y,p) => { const e = new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:77,pointerType:'pen',clientX:r.left+x,clientY:r.top+y,button:0,pressure:p}); e.getCoalescedEvents = () => [e]; svg.dispatchEvent(e); };
-          send('pointerdown',80,100,0.1); send('pointermove',120,140,0.3); send('pointermove',180,180,0.9); send('pointerup',220,220,0.5);
-          svg.setPointerCapture = original; return true;
-        })()
-        """)
+        try syntheticPenStroke()
         XCTAssertEqual(web.scrollView.contentOffset, offset)
         snapshot("drawing")
+
+        // Exercise all four editor inputs in addition to both home inputs.
+        try fileInput(0, data: pdf, name: "site-plan-replaced.pdf", mime: "application/pdf")
+        try waitJS("document.querySelector('.v3-toast')?.textContent.includes('下絵を読み込みました') === true")
+        let sampleImage = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image { context in
+            UIColor.systemGreen.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+        }
+        let photo = try XCTUnwrap(sampleImage.pngData())
+        try click("AIツール"); try click("選択ブラシ"); try syntheticPenStroke()
+        try fileInput(1, data: photo, name: "site-photo.png", mime: "image/png")
+        try waitJS("document.querySelector('.v3-side')?.textContent.includes('site-photo') === true")
+        try syntheticPenStroke()
+        try fileInput(2, data: photo, name: "camera-shot.png", mime: "image/png")
+        try waitJS("document.querySelector('.v3-side')?.textContent.includes('camera-shot') === true")
+        snapshot("photo-and-camera-inputs")
         try click("設定")
         XCTAssertTrue((try js("!document.querySelector('a[href=\"?v=2\"]')") as? Bool) == true)
         let png = try shareFile("PNG", extension: "png")
@@ -124,19 +153,25 @@ final class SketchIntegrationTests: XCTestCase {
         let json = try shareFile("編集データを書き出す", extension: "json")
         let doc = try XCTUnwrap(JSONSerialization.jsonObject(with: json) as? [String: Any])
         XCTAssertEqual(doc["schema"] as? Int, 3)
+        XCTAssertEqual((doc["underlay"] as? [String: Any])?["name"] as? String, "site-plan-replaced.pdf")
         let layers = try XCTUnwrap(doc["layers"] as? [[String: Any]])
         let strokes = layers.flatMap { $0["items"] as? [[String: Any]] ?? [] }.filter { $0["type"] as? String == "stroke" }
         XCTAssertFalse(strokes.isEmpty)
+        let textures = layers.flatMap { $0["items"] as? [[String: Any]] ?? [] }.filter { $0["type"] as? String == "texture" }
+        XCTAssertEqual(textures.count, 2)
         let pressures = (strokes.last?["pts"] as? [[String: Any]] ?? []).compactMap { $0["p"] as? Double }
         XCTAssertTrue(pressures.contains(where: { $0 > 0.8 }))
         XCTAssertTrue(pressures.contains(where: { $0 < 0.2 }))
 
         // Editor has four inputs: underlay, photos, camera, JSON.
         try fileInput(3, data: json, name: "site-plan.garden3.json", mime: "application/json")
+        try waitJS("document.querySelector('.v3-toast')?.textContent.includes('編集データを読み込みました') === true")
         try click("案件一覧"); try waitJS("!!document.querySelector('.v3-home')")
         // Reload the actual app entry and reconnect to the same IndexedDB.
+        try js("window.__gofgReloadToken = 'before-reload'")
         controller.loadWebView()
-        try waitJS("!!document.querySelector('.v3-doc')")
+        // The old home also has .v3-doc; wait for a fresh page before importing.
+        try waitJS("!window.__gofgReloadToken && !!document.querySelector('.v3-doc')")
         snapshot("saved-after-reload")
         try fileInput(1, data: json, name: "site-plan.garden3.json", mime: "application/json")
         try waitJS("!!document.querySelector('.v3-stage')")

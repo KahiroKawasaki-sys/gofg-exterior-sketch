@@ -37,6 +37,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-simulator-evidence
-          path: ${{ runner.temp }}/gofg-simulator-results
+          path: |
+            ${{ runner.temp }}/gofg-simulator-results/*-screenshots/**
+            ${{ runner.temp }}/gofg-simulator-results/*.png
+            ${{ runner.temp }}/gofg-simulator-results/*.json
           retention-days: 14
+          if-no-files-found: ignore
+      - name: Preserve Xcode diagnostic bundles
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-xcode-results
+          path: ${{ runner.temp }}/gofg-simulator-results/*.xcresult/**
+          retention-days: 7
           if-no-files-found: ignore

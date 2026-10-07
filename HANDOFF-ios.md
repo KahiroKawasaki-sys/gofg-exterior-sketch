@@ -19,14 +19,14 @@
 - 改修後：79テスト成功。Webとアプリ用の型検査・ビルド成功。署名検査のPythonテスト7件成功。
 - 開発依存の警告を修正。npm auditは0件。
 - Macシミュレータ：CI実行中。結果を作業記録へ追記し、未確認を成功と扱わない。
-- 署名済みIPA：未検証。初回upload=falseはGitHub Secrets4項目未設定を検出し停止。IPA生成・Appleアップロードなし。
+- 署名済みIPA：upload=falseの[署名検査](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37644295472)成功。署名／配布プロファイル／権限／Universalを検査。Appleへのアップロードなし。
 
 ## Apple登録・署名設定の現状
 
 - App ID登録済み：com.kawakahi.gofgsketch（Developerの説明：Gofg Exterior Sketch）。
 - App Store Connect作成済み：[外構スケッチ](https://appstoreconnect.apple.com/apps/6820144141/distribution/info)。日本語、SKU gofg-exterior-sketch。
 - GitHub SecretsのAPPLE_TEAM_ID／ASC_KEY_ID／ASC_ISSUER_IDは登録済み。値を文書へ複製しない。
-- ASC_PRIVATE_KEYは本人入力待ち。既存のGitHub Secretは値を取得できないため、本人が保存済み.p8の内容を新リポジトリのSecretへ入力する。
+- ASC_PRIVATE_KEYも本人が入力済み。4つのSecret名の存在を確認。値は取得していない。
 - [入力画面](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/settings/secrets/actions/new)のNameはASC_PRIVATE_KEY。キーをチャットへ送らない。
 
 ## 設定の担当
@@ -34,7 +34,7 @@
 1. 本人のAppleログイン完了。パスワード・確認コードはチャットへ送らない。
 2. CodexがApp IDとApp Store Connectのアプリ登録を完了（2026-10-07本人指定／2026-10-08完了）。
 3. CodexがGitHub設定を準備。秘密キーの値が必要な入力は本人がGitHub画面で行う。登録済みSecretからの取得は不可。
-4. 設定後、Codexがupload=falseの署名検査を実行する。
+4. Codexのupload=false署名検査は成功済み。
 5. 本人がupload=trueを実行し、Apple処理後にTestFlightの内部テスターを追加する。
 
 ## iPad実機チェック
