@@ -59,6 +59,7 @@ final class SketchIntegrationTests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
         let activity = try XCTUnwrap(controller.presentedViewController as? UIActivityViewController)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.6))
         snapshot("share-\(ext)")
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("exports")
         let iterator = try XCTUnwrap(FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil))
@@ -68,6 +69,20 @@ final class SketchIntegrationTests: XCTestCase {
         activity.completionWithItemsHandler?(nil, false, nil, nil)
         try waitJS("document.querySelector('.v3-toast')?.textContent.includes('キャンセル') ?? true")
         return data
+    }
+
+
+    func testPersistenceAfterRelaunch() throws {
+        try waitJS("!!document.querySelector('.v3-doc')")
+        snapshot("home-after-process-relaunch")
+        try js("(() => { const doc = [...document.querySelectorAll('.v3-doc')].find(d => d.textContent.includes('site-plan')); if (!doc) throw Error('Persisted drawing missing'); doc.click(); return true; })()")
+        try waitJS("!!document.querySelector('.v3-stage')")
+        let json = try shareFile("編集データを書き出す", extension: "json")
+        let doc = try XCTUnwrap(JSONSerialization.jsonObject(with: json) as? [String: Any])
+        let layers = try XCTUnwrap(doc["layers"] as? [[String: Any]])
+        XCTAssertTrue(layers.flatMap { $0["items"] as? [[String: Any]] ?? [] }.contains { $0["type"] as? String == "stroke" })
+        XCTAssertNotNil(doc["underlay"])
+        snapshot("drawing-after-process-relaunch")
     }
 
     func testOfflineDrawingAndRoundTrip() throws {
@@ -89,9 +104,9 @@ final class SketchIntegrationTests: XCTestCase {
         let offset = web.scrollView.contentOffset
         try js("""
         (() => {
-          const svg = document.querySelector('.v3-stage > svg'); const r = svg.getBoundingClientRect();
+          const svg = document.querySelector('.v3-svg'); const r = svg.getBoundingClientRect();
           const original = svg.setPointerCapture; svg.setPointerCapture = () => {};
-          const send = (type,x,y,p) => svg.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:77,pointerType:'pen',clientX:r.left+x,clientY:r.top+y,button:0,pressure:p}));
+          const send = (type,x,y,p) => { const e = new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:77,pointerType:'pen',clientX:r.left+x,clientY:r.top+y,button:0,pressure:p}); e.getCoalescedEvents = () => [e]; svg.dispatchEvent(e); };
           send('pointerdown',80,100,0.1); send('pointermove',120,140,0.3); send('pointermove',180,180,0.9); send('pointerup',220,220,0.5);
           svg.setPointerCapture = original; return true;
         })()
