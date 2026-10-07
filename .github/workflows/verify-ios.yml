@@ -1,0 +1,31 @@
+name: Verify iOS source
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: gofg-verify-ios
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run build:app
+      - run: npx cap sync ios
+      - name: Unsigned iOS simulator build
+        run: >-
+          xcodebuild -quiet -project ios/App/App.xcodeproj -scheme App
+          -configuration Debug -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath "$RUNNER_TEMP/gofg-derived"
+          CODE_SIGNING_ALLOWED=NO build

@@ -21,11 +21,11 @@ import { saveDoc, listLibrary, saveLibItem, deleteLibItem, validDoc } from './st
 import { LayerPanel, ObjectPanel, GuidePanel, AIPanel, HistoryPanel, TextsPanel, TexturePicker, guideDefaults, type EditorApi, type Job, type GenKind } from './Panels';
 import { TextDialog, PromptDialog, Menu, Modal, type Field, type TextValue } from './Dialogs';
 import { readSource } from '../io';
+import { isNativeApp, saveFile } from './platform';
 
 const VERSION = 'ver 2026.10.06-01 (home-app)';
 type PanelId = 'objects' | 'layers' | 'guides' | 'ai' | 'settings' | 'history' | 'texts' | null;
 
-function download(blob: Blob, name: string) { const u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 30000); }
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'gaikou';
 
 export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }) {
@@ -166,10 +166,10 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const exportAs = async (kind: 'png' | 'a4' | 'a3' | 'json') => {
     setMenu(null);
     try {
-      if (kind === 'json') return download(new Blob([JSON.stringify({ ...doc, view })], { type: 'application/json' }), safeName(doc.name) + '.garden3.json');
+      if (kind === 'json') return await saveFile(new Blob([JSON.stringify({ ...doc, view })], { type: 'application/json' }), safeName(doc.name) + '.garden3.json');
       toast('書き出し中…');
       const blob = kind === 'png' ? await exportImage(doc, lib, ctx) : await exportPDF(doc, lib, ctx, kind === 'a3' ? 'A3' : 'A4');
-      download(blob, `${safeName(doc.name)}.${kind === 'png' ? 'png' : 'pdf'}`); toast('書き出しました');
+      const result = await saveFile(blob, `${safeName(doc.name)}.${kind === 'png' ? 'png' : 'pdf'}`); toast(result === 'cancelled' ? '書き出しをキャンセルしました' : '書き出しました');
     } catch (err) { toast(err instanceof Error ? err.message : '書き出しに失敗しました'); }
   };
 
@@ -230,7 +230,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     applyJob: j => applyTexture(j.tex, j.texName, j.name),
     pickImage: rect => setMenu({ id: 'apply', rect }),
     activeTex, setActiveTex, recallSelection: async t => { setAiSel(await Selection.fromImage(t.mask, { x: t.x, y: t.y, w: t.w, h: t.h })); setAiVer(v => v + 1); toast('選択範囲を呼び出しました'); },
-    saveTexture: async t => { const svg = docSVG({ ...doc, underlay: undefined, layers: [{ id: 'x', name: 'x', kind: 'texture', visible: true, locked: false, opacity: 1, items: [t] }] }, lib, ctx, { x: t.x, y: t.y, w: t.w, h: t.h }, { pxW: t.w * 2, pxH: t.h * 2 }); const c = await rasterize(svg, t.w * 2, t.h * 2); c.toBlob(b => b && download(b, safeName(t.texName) + '-texture.png')); },
+    saveTexture: async t => { const svg = docSVG({ ...doc, underlay: undefined, layers: [{ id: 'x', name: 'x', kind: 'texture', visible: true, locked: false, opacity: 1, items: [t] }] }, lib, ctx, { x: t.x, y: t.y, w: t.w, h: t.h }, { pxW: t.w * 2, pxH: t.h * 2 }); const c = await rasterize(svg, t.w * 2, t.h * 2); c.toBlob(b => { if (b) void saveFile(b, safeName(t.texName) + '-texture.png').catch(() => toast('テクスチャを書き出せませんでした')); }); },
     aiKeyword, openPanel: p => setPanel(p as PanelId),
     history: D.history, restore: D.restore,
     editText: id => { const f = findItem(doc, id); if (f && f.item.type === 'text') setTextDlg({ p: { x: f.item.x, y: f.item.y }, edit: f.item }); },
@@ -260,7 +260,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const openMenu = (id: string) => (e: React.MouseEvent) => setMenu(m => m?.id === id ? null : { id, rect: (e.currentTarget as HTMLElement).getBoundingClientRect() });
   const panelBtn = (p: PanelId) => () => setPanel(cur => cur === p ? null : p);
   const P = (p: PanelId) => panel === p ? ' on' : '';
-  const fs = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => toast('全画面にできませんでした')); };
+  const fs = () => { if (isNativeApp()) return toast('アプリは全画面で表示しています'); if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => toast('全画面にできませんでした')); };
   const selBox = sel.length ? (() => { const its = selItems(); return its.length ? unionBox(its.map(itemBox)) : null; })() : null;
 
   return (
@@ -445,7 +445,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         <section className="v3-card"><h4>書き出し</h4>
           <div className="v3-row wrap"><button className="v3-btn" onClick={() => exportAs('png')}>PNG</button><button className="v3-btn" onClick={() => exportAs('a4')}>PDF A4</button><button className="v3-btn" onClick={() => exportAs('a3')}>PDF A3</button><button className="v3-btn" onClick={() => exportAs('json')}>編集データ</button></div>
         </section>
-        <section className="v3-card"><h4>旧バージョン</h4><p className="v3-note">v0.2（下絵の原本保管・クラウド同期つき）は <a href="?v=2">こちら</a> から開けます。</p></section>
+        {!isNativeApp() && <section className="v3-card"><h4>旧バージョン</h4><p className="v3-note">v0.2（下絵の原本保管・クラウド同期つき）は <a href="?v=2">こちら</a> から開けます。</p></section>}
       </div>
     );
   }

@@ -21,9 +21,17 @@
     "cf:storage:list": "node scripts/cloudflare-account.mjs storage-list",
     "cf:storage:create": "node scripts/cloudflare-account.mjs storage-create",
     "cf:storage:bind": "node scripts/bind-storage.mjs",
-    "cf:storage:migrate": "node scripts/cloudflare-account.mjs storage-migrate"
+    "cf:storage:migrate": "node scripts/cloudflare-account.mjs storage-migrate",
+    "build:app": "tsc --noEmit && vite build --mode app && node scripts/check-app-bundle.mjs",
+    "ios:sync": "npm run build:app && cap sync ios",
+    "ios:assets": "node scripts/make-ios-assets.mjs && capacitor-assets generate --ios"
   },
   "dependencies": {
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.4",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/keyboard": "8.0.6",
+    "@capacitor/share": "8.0.3",
     "fflate": "^0.8.2",
     "jose": "^6.2.12",
     "lucide-react": "^1.47.0",
@@ -33,6 +41,8 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "8.5.3",
     "@cloudflare/workers-types": "^5.20260919.1",
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",

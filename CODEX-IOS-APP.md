@@ -128,3 +128,13 @@ rhythm-health を参考に、次の 2 つを作る。
 - 初回コミット候補を検査し、秘密鍵・トークン・長い秘密値の直書き候補は0件。認証ファイルの中身は読んでいない。
 - wrangler.jsoncはアプリ名・Worker経路・配信設定・空の認証設定とPUBLIC_APP=falseのみ。APIキー・アカウントID・個人メールは含まず、コミット可能と判断。
 - GitHub CLIは未ログイン。本人のブラウザ認証後に非公開リポジトリを作成してpushする。Cloudflareのデプロイは今回実行しない。
+
+### 2026-10-07 Phase 1〜4 実装方針
+
+- 改修前のWeb版：69テスト通過・npm run build成功。旧版のソースは変更しない。
+- Capacitorの公式npmで安定版8.5.3を確認。SPMを使用。iOS 17以上・Universal。
+- 別エントリーmain-app.tsxとViteのappモードで、v3のみ・相対パス・PWA非依存のdist-appを生成する。
+- appモードだけ下絵読込をv3/source.tsに解決し、旧版io.tsとその保存・クラウド処理を同梱から外す。Webの入口と解決先は維持する。
+- native判定をplatform.tsへ集約。書出しはCache保存→共有シート、キャンセルと失敗時も一時ファイルを片付ける。
+- native専用CSSでセーフエリアとキーボードを扱う。WKWebViewのページ拡大・スクロール・手書き変換を無効化し、キャンバス内の2本指操作は維持する。
+- シミュレータとApple Pencil実機の確認結果は区別して記録する。Windows単体でiOS検証済みとは扱わない。
