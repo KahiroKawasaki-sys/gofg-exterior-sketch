@@ -101,3 +101,73 @@ PUBLIC_APP=trueでは画面だけを認証なしで開き、全クラウド図�
 本人の実行直前承認後、このWorkerのAccess保護範囲を「WorkerのプレビューURL」だけへ変更済み。本番URLはメール確認なしで起動します。25項目の本番匿名検証と、見本16要素の端末保存・再読み込みを確認しました。
 
 完成後はPUBLIC_APP=falseで再配信し、このWorkerのCloudflare Accessを「すべてのTraffic」（本番URLとプレビューURL）へ戻します。その後cf:verifyと本人ログイン後のクラウド保存・同期を確認します。既存の許可ポリシー・AUD・署名・本人メール確認・D1の紐付けは保持してあります。
+
+## v0.3 iOSアプリ（2026-10-07）
+
+アプリはCapacitor 8.5.3／Swift Package Managerでv3エディタだけを同梱します。iOS 17以降のiPad・iPhoneに対応し、起動・下絵PDF／画像・編集・端末保存・書出しをオフラインで使います。Cloudflare Workerへの接続はありません。Web版の公開は今回の作業に含みません。
+
+### Windowsでの準備
+
+```powershell
+npm ci
+npm test
+npm run build
+npm run build:app
+npx cap sync ios
+# アイコンを更新する場合のみ
+npm run ios:assets
+```
+
+`build`は従来のWeb版（?v=2も維持）、`build:app`はv3だけをdist-appへ生成します。アプリ入口の?v=2は無効です。アセットとpdf.jsワーカーは相対URLで同梱し、PWAやService Workerへ依存しません。cap syncがios/App/App/publicへコピーする生成物はgit対象外です。server.urlは設定しません。
+
+### Macがない場合の検証
+
+非公開リポジトリ：[gofg-exterior-sketch](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch)
+
+```powershell
+gh workflow run verify-ios.yml --ref main
+gh run list --workflow verify-ios.yml
+gh run view <run-id> --log-failed
+gh run download <run-id> --name ios-simulator-evidence --dir C:	mpgofg-ios-evidence
+```
+
+verify-iosはWebテスト・Webビルド・アプリビルド・SPM同期・署名なしシミュレータビルドを実行します。その後iPad／iPhoneの実際のWKWebViewで、下絵PDF、合成ペン入力、PNG/PDF/JSONの共有シート、JSON復元、アプリのプロセス再起動後のIndexedDBを検証します。画面と共有シートのスクリーンショットはios-simulator-evidenceへ14日間保存します。合成入力はApple Pencilの実機筆圧・手のひら除外・Scribbleの確認ではありません。
+
+### 配布の初期設定と手動実行
+
+1. [Apple DeveloperのIdentifiers](https://developer.apple.com/account/resources/identifiers/list)でApp ID `com.kawakahi.gofgsketch`を登録します。rhythmと同じチームを選びます。
+2. [App Store Connect](https://appstoreconnect.apple.com/apps)で「外構スケッチ」を作成します。iOS、日本語、上記Bundle ID、SKUは例 `gofg-exterior-sketch`。
+3. [GitHub Actions Secrets](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/settings/secrets/actions)へASC_PRIVATE_KEY / ASC_KEY_ID / ASC_ISSUER_ID / APPLE_TEAM_IDを登録します。rhythmと同じAPIキーとチームを使います。値をチャット・コマンドラインへ貼りません。既存GitHub Secretsの値は取得できません。
+
+2026-10-07、本人が設定操作もCodexへ依頼。ログイン済み画面でのApp ID／アプリ登録はCodexが実施し、秘密キーの内容を読まないルールは維持します。Appleのパスワード・確認コードや秘密キーの入力が必要な箇所だけ本人が入力します。
+
+4. 設定後、Codexがupload=falseの署名済みIPA検査を実行します。
+
+```powershell
+gh workflow run testflight.yml --ref main -f upload=false
+gh run list --workflow testflight.yml
+gh run view <run-id> --log-failed
+```
+
+検査対象はBundle ID、iPad/iPhone両対応、最低iOS版、日本語の権限利用目的、署名、チーム、有効期限、App Store向け配布形式です。ビルド番号は1.実行番号.再実行番号。署名情報とIPAは一時ディレクトリのみで扱い、Artifactsには残しません。upload=falseではAppleへのアップロードは発生しません。
+
+5. 本人がGitHubのActions → Sign and prepare TestFlight → Run workflowでuploadをtrueにして実行します。Appleの処理完了後、App Store Connect → TestFlightで内部テスターを追加し、iPadのTestFlightからインストールします。設定は内部テスト向けです。
+
+### ブラウザ版からのデータ引継ぎ
+
+1. Web版v0.3で、移したいキャンバスを開きます。
+2. 「編集データを書き出す」、または「設定」→「編集データ」で `.garden3.json` を保存します。下絵と図形を含みます。
+3. iPad／iPhoneの「ファイル」に置きます。AirDropやiCloud Driveでもかまいません。事前に端末へダウンロードすればオフラインでも開けます。
+4. アプリのホーム「編集データを開く」からそのファイルを選びます。別のキャンバスとして端末に保存します。
+5. 下絵・線・寸法を確認します。v2の.garden.zip／.garden.jsonは形式が異なり、v3へ直接は取り込めません。
+
+DB名は同じgofg-sketch-v3ですが、Webとアプリは別の保存領域です。自動同期・自動移行はありません。独自登録オブジェクトのライブラリは既存のキャンバスJSONに含まれないため、使用した図面では再登録と見え方の確認が必要です。アプリ削除で端末データも消えるため、区切りごとに編集データを「ファイル」へ保存してください。
+
+### ファイル入口と実機確認
+
+実コードはホーム2入口とエディタ4入口の計6入口です（指示書の「5」は数え違い）。ホームの下絵／JSON、エディタの下絵差替え／写真ライブラリ／カメラ／JSONを確認対象とします。既存input type=fileを維持します。カメラ実撮影とHEIC等の写真形式は実機で確認します。PNG/PDF/JSONに加え、テクスチャPNGもネイティブ共有シートで「ファイルに保存」等を選択します。
+
+実機確認と残項目は[HANDOFF-ios.md](HANDOFF-ios.md)。
+
+参考：[Capacitor 8とSPM](https://capacitorjs.com/docs/updating/8-0)、[Share API](https://capacitorjs.com/docs/apis/share)、[Scribble制御](https://developer.apple.com/documentation/uikit/uiscribbleinteractiondelegate)。
+
