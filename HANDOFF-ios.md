@@ -19,7 +19,8 @@
 - 改修後：79テスト成功。Webとアプリ用の型検査・ビルド成功。署名検査のPythonテスト7件成功。
 - 開発依存の警告を修正。npm auditは0件。
 - Macシミュレータ：[最終verify-ios](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706029379)成功。iPad Pro 13-inch (M5)／iPhone 17 Pro、iOS 26.4.1。操作一巡と別プロセスでの再起動の計4テスト通過。
-- 署名済みIPA：upload=falseの[署名検査](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706036980)成功。署名／配布プロファイル／権限／Universalを検査。Appleへのアップロードなし。
+- 署名済みIPA：upload=falseの[署名検査](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706036980)成功。署名／配布プロファイル／権限／Universalを検査。
+- 2026-10-08 11:33 JST、本人が実行した[upload=true](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37718163594)が成功。0.3.0（1.4.1）の署名検査、Appleのアップロード前検証、アップロードがエラーなしで完了。TestFlightでの処理完了とテスター追加は別途確認する。
 
 ## 画面証拠と確認範囲
 
@@ -51,7 +52,7 @@
 2. CodexがApp IDとApp Store Connectのアプリ登録を完了（2026-10-07本人指定／2026-10-08完了）。
 3. CodexがGitHub設定を準備。秘密キーの値が必要な入力は本人がGitHub画面で行う。登録済みSecretからの取得は不可。
 4. Codexのupload=false署名検査は成功済み。
-5. 本人がupload=trueを実行し、Apple処理後にTestFlightの内部テスターを追加する。
+5. 本人のupload=trueは成功済み（0.3.0／1.4.1）。Apple処理後に本人がTestFlightの内部テスターを追加する。
 
 ## iPad実機チェック
 

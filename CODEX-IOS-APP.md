@@ -190,3 +190,8 @@ rhythm-health を参考に、次の 2 つを作る。
 - iPad／iPhoneの全画面・上部道具・左ボタン・パネル・共有シートを実表示で確認。iPhoneホームのアプリ名の縦折返しは復旧。長いバージョン表示が幅を圧迫したため、native専用の幅配分と省略表示で防止。配布前のアプリにのみ影響。
 - 8枚の元解像度PNGをdocs/ios/evidenceへ保存。README／HANDOFFの設定完了状況・ビルド・配布・引継ぎ・実機の残項目を整合。
 - 次は指示書で本人担当のupload=trueとTestFlight内部テスター追加、iPad実機チェック。Pencilダブルタップは任意として未実装。Cloudflareデプロイは実行していない。
+
+### 2026-10-08 本人によるTestFlightアップロード
+
+- 2026-10-08 11:33 JST、本人が実行した[upload=true](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37718163594)が成功。0.3.0（1.4.1）の署名検査、Appleのアップロード前検証、アップロードがエラーなしで完了。TestFlightでの処理完了とテスター追加は別途確認する。
+- 対象コミット3804d61。Appleへのアップロードと、TestFlightで利用可能になること・実機へのインストールは区別する。

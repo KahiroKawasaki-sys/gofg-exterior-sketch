@@ -128,7 +128,7 @@ npm run ios:assets
 gh workflow run verify-ios.yml --ref main
 gh run list --workflow verify-ios.yml
 gh run view <run-id> --log-failed
-gh run download <run-id> --name ios-simulator-evidence --dir C:	mpgofg-ios-evidence
+gh run download <run-id> --name ios-simulator-evidence --dir C:\tmp\gofg-ios-evidence
 ```
 
 verify-iosはWebテスト・Webビルド・アプリビルド・SPM同期・署名なしシミュレータビルドを実行します。その後iPad／iPhoneの実際のWKWebViewで、下絵PDF、合成ペン入力、PNG/PDF/JSONの共有シート、JSON復元、アプリのプロセス再起動後のIndexedDBを検証します。画面と共有シートのスクリーンショットはios-simulator-evidenceへ14日間保存します。合成入力はApple Pencilの実機筆圧・手のひら除外・Scribbleの確認ではありません。
@@ -152,6 +152,8 @@ gh run view <run-id> --log-failed
 検査対象はBundle ID、iPad/iPhone両対応、最低iOS版、日本語の権限利用目的、署名、チーム、有効期限、App Store向け配布形式です。ビルド番号は1.実行番号.再実行番号。署名情報とIPAは一時ディレクトリのみで扱い、Artifactsには残しません。upload=falseではAppleへのアップロードは発生しません。
 
 5. 本人がGitHubのActions → Sign and prepare TestFlight → Run workflowでuploadをtrueにして実行します。Appleの処理完了後、App Store Connect → TestFlightで内部テスターを追加し、iPadのTestFlightからインストールします。設定は内部テスト向けです。
+
+2026-10-08 11:33 JST、本人が実行した[upload=true](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37718163594)が成功。0.3.0（1.4.1）の署名検査、Appleのアップロード前検証、アップロードがエラーなしで完了。TestFlightでの処理完了とテスター追加は別途確認する。
 
 ### ブラウザ版からのデータ引継ぎ
 
