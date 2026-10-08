@@ -109,10 +109,10 @@ rhythm-health を参考に、次の 2 つを作る。
 ## 6. 完了条件
 
 - [x] git 化と非公開リポジトリへの push ができている（本人承認済み）
-- [ ] `verify-ios.yml` が成功する（Web テスト・アプリ用ビルド・シミュレータビルド）
+- [x] `verify-ios.yml` が成功する（Web テスト・アプリ用ビルド・シミュレータビルド）
 - [x] `testflight.yml`（`upload=false`）で署名済み IPA の検査が成功する
-- [ ] iPad シミュレータで、全画面起動・Pencil を想定したドラッグでスクロールしない・PDF 下絵の読み込み・PNG と PDF の書き出し（共有シート）・.json の読み書き・再起動後もデータが残る、を確認した（スクリーンショットか録画を残す）
-- [ ] iPhone シミュレータで、セーフエリアに UI が隠れず、主要な操作ができる
+- [x] iPad シミュレータで、全画面起動・Pencil を想定したドラッグでスクロールしない・PDF 下絵の読み込み・PNG と PDF の書き出し（共有シート）・.json の読み書き・再起動後もデータが残る、を確認した（スクリーンショットか録画を残す）
+- [x] iPhone シミュレータで、セーフエリアに UI が隠れず、主要な操作ができる
 - [x] README に「アプリ版のビルド・配布手順」と「ブラウザ版からのデータ引き継ぎ手順」を追記した
 - [x] `HANDOFF-ios.md` に、実機で確かめること（筆圧・手のひら除外・Split View・カメラ）と残った課題を書いた
 
@@ -180,3 +180,13 @@ rhythm-health を参考に、次の 2 つを作る。
 - 実画面でiPhoneホームのアプリ名が1文字ずつ折り返す問題を発見。固定幅のバージョン表示が見出しの幅を圧迫していた。native専用CSSでアプリ名と保存状態の幅を確保し、長いバージョン表示だけ省略する。WebのCSSは変更しない。
 - 画面証拠の一部はDOM更新直後に撮られており、更新前の画面が写っていた。撮影前に描画フレームを待ち、証拠と操作結果を一致させる。
 - 影響範囲は配布前のiPhoneアプリと検証用画面証拠。公開Web版と利用者の保存データへの影響はない。
+
+
+### 2026-10-08 Codex担当範囲の完了
+
+- 最終verify-ios成功：https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706029379（f4d5de5）。79単体テスト・Web／アプリビルド・同期・署名なしMacビルドに加え、iPad／iPhoneの操作一巡と別プロセスでの再起動の計4テストすべて通過。
+- 最終upload=false署名検査成功：https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706036980（同じアプリ）。App Store配布形式の署名・プロファイル・利用目的・Universalを確認。Appleアップロードは未実行。
+- 6つのFile入口、2ページPDFの選択、PNG/PDF/JSON共有、一時ファイル削除、合成ペンの筆圧、JSON復元、再起動後の保存を確認。写真選択画面・カメラ実撮影・Apple Pencil実機はHANDOFFの実機チェックに残す。
+- iPad／iPhoneの全画面・上部道具・左ボタン・パネル・共有シートを実表示で確認。iPhoneホームのアプリ名の縦折返しは復旧。長いバージョン表示が幅を圧迫したため、native専用の幅配分と省略表示で防止。配布前のアプリにのみ影響。
+- 8枚の元解像度PNGをdocs/ios/evidenceへ保存。README／HANDOFFの設定完了状況・ビルド・配布・引継ぎ・実機の残項目を整合。
+- 次は指示書で本人担当のupload=trueとTestFlight内部テスター追加、iPad実機チェック。Pencilダブルタップは任意として未実装。Cloudflareデプロイは実行していない。

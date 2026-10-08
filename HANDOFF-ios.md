@@ -18,8 +18,24 @@
 - 改修前Web：69テスト・ビルド成功。
 - 改修後：79テスト成功。Webとアプリ用の型検査・ビルド成功。署名検査のPythonテスト7件成功。
 - 開発依存の警告を修正。npm auditは0件。
-- Macシミュレータ：CI実行中。結果を作業記録へ追記し、未確認を成功と扱わない。
-- 署名済みIPA：upload=falseの[署名検査](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37644295472)成功。署名／配布プロファイル／権限／Universalを検査。Appleへのアップロードなし。
+- Macシミュレータ：[最終verify-ios](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706029379)成功。iPad Pro 13-inch (M5)／iPhone 17 Pro、iOS 26.4.1。操作一巡と別プロセスでの再起動の計4テスト通過。
+- 署名済みIPA：upload=falseの[署名検査](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706036980)成功。署名／配布プロファイル／権限／Universalを検査。Appleへのアップロードなし。
+
+## 画面証拠と確認範囲
+
+最終検証：2026-10-08。元のPNGを`docs/ios/evidence/`へ保存。全画面と上下の余白、iPhoneホームのアプリ名、道具とパネル、共有シートを実表示で確認。
+
+| 端末 | ホーム | 描画 | PDF共有 | プロセス再起動後 |
+| --- | --- | --- | --- | --- |
+| iPad | [画面](docs/ios/evidence/ipad-home.png) | [画面](docs/ios/evidence/ipad-drawing.png) | [画面](docs/ios/evidence/ipad-share-pdf.png) | [画面](docs/ios/evidence/ipad-relaunch.png) |
+| iPhone | [画面](docs/ios/evidence/iphone-home.png) | [画面](docs/ios/evidence/iphone-drawing.png) | [画面](docs/ios/evidence/iphone-share-pdf.png) | [画面](docs/ios/evidence/iphone-relaunch.png) |
+
+- 同梱されたPDFとpdf.jsで読込、2ページPDFのページ選択、合成ペン描画と筆圧値の保存、ページスクロール抑止を確認。
+- ホーム2入口とエディタ4入口の計6入口にFileを渡し、差替え下絵名と写真／カメラ入力からのテクスチャ2件をJSONで確認。
+- 実際のiOS共有シートをPNG/PDF/JSONで開き、生成ファイルの形式を検査。キャンセル後の一時ファイル削除と編集継続を確認。
+- エディタ／ホームのJSON復元、ページ再読込、アプリを終了して別プロセスで起動した後のIndexedDBを確認。
+- 全操作の画面・JSONは[CI実行結果](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706029379)の`ios-simulator-evidence`にも14日間保存。詳しいXcode診断は7日間。
+- 操作検証の待機／ページ選択不足を修正済み。失敗時には表示文言と画面を保存し、失敗を完了として扱わない。配布前の自動検証だけに影響し、公開Webと利用者データへの影響はない。
 
 ## Apple登録・署名設定の現状
 

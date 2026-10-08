@@ -167,7 +167,7 @@ DB名は同じgofg-sketch-v3ですが、Webとアプリは別の保存領域で�
 
 実コードはホーム2入口とエディタ4入口の計6入口です（指示書の「5」は数え違い）。ホームの下絵／JSON、エディタの下絵差替え／写真ライブラリ／カメラ／JSONを確認対象とします。既存input type=fileを維持します。カメラ実撮影とHEIC等の写真形式は実機で確認します。PNG/PDF/JSONに加え、テクスチャPNGもネイティブ共有シートで「ファイルに保存」等を選択します。
 
-実機確認と残項目は[HANDOFF-ios.md](HANDOFF-ios.md)。
+最終[シミュレータ検証](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706029379)と[署名検査（upload=false）](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706036980)は成功しています。確認画面、実機確認と残項目は[HANDOFF-ios.md](HANDOFF-ios.md)。
 
 参考：[Capacitor 8とSPM](https://capacitorjs.com/docs/updating/8-0)、[Share API](https://capacitorjs.com/docs/apis/share)、[Scribble制御](https://developer.apple.com/documentation/uikit/uiscribbleinteractiondelegate)。
 
