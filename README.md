@@ -153,7 +153,7 @@ gh run view <run-id> --log-failed
 
 5. 本人がGitHubのActions → Sign and prepare TestFlight → Run workflowでuploadをtrueにして実行します。Appleの処理完了後、App Store Connect → TestFlightで内部テスターを追加し、iPadのTestFlightからインストールします。設定は内部テスト向けです。
 
-2026-10-08 11:33 JST、本人が実行した[upload=true](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37718163594)が成功。0.3.0（1.4.1）の署名検査、Appleのアップロード前検証、アップロードがエラーなしで完了。TestFlightでの処理完了とテスター追加は別途確認する。
+2026-10-08 11:33 JST、本人が実行した[upload=true](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37718163594)が成功。0.3.0（1.4.1）の署名検査、Appleのアップロード前検証、アップロードがエラーなしで完了。2026-10-08、App Store ConnectのTestFlightで0.3.0（1.4.1）が「テスト準備完了」であることを確認。内部テスター登録と実機インストールは未実行。
 
 ### ブラウザ版からのデータ引継ぎ
 

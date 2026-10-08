@@ -20,7 +20,7 @@
 - 開発依存の警告を修正。npm auditは0件。
 - Macシミュレータ：[最終verify-ios](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706029379)成功。iPad Pro 13-inch (M5)／iPhone 17 Pro、iOS 26.4.1。操作一巡と別プロセスでの再起動の計4テスト通過。
 - 署名済みIPA：upload=falseの[署名検査](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37706036980)成功。署名／配布プロファイル／権限／Universalを検査。
-- 2026-10-08 11:33 JST、本人が実行した[upload=true](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37718163594)が成功。0.3.0（1.4.1）の署名検査、Appleのアップロード前検証、アップロードがエラーなしで完了。TestFlightでの処理完了とテスター追加は別途確認する。
+- 2026-10-08 11:33 JST、本人が実行した[upload=true](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37718163594)が成功。0.3.0（1.4.1）の署名検査、Appleのアップロード前検証、アップロードがエラーなしで完了。2026-10-08、App Store ConnectのTestFlightで0.3.0（1.4.1）が「テスト準備完了」であることを確認。内部テスター登録と実機インストールは未実行。
 
 ## 画面証拠と確認範囲
 

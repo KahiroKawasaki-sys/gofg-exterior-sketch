@@ -195,3 +195,8 @@ rhythm-health を参考に、次の 2 つを作る。
 
 - 2026-10-08 11:33 JST、本人が実行した[upload=true](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37718163594)が成功。0.3.0（1.4.1）の署名検査、Appleのアップロード前検証、アップロードがエラーなしで完了。TestFlightでの処理完了とテスター追加は別途確認する。
 - 対象コミット3804d61。Appleへのアップロードと、TestFlightで利用可能になること・実機へのインストールは区別する。
+
+### 2026-10-08 TestFlightでの処理完了確認
+
+- 2026-10-08、App Store ConnectのTestFlightで0.3.0（1.4.1）が「テスト準備完了」であることを確認。内部テスター登録と実機インストールは未実行。
+- 本人用グループの入力を準備し、自動配信は無効。指示書ではテスター追加が本人担当のため、本人1名の登録・招待をCodexが担当するか確認中。
