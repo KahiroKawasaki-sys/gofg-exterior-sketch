@@ -19,3 +19,10 @@ html.v3-native {
 .v3-native .v3-modal { max-height: 100%; }
 .v3-native.v3-keyboard .v3-modal-bg { align-items: start; }
 .v3-native input, .v3-native textarea { -webkit-user-select: text; user-select: text; }
+
+/* Reserve space for the name and save status on narrow iPhone screens. */
+.v3-native .v3-hhead .logo, .v3-native .v3-hhead b { flex-shrink: 0; }
+.v3-native .v3-hhead b { white-space: nowrap; }
+.v3-native .v3-hhead > .v3-mono:not(:last-child) {
+  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

@@ -139,9 +139,9 @@ verify-iosはWebテスト・Webビルド・アプリビルド・SPM同期・署�
 2. [App Store Connect](https://appstoreconnect.apple.com/apps)で「外構スケッチ」を作成します。iOS、日本語、上記Bundle ID、SKUは例 `gofg-exterior-sketch`。
 3. [GitHub Actions Secrets](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/settings/secrets/actions)へASC_PRIVATE_KEY / ASC_KEY_ID / ASC_ISSUER_ID / APPLE_TEAM_IDを登録します。rhythmと同じAPIキーとチームを使います。値をチャット・コマンドラインへ貼りません。既存GitHub Secretsの値は取得できません。
 
-2026-10-07、本人が設定操作もCodexへ依頼。ログイン済み画面でのApp ID／アプリ登録はCodexが実施し、秘密キーの内容を読まないルールは維持します。Appleのパスワード・確認コードや秘密キーの入力が必要な箇所だけ本人が入力します。
+2026-10-08、App ID／App Store Connectアプリの登録と4つのGitHub Secretsの設定は完了しています。App ID／アプリ登録と識別情報の設定はCodexが実施し、Appleログインと秘密キーの入力は本人が実施。秘密キーの内容を取得しないルールは維持しています。
 
-4. 設定後、Codexがupload=falseの署名済みIPA検査を実行します。
+4. upload=falseの署名済みIPA検査は成功済みです。再検査する場合は次を実行します。
 
 ```powershell
 gh workflow run testflight.yml --ref main -f upload=false

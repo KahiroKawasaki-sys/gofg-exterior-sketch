@@ -27,7 +27,7 @@
 - App Store Connect作成済み：[外構スケッチ](https://appstoreconnect.apple.com/apps/6820144141/distribution/info)。日本語、SKU gofg-exterior-sketch。
 - GitHub SecretsのAPPLE_TEAM_ID／ASC_KEY_ID／ASC_ISSUER_IDは登録済み。値を文書へ複製しない。
 - ASC_PRIVATE_KEYも本人が入力済み。4つのSecret名の存在を確認。値は取得していない。
-- [入力画面](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/settings/secrets/actions/new)のNameはASC_PRIVATE_KEY。キーをチャットへ送らない。
+- 設定確認先：[GitHub Actions Secrets](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/settings/secrets/actions)。値をチャットへ送らない。
 
 ## 設定の担当
 

@@ -49,6 +49,8 @@ final class SketchIntegrationTests: XCTestCase {
     }
 
     func snapshot(_ name: String) {
+        // DOM changes precede WKWebView's rendered frame; preserve the resulting screen.
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
         guard let window = controller.view.window else { return }
         let format = UIGraphicsImageRendererFormat(); format.scale = window.screen.scale
         let image = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
