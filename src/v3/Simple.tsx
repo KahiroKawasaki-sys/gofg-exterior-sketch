@@ -312,26 +312,57 @@ export const HELP: HelpItem[] = [
   { demo: 'pinch', title: '拡大・移動', text: '2本指で広げる・ずらす' },
 ];
 
-export function HelpSheet({ items, onClose, onTour }: { items: HelpItem[]; onClose: () => void; onTour: () => void }) {
-  const [video, setVideo] = useState<HelpItem | null>(null);
+// 詳細モードの解説動画（guideFull.ts）。サムネイル画像つき
+export type GuideVideo = { id: string; title: string; text: string; video: string; poster: string };
+export type HelpTab = 'simple' | 'full';
+type Playing = { title: string; src: string; list: { title: string; src: string }[] };
+
+export function HelpSheet({ items, full, tab: tab0 = 'simple', open, onClose, onTour }: {
+  items: HelpItem[]; full: GuideVideo[]; tab?: HelpTab; open?: string; onClose: () => void; onTour: () => void;
+}) {
+  const [tab, setTab] = useState<HelpTab>(tab0);
+  const simpleList = items.filter(h => h.video && h.demo !== 'move').map(h => ({ title: h.title, src: h.video! }));
+  const fullList = full.map(v => ({ title: v.title, src: v.video }));
+  const start = full.find(v => v.id === open);
+  const [playing, setPlaying] = useState<Playing | null>(start ? { title: start.title, src: start.video, list: fullList } : null);
+  const idx = playing ? playing.list.findIndex(x => x.src === playing.src && x.title === playing.title) : -1;
+  const next = playing && idx >= 0 && idx < playing.list.length - 1 ? playing.list[idx + 1] : null;
   return (
     <div className="v3-modal-bg" onPointerDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sx-help" role="dialog" aria-label="使い方">
-        <div className="sx-hhead"><b>使い方</b><span className="sp" /><button className="sx-tourbtn" onClick={onTour}><Play size={15} />案内をもう一度</button><button className="v3-ib" aria-label="閉じる" onClick={onClose}><X size={18} /></button></div>
-        {video?.video ? (
-          <div className="sx-player">
-            <video src={video.video} autoPlay controls playsInline muted loop />
-            <div className="v3-actions"><b>{video.title}</b><span className="sp" /><button className="v3-btn" onClick={() => setVideo(null)}>一覧に戻る</button></div>
+        <div className="sx-hhead"><b>使い方</b>
+          <div className="sx-tabs" role="tablist">
+            <button role="tab" aria-selected={tab === 'simple'} className={tab === 'simple' ? 'on' : ''} onClick={() => { setTab('simple'); setPlaying(null); }}>かんたんモード</button>
+            <button role="tab" aria-selected={tab === 'full'} className={tab === 'full' ? 'on' : ''} onClick={() => { setTab('full'); setPlaying(null); }}>詳細モード</button>
           </div>
-        ) : (
+          <span className="sp" />{tab === 'simple' && <button className="sx-tourbtn" onClick={onTour}><Play size={15} />案内をもう一度</button>}<button className="v3-ib" aria-label="閉じる" onClick={onClose}><X size={18} /></button></div>
+        {playing ? (
+          <div className="sx-player">
+            <video key={playing.src + playing.title} src={playing.src} autoPlay controls playsInline muted />
+            <div className="v3-actions"><b>{playing.title}</b><span className="sp" />
+              <button className="v3-btn" onClick={() => setPlaying(null)}>一覧に戻る</button>
+              {next && <button className="v3-btn primary" onClick={() => setPlaying({ ...playing, ...next })}>次：{next.title}</button>}
+            </div>
+          </div>
+        ) : tab === 'simple' ? (
           <div className="sx-hgrid">
             {items.map(h => (
               <div key={h.title} className="sx-hcard">
                 <Demo kind={h.demo} />
                 <b>{h.title}</b><span>{h.text}</span>
-                {h.video && <button className="sx-watch" onClick={() => setVideo(h)}><Play size={13} />実際の画面で見る</button>}
+                {h.video && <button className="sx-watch" onClick={() => setPlaying({ title: h.title, src: h.video!, list: simpleList })}><Play size={13} />実際の画面で見る</button>}
               </div>
             ))}
+          </div>
+        ) : (
+          <div className="sx-hgrid">
+            {full.map(v => (
+              <button key={v.id} className="sx-hcard sx-vcard" onClick={() => setPlaying({ title: v.title, src: v.video, list: fullList })}>
+                <span className="th"><img src={v.poster} alt="" /><i><Play size={18} /></i></span>
+                <b>{v.title}</b><span>{v.text}</span>
+              </button>
+            ))}
+            {!full.length && <p className="v3-note">動画を準備中です。</p>}
           </div>
         )}
       </div>

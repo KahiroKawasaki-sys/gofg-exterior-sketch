@@ -1,10 +1,11 @@
-"""かんたんモードの使い方動画を、実際の画面を操作して録画する。
+"""使い方動画（かんたんモード／詳細モード）を、実際の画面を操作して録画する。
 
 開発サーバー（npm run dev）を起動した状態で実行する:
-    python scripts/record-guide.py
-    python scripts/record-guide.py --only draw --shots C:/tmp/shots
+    python scripts/record-guide.py                 # 全部
+    python scripts/record-guide.py --only draw f-pen --shots C:/tmp/shots
 
-src/v3/guide/<名前>.mp4 を上書きする。画面を変えたら撮り直す。
+src/v3/guide/<名前>.mp4 を上書きする（詳細モードの f-* はサムネイル .jpg も）。画面を変えたら撮り直す。
+詳細モードの場面は scripts/guide_full_scenes.py。
 指の位置は丸、押した瞬間は濃い丸で映す（録画には本物のカーソルが映らないため）。
 """
 import argparse
@@ -14,8 +15,13 @@ import subprocess
 import tempfile
 import time
 
+import sys
+
 import imageio_ffmpeg
 from playwright.sync_api import Page, sync_playwright
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from guide_full_scenes import FULL_OPEN, FULL_SCENES  # noqa: E402
 
 W, H = 1180, 820
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -27,7 +33,11 @@ addEventListener('DOMContentLoaded', () => {
   f.style.cssText = 'position:fixed;left:-99px;top:-99px;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;background:rgba(46,87,71,.28);border:2.5px solid #2e5747;pointer-events:none;z-index:2147483647;transition:transform .12s,background .12s';
   const cap = document.createElement('div');
   cap.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(20,24,22,.86);color:#fff;font:700 26px/1.4 "Yu Gothic UI","Meiryo",sans-serif;padding:14px 28px;border-radius:16px;pointer-events:none;z-index:2147483646;opacity:0;transition:opacity .25s;white-space:nowrap';
-  document.body.append(f, cap);
+  const ring = document.createElement('div');
+  ring.style.cssText = 'position:fixed;border:3px solid #f0a020;border-radius:12px;box-shadow:0 0 0 4px rgba(240,160,32,.25),0 0 18px rgba(240,160,32,.55);pointer-events:none;z-index:2147483645;opacity:0;transition:all .2s ease';
+  document.body.append(f, cap, ring);
+  window.__mark = (x, y, w, h) => { ring.style.left = (x - 5) + 'px'; ring.style.top = (y - 5) + 'px'; ring.style.width = (w + 10) + 'px'; ring.style.height = (h + 10) + 'px'; ring.style.opacity = '1'; };
+  window.__unmark = () => { ring.style.opacity = '0'; };
   const at = e => { f.style.left = e.clientX + 'px'; f.style.top = e.clientY + 'px'; };
   addEventListener('pointermove', at, true);
   addEventListener('pointerdown', e => { at(e); f.style.transform = 'scale(.72)'; f.style.background = 'rgba(46,87,71,.6)'; }, true);
@@ -38,9 +48,22 @@ addEventListener('DOMContentLoaded', () => {
 
 
 class Rec:
-    def __init__(self, page: Page):
+    def __init__(self, page: Page, flash: bool = False):
         self.p = page
         self.x, self.y = W / 2, H / 2
+        self.flash = flash  # 押すボタンを枠で光らせる（ボタンの多い詳細モード用）
+
+    def mark(self, target, text: str = '', wait: float = 1.8, where: str = 'low'):
+        b = target if isinstance(target, dict) else target.bounding_box()
+        assert b, f'not visible: {target}'
+        self.p.evaluate('([x, y, w, h]) => window.__mark(x, y, w, h)', [b['x'], b['y'], b['width'], b['height']])
+        if text:
+            self.cap(text, wait, where)
+        else:
+            self.p.wait_for_timeout(int(wait * 1000))
+
+    def unmark(self):
+        self.p.evaluate('() => window.__unmark()')
 
     def cap(self, text: str, wait: float = 1.6, where: str = 'mid'):
         where = 'low' if where == 'top' else where
@@ -69,7 +92,11 @@ class Rec:
     def tap_el(self, locator, after: float = .5):
         b = locator.bounding_box()
         assert b, f'not visible: {locator}'
+        if self.flash:
+            self.p.evaluate('([x, y, w, h]) => window.__mark(x, y, w, h)', [b['x'], b['y'], b['width'], b['height']])
         self.tap(b['x'] + b['width'] / 2, b['y'] + b['height'] / 2, after)
+        if self.flash:
+            self.unmark()
 
     def drag(self, pts: list[tuple[float, float]], ms: int = 1200, after: float = .5):
         self.move(*pts[0])
@@ -107,11 +134,12 @@ class Rec:
 
 
 def open_sample(r: Rec):
-    r.p.goto(ARGS.url)
+    r.p.goto(r.url)
     r.p.get_by_text('サンプル邸で試す').click()
-    r.p.locator('.sx-dock').wait_for()
+    r.p.locator('.v3-stage').wait_for()
     r.p.wait_for_timeout(900)
-    r.p.locator('.sx-seg button', has_text='中').click()
+    if r.p.locator('.sx-seg').count():
+        r.p.locator('.sx-seg button', has_text='中').click()
 
 
 def parking(r: Rec):
@@ -226,7 +254,7 @@ def undo(r: Rec):
     r.uncap()
 
 
-SCENES = {'draw': draw, 'parts': parts, 'paint': paint, 'out': out, 'undo': undo}
+SCENES = {'draw': draw, 'parts': parts, 'paint': paint, 'out': out, 'undo': undo, **FULL_SCENES}
 
 
 def to_mp4(src: pathlib.Path, dst: pathlib.Path, start: float):
@@ -236,22 +264,41 @@ def to_mp4(src: pathlib.Path, dst: pathlib.Path, start: float):
                     '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', str(dst)], check=True)
 
 
+def poster(src: pathlib.Path, dst: pathlib.Path):
+    """一覧に出すサムネイル（動画の6割あたりの1コマ）"""
+    ff = imageio_ffmpeg.get_ffmpeg_exe()
+    info = subprocess.run([ff, '-i', str(src)], capture_output=True, text=True, encoding='utf-8', errors='replace').stderr
+    h, m, sec = info.split('Duration: ')[1].split(',')[0].split(':')
+    t = (int(h) * 3600 + int(m) * 60 + float(sec)) * 0.6
+    subprocess.run([ff, '-y', '-loglevel', 'error', '-ss', f'{t:.2f}', '-i', str(src), '-frames:v', '1',
+                    '-vf', 'scale=480:-2', '-q:v', '5', str(dst)], check=True)
+
+
 def main():
     out_dir = pathlib.Path(ARGS.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     names = ARGS.only or list(SCENES)
-    with sync_playwright() as pw, tempfile.TemporaryDirectory() as tmp:
+    with sync_playwright() as pw, tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         browser = pw.chromium.launch()
         for name in names:
             ctx = browser.new_context(viewport={'width': W, 'height': H}, record_video_dir=tmp,
                                       record_video_size={'width': W, 'height': H}, accept_downloads=True)
             ctx.add_init_script(OVERLAY)
+            full = name.startswith('f-')
+            if full:
+                ctx.add_init_script("try { localStorage.setItem('gofg-v3-ui', 'full'); } catch {}")
             page = ctx.new_page()
             t0 = time.time()
-            r = Rec(page)
-            open_sample(r)
+            r = Rec(page, flash=full)
+            r.url = ARGS.url
+            FULL_OPEN.get(name, open_sample)(r)
             start = time.time() - t0
-            SCENES[name](r)
+            try:
+                SCENES[name](r)
+            except Exception:
+                if ARGS.shots:
+                    page.screenshot(path=str(pathlib.Path(ARGS.shots) / f'{name}-fail.png'))
+                raise
             if ARGS.shots:
                 pathlib.Path(ARGS.shots).mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(pathlib.Path(ARGS.shots) / f'{name}.png'))
@@ -260,6 +307,8 @@ def main():
             webm = pathlib.Path(video.path())
             dst = out_dir / f'{name}.mp4'
             to_mp4(webm, dst, start)
+            if full:
+                poster(dst, out_dir / f'{name}.jpg')
             print(f'{name}: {dst} ({dst.stat().st_size // 1024} KB)')
         browser.close()
 

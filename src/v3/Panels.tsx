@@ -1,6 +1,6 @@
 // 右側パネル（オブジェクト・レイヤー・ガイド線・AIツール・設定・履歴・テキスト）
 import { useRef, useState, type ReactNode } from 'react';
-import { Plus, Copy, ArrowDownToLine, Combine, Trash2, Eye, EyeOff, Lock, LockOpen, GripVertical, X, CircleMinus, Pencil } from 'lucide-react';
+import { Plus, Copy, ArrowDownToLine, Combine, Trash2, Eye, EyeOff, Lock, LockOpen, GripVertical, X, CircleMinus, Pencil, Play } from 'lucide-react';
 import { type Doc, type Layer, type LibItem, type Guide, type GuideType, type ObjItem, type TextureItem, type TextItem, type Pt, dist, deg, rad, fmtLen, PALETTE } from './types';
 import { CATEGORIES } from './library';
 import { TEXTURES, textureSrc } from './textures';
@@ -26,10 +26,13 @@ export type EditorApi = {
   // history
   history: HistEntry[]; restore: (i: number) => void;
   editText: (id: string) => void;
+  video: (id: string) => void;
 };
 
-const Head = ({ title, children, onClose }: { title: string; children?: ReactNode; onClose: () => void }) => (
-  <div className="v3-phead"><b>{title}</b><span className="sp" />{children}<button className="v3-ib" aria-label="閉じる" onClick={onClose}><X size={16} /></button></div>
+// 解説動画を開くボタン（各パネルの見出しに置く）
+export const VideoBtn = ({ onClick }: { onClick: () => void }) => <button className="sx-vbtn" onClick={onClick} title="このパネルの使い方を動画で見る"><Play size={12} />動画</button>;
+const Head = ({ title, children, onClose, video }: { title: string; children?: ReactNode; onClose: () => void; video?: () => void }) => (
+  <div className="v3-phead"><b>{title}</b><span className="sp" />{children}{video && <VideoBtn onClick={video} />}<button className="v3-ib" aria-label="閉じる" onClick={onClose}><X size={16} /></button></div>
 );
 const Card = ({ title, children }: { title?: string; children: ReactNode }) => <section className="v3-card">{title && <h4>{title}</h4>}{children}</section>;
 
@@ -80,6 +83,7 @@ export function LayerPanel({ e }: { e: EditorApi }) {
         <button className="v3-ib" aria-label="下に結合" onClick={mergeDown}><ArrowDownToLine size={16} /></button>
         <button className="v3-ib" aria-label="表示レイヤーを結合" onClick={mergeVisible}><Combine size={16} /></button>
         <button className="v3-ib" aria-label="削除" onClick={del}><Trash2 size={16} /></button>
+        <VideoBtn onClick={() => e.video('f-layers')} />
         <button className="v3-ib" aria-label="閉じる" onClick={e.close}><X size={16} /></button>
       </div>
       <div className="v3-layers" onPointerMove={onGripMove} onPointerUp={onGripUp}>
@@ -129,7 +133,7 @@ export function ObjectPanel({ e }: { e: EditorApi }) {
   const libOf = (o: ObjItem) => lib.find(l => l.id === o.ref);
   return (
     <div className="v3-panel">
-      <Head title="オブジェクト" onClose={e.close} />
+      <Head title="オブジェクト" onClose={e.close} video={() => e.video('f-objects')} />
       <Card title="ツールモード">
         <div className="v3-grid2">
           <button className={'v3-pbtn' + (tool === 'select' ? ' on' : '')} onClick={() => mode('select', 'オブジェクト選択 ON')}>選択</button>
@@ -208,6 +212,7 @@ export function GuidePanel({ e }: { e: EditorApi }) {
       <div className="v3-phead"><b>ガイド線</b><span className="sp" />
         <button className="v3-ib" aria-label="選択中のガイド線を削除" disabled={!activeGuide} onClick={() => { if (!activeGuide) return; e.set(d => ({ ...d, guides: d.guides.filter(g => g.id !== activeGuide) }), 'ガイド線を削除'); setActiveGuide(null); }}><CircleMinus size={17} /></button>
         <button className="v3-ib" aria-label="直線ガイドを追加" onClick={() => e.addGuide('line')}><Plus size={17} /></button>
+        <VideoBtn onClick={() => e.video('f-guides')} />
         <button className="v3-ib" aria-label="閉じる" onClick={e.close}><X size={16} /></button>
       </div>
       <div className="v3-card"><div className="v3-grid3">
@@ -259,7 +264,7 @@ export function AIPanel({ e }: { e: EditorApi }) {
   );
   return (
     <div className="v3-panel">
-      <Head title="AIツール" onClose={e.close} />
+      <Head title="AIツール" onClose={e.close} video={() => e.video('f-paint')} />
       <Card title="選択範囲">
         <div className="v3-grid4">
           <button className={'v3-pbtn sq' + (tool === 'aiBrush' ? ' on' : '')} onClick={() => setTool('aiBrush')}>選択ブラシ</button>
@@ -319,7 +324,7 @@ export function TexturePicker({ onPick }: { onPick: (tex: string, name: string) 
 export function HistoryPanel({ e }: { e: EditorApi }) {
   return (
     <div className="v3-panel">
-      <Head title="履歴" onClose={e.close} />
+      <Head title="履歴" onClose={e.close} video={() => e.video('f-save')} />
       <div className="v3-list">
         {!e.history.length && <p className="v3-note pad">まだ操作履歴はありません。</p>}
         {[...e.history].map((h, i) => ({ h, i })).reverse().slice(0, 60).map(({ h, i }) => (
@@ -335,7 +340,7 @@ export function TextsPanel({ e }: { e: EditorApi }) {
   const texts = e.doc.layers.flatMap(l => l.items.filter(i => i.type === 'text')) as TextItem[];
   return (
     <div className="v3-panel">
-      <Head title="テキスト" onClose={e.close} />
+      <Head title="テキスト" onClose={e.close} video={() => e.video('f-dim')} />
       <div className="v3-list">
         {!texts.length && <p className="v3-note pad">「T」で図面をタップすると、寸法やメモを置けます。</p>}
         {texts.map(t => <button key={t.id} className={'v3-item' + (e.sel.includes(t.id) ? ' on' : '')} onClick={() => { e.setSel([t.id]); e.setTool('select'); }} onDoubleClick={() => e.editText(t.id)}><span style={{ color: t.color }}>{t.text.split('\n')[0]}</span></button>)}

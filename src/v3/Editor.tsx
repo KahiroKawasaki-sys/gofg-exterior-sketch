@@ -4,7 +4,7 @@ import {
   Image as ImageIcon, Download, PenTool, ChevronDown, Eraser, Type, MoveHorizontal, Circle, Slash, SquareX, Grid3x3, Maximize, Spline,
   AlignJustify, Lock, LockOpen, RotateCw, RotateCcw, Copy, House, Save, SaveAll, FolderOpen, ArrowDownToLine, ArrowUpFromLine, CloudUpload,
   User, LogOut, PanelRight, Layers, LayoutGrid, Ruler, FileText, Sparkles, History, Settings, Redo2, Undo2, SquareDashedMousePointer, Magnet,
-  Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, FolderOpen as Folder,
+  Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, FolderOpen as Folder, CircleHelp, Play,
 } from 'lucide-react';
 import { type Doc, type Item, type LibItem, type Pt, type ObjItem, type TextItem, type TextureItem, type GuideType, PALETTE, uid, itemBox, unionBox, boxOf, pointInPoly, transformItem, dist, rad, newLayer } from './types';
 import { useDoc, ensureLayer, findItem, removeItems, updateItem } from './useDoc';
@@ -22,9 +22,10 @@ import { LayerPanel, ObjectPanel, GuidePanel, AIPanel, HistoryPanel, TextsPanel,
 import { TextDialog, PromptDialog, Menu, Modal, type Field, type TextValue } from './Dialogs';
 import { readSource } from '../io';
 import { isNativeApp, saveFile } from './platform';
-import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, type TourStep } from './Simple';
+import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, type TourStep, type HelpTab } from './Simple';
+import { GUIDE_FULL } from './guideFull';
 
-const VERSION = 'ver 2026.10.08-01 (simple-mode)';
+const VERSION = 'ver 2026.10.09-01 (guide-videos)';
 type PanelId = 'objects' | 'layers' | 'guides' | 'ai' | 'settings' | 'history' | 'texts' | null;
 
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'gaikou';
@@ -40,7 +41,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const simple = ui === 'simple';
   const [step, setStepRaw] = useState<Step>('draw');
   const [tour, setTour] = useState(() => readPref('gofg-v3-ui') !== 'full' && readPref('gofg-v3-tour') !== 'done');
-  const [help, setHelp] = useState(false);
+  const [help, setHelp] = useState<{ tab: HelpTab; open?: string } | null>(null);
   const [hintOn, setHintOn] = useState(true);
   const [panel, setPanel] = useState<PanelId>(() => readPref('gofg-v3-ui') === 'full' ? 'objects' : null);
   const [sel, setSel] = useState<string[]>([]);
@@ -130,6 +131,8 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     const b = contentBox(doc, 300), bb = p ? unionBox([b, { x: p.x - 50, y: p.y - 50, w: 100, h: 100 }]) : b;
     const s = new Selection(bb); setAiSel(s); return s;
   };
+  // 選択ブラシは選択範囲の入れ物が無いと何も塗れないため、道具を選んだ時点で用意する
+  useEffect(() => { if (tool === 'aiBrush' && !aiSel) ensureSel(); }, [tool, aiSel]);
 
   const applyTexture = (tex: string, texName: string, jobName = texName) => {
     if (!aiSel || !aiSel.count()) return toast('先に「塗りつぶし追加」か「選択ブラシ」で範囲を選んでください');
@@ -246,6 +249,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     saveTexture: async t => { const svg = docSVG({ ...doc, underlay: undefined, layers: [{ id: 'x', name: 'x', kind: 'texture', visible: true, locked: false, opacity: 1, items: [t] }] }, lib, ctx, { x: t.x, y: t.y, w: t.w, h: t.h }, { pxW: t.w * 2, pxH: t.h * 2 }); const c = await rasterize(svg, t.w * 2, t.h * 2); c.toBlob(b => { if (b) void saveFile(b, safeName(t.texName) + '-texture.png').catch(() => toast('テクスチャを書き出せませんでした')); }); },
     aiKeyword, openPanel: p => setPanel(p as PanelId),
     history: D.history, restore: D.restore,
+    video: id => setHelp({ tab: 'full', open: id }),
     editText: id => { const f = findItem(doc, id); if (f && f.item.type === 'text') setTextDlg({ p: { x: f.item.x, y: f.item.y }, edit: f.item }); },
   };
 
@@ -270,7 +274,8 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const zoomRot = (dr: number) => { const el = stageRef.current!, r = el.getBoundingClientRect(), s = { x: r.width / 2, y: r.height / 2 }, w = toWorld(view, s), nr = view.r + dr, q = { x: w.x * view.k, y: w.y * view.k }, a = rad(nr); setView({ ...view, r: nr, x: s.x - (q.x * Math.cos(a) - q.y * Math.sin(a)), y: s.y - (q.x * Math.sin(a) + q.y * Math.cos(a)) }); };
   const rotLabel = ((Math.round(view.r) % 360) + 360) % 360;
   const T = (t: Tool) => tool === t ? ' on' : '';
-  const openMenu = (id: string) => (e: React.MouseEvent) => setMenu(m => m?.id === id ? null : { id, rect: (e.currentTarget as HTMLElement).getBoundingClientRect() });
+  // 位置はクリックの時点で読む（setState の中では currentTarget が null になり画面ごと落ちる）
+  const openMenu = (id: string) => (e: React.MouseEvent) => { const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenu(m => m?.id === id ? null : { id, rect }); };
   const panelBtn = (p: PanelId) => () => setPanel(cur => cur === p ? null : p);
   const P = (p: PanelId) => panel === p ? ' on' : '';
   const fs = () => { if (isNativeApp()) return toast('アプリは全画面で表示しています'); if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => toast('全画面にできませんでした')); };
@@ -296,7 +301,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       <input ref={camRef} type="file" hidden accept="image/*" capture="environment" onChange={e => { onImageFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={jsonRef} type="file" hidden accept="application/json,.json" onChange={e => { importJson(e.target.files?.[0]); e.target.value = ''; }} />
 
-      {simple ? <SimpleTop name={doc.name} saved={saved} canUndo={D.canUndo} canRedo={D.canRedo} undo={D.undo} redo={D.redo} fit={fit} home={goHome} help={() => setHelp(true)} toFull={() => setUi('full')} /> : <header className="v3-top">
+      {simple ? <SimpleTop name={doc.name} saved={saved} canUndo={D.canUndo} canRedo={D.canRedo} undo={D.undo} redo={D.redo} fit={fit} home={goHome} help={() => setHelp({ tab: 'simple' })} toFull={() => setUi('full')} /> : <header className="v3-top">
         <div className="v3-bar r1">
           <button className="v3-tb" aria-label="下絵を読み込む" title="下絵（PDF・画像）を読み込む" onClick={() => fileRef.current?.click()}><ImageIcon size={18} /></button>
           <button className="v3-tb" aria-label="書き出し" title="書き出し" onClick={openMenu('export')}><Download size={18} /></button>
@@ -335,16 +340,15 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         </div>
         <div className="v3-bar r3">
           <button className="sx-modebtn" onClick={() => setUi('simple')}>かんたんモード</button>
+          <button className="sx-modebtn" onClick={() => setHelp({ tab: 'full' })}><CircleHelp size={15} />使い方</button>
           <button className="v3-tb sm" aria-label="案件一覧" title="案件一覧へ" onClick={goHome}><House size={16} /></button>
-          <span className="v3-mono status">{saved === 'saving' ? '保存中…' : saved === 'error' ? '保存エラー' : 'ローカル保存(端末)'}</span>
+          <span className="v3-mono status">{saved === 'saving' ? '保存中…' : saved === 'error' ? '保存エラー' : '端末に保存済み'}</span>
           <button className="v3-tb sm" aria-label="上書き保存" title="上書き保存" onClick={() => saveWithThumb().then(() => toast('端末に保存しました'))}><Save size={16} /></button>
           <button className="v3-tb sm on" aria-label="別名で保存" title="別名で保存" onClick={() => setPrompt({ title: '別名で保存', fields: [{ key: 'name', label: '名前', value: doc.name + ' 別案' }], ok: '保存', run: async v => { setPrompt(null); const nd = { ...doc, id: uid(), name: String(v.name || doc.name), updatedAt: new Date().toISOString() }; await saveDoc(nd, await thumbnail(nd, lib, ctx)); D.reset(nd); toast('別案として保存しました'); } })}><SaveAll size={16} /></button>
           <button className="v3-tb sm" aria-label="開く" title="案件一覧から開く" onClick={goHome}><FolderOpen size={16} /></button>
           <button className="v3-tb sm" aria-label="編集データを読み込む" title="編集データ(.json)を読み込む" onClick={() => jsonRef.current?.click()}><ArrowDownToLine size={16} /></button>
           <button className="v3-tb sm" aria-label="編集データを書き出す" title="編集データ(.json)を書き出す" onClick={() => exportAs('json')}><ArrowUpFromLine size={16} /></button>
           <button className="v3-tb sm" aria-label="クラウド" title="クラウド同期（公開版では停止中）" onClick={() => toast('開発版はこの端末に保存します。端末間は編集データで引き継ぎます')}><CloudUpload size={16} /></button>
-          <span className="v3-mono b">クラウド: 未接続</span>
-          <span className="v3-mono">{VERSION}</span>
           <button className="v3-tb sm on" aria-label="利用者" title="利用者" onClick={() => toast('この端末で利用中（ログインなし）')}><User size={16} /></button>
           <button className="v3-tb sm" aria-label="ログアウト（一覧へ）" title="案件一覧へ戻る" onClick={goHome}><LogOut size={16} /></button>
           <i className="sep" />
@@ -445,7 +449,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         onDelete={textDlg.edit ? () => { D.set(d => removeItems(d, new Set([textDlg.edit!.id])), '文字を削除'); setTextDlg(null); } : undefined}
         onOk={(v: TextValue) => { const ed = textDlg.edit; if (ed) D.set(d => updateItem(d, ed.id, it => ({ ...it, ...v }) as Item), '文字を編集'); else addItem({ id: uid(), type: 'text', x: textDlg.p.x, y: textDlg.p.y, text: v.text, size: Math.round(24 / view.k), color: v.color, bg: v.bg, border: v.border, rot: -view.r }); setTextDlg(null); }} />}
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
-      {help && <HelpSheet items={HELP} onClose={() => setHelp(false)} onTour={() => { setHelp(false); setUi('simple'); setTour(true); }} />}
+      {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}
       {prompt && <PromptDialog title={prompt.title} fields={prompt.fields} note={prompt.note} okLabel={prompt.ok} onOk={prompt.run} onCancel={() => { setPrompt(null); if (tool === 'calib') setTool('select'); }} />}
     </div>
   );
@@ -454,7 +458,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     const u = doc.underlay;
     return (
       <div className="v3-panel">
-        <div className="v3-phead"><b>設定</b><span className="sp" /><button className="v3-ib" aria-label="閉じる" onClick={() => setPanel(null)}><X size={16} /></button></div>
+        <div className="v3-phead"><b>設定</b><span className="sp" /><button className="sx-vbtn" onClick={() => setHelp({ tab: 'full', open: 'f-underlay' })}><Play size={12} />動画</button><button className="v3-ib" aria-label="閉じる" onClick={() => setPanel(null)}><X size={16} /></button></div>
         <section className="v3-card"><h4>案件</h4>
           <label className="v3-kv"><span>名前</span><input defaultValue={doc.name} onBlur={e => { const v = e.target.value.trim(); if (v && v !== doc.name) D.set(d => ({ ...d, name: v }), '名前を変更'); }} /></label>
         </section>
@@ -481,6 +485,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         <section className="v3-card"><h4>書き出し</h4>
           <div className="v3-row wrap"><button className="v3-btn" onClick={() => exportAs('png')}>PNG</button><button className="v3-btn" onClick={() => exportAs('a4')}>PDF A4</button><button className="v3-btn" onClick={() => exportAs('a3')}>PDF A3</button><button className="v3-btn" onClick={() => exportAs('json')}>編集データ</button></div>
         </section>
+        <section className="v3-card"><h4>このアプリ</h4><p className="v3-note">{VERSION}　保存先：この端末（クラウド同期は停止中。端末間は編集データで引き継ぎ）</p></section>
         {!isNativeApp() && <section className="v3-card"><h4>旧バージョン</h4><p className="v3-note">v0.2（下絵の原本保管・クラウド同期つき）は <a href="?v=2">こちら</a> から開けます。</p></section>}
       </div>
     );

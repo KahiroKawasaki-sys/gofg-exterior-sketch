@@ -30,7 +30,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .v3-tb.on { background: var(--soft); color: var(--green); }
 .v3-mono { font-family: var(--mono); font-size: 11px; color: #5b5f5d; padding: 0 8px; border: 0; background: none; flex: none; letter-spacing: -.01em; }
 .v3-mono.b { font-weight: 700; color: var(--green); }
-.v3-mono.status { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.v3-mono.status { width: 104px; overflow: hidden; text-overflow: ellipsis; } /* 保存中…/保存済みで幅が変わるとボタンがずれるため固定 */
 button.v3-mono:hover { color: var(--green); }
 .v3-width { display: flex; align-items: center; gap: 8px; padding: 0 6px; flex: none; }
 .v3-width .dotmin { width: 4px; height: 4px; border-radius: 50%; background: #9a9a9a; }

@@ -109,3 +109,41 @@ it('道具ごとの一言', () => {
   expect(simpleHint('select', 0, undefined, 'parts')).toContain('部品を選ぶ');
   expect(simpleHint('pen', 0, undefined, 'out')).toBe('');
 });
+
+// ---- 詳細モード ----
+async function openFull() { localStorage.setItem('gofg-v3-tour', 'done'); localStorage.setItem('gofg-v3-ui', 'full'); await open(); }
+
+it('詳細モード：▼メニューを押しても画面が落ちない（ペン・線・図形・書き出し）', async () => {
+  await openFull();
+  for (const label of ['ペンの種類', '線の種類', '図形の種類', '書き出し']) {
+    await click(q(`.v3-top [aria-label="${label}"]`));
+    expect(q('.v3-menu'), label).toBeTruthy();
+    await act(async () => { document.body.dispatchEvent(new Event('pointerdown', { bubbles: true })); });
+    await click(q(`.v3-top [aria-label="${label}"]`));
+    await click(q(`.v3-top [aria-label="${label}"]`));
+  }
+  expect(q('.v3-top')).toBeTruthy();
+});
+
+it('詳細モード：「使い方」で詳細の解説動画一覧を開き、続けて次の動画へ進める', async () => {
+  await openFull();
+  await click(byText('.sx-modebtn', '使い方'));
+  expect(byText('.sx-tabs button.on', '詳細モード')).toBeTruthy();
+  expect(qa('.sx-vcard').length).toBe(10);
+  await click(byText('.sx-vcard', '画面の見方'));
+  expect(q('.sx-player video')?.getAttribute('src')).toMatch(/f-screen.*\.mp4/);
+  await click(byText('.sx-player .v3-btn', '次：ペン・線・図形'));
+  expect(q('.sx-player video')?.getAttribute('src')).toMatch(/f-pen.*\.mp4/);
+  await click(byText('.sx-tabs button', 'かんたんモード'));
+  expect(qa('.sx-hcard .sx-demo').length).toBe(8);
+});
+
+it('詳細モード：各パネルの「動画」でそのパネルの解説がすぐ流れる', async () => {
+  await openFull();
+  await click(q('.v3-side .sx-vbtn'));
+  expect(q('.sx-player video')?.getAttribute('src')).toMatch(/f-objects.*\.mp4/);
+  await click(q('.sx-help [aria-label="閉じる"]'));
+  await click(q('.v3-top [aria-label="レイヤー"]'));
+  await click(q('.v3-side .sx-vbtn'));
+  expect(q('.sx-player video')?.getAttribute('src')).toMatch(/f-layers.*\.mp4/);
+});
