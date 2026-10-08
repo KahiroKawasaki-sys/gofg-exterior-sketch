@@ -151,9 +151,9 @@ gh run view <run-id> --log-failed
 
 検査対象はBundle ID、iPad/iPhone両対応、最低iOS版、日本語の権限利用目的、署名、チーム、有効期限、App Store向け配布形式です。ビルド番号は1.実行番号.再実行番号。署名情報とIPAは一時ディレクトリのみで扱い、Artifactsには残しません。upload=falseではAppleへのアップロードは発生しません。
 
-5. 本人がGitHubのActions → Sign and prepare TestFlight → Run workflowでuploadをtrueにして実行します。Appleの処理完了後、App Store Connect → TestFlightで内部テスターを追加し、iPadのTestFlightからインストールします。設定は内部テスト向けです。
+5. 配信する場合はGitHubのActions → Sign and prepare TestFlight → Run workflowでuploadをtrueにして実行します。Appleの処理完了後、App Store Connect → TestFlightで対象の内部グループへビルドを追加します。初回は本人のupload=trueと、Codexによる本人1名の登録・招待が完了済みです。設定は内部テスト向けです。
 
-2026-10-08 11:33 JST、本人が実行した[upload=true](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37718163594)が成功。0.3.0（1.4.1）の署名検査、Appleのアップロード前検証、アップロードがエラーなしで完了。2026-10-08、App Store ConnectのTestFlightで0.3.0（1.4.1）が「テスト準備完了」であることを確認。内部テスター登録と実機インストールは未実行。
+2026-10-08 11:33 JST、本人が実行した[upload=true](https://github.com/KahiroKawasaki-sys/gofg-exterior-sketch/actions/runs/37718163594)が成功。0.3.0（1.4.1）の署名検査、Appleのアップロード前検証、アップロードがエラーなしで完了。2026-10-08、App Store ConnectのTestFlightで0.3.0（1.4.1）が「テスト準備完了」であることを確認。本人の追加承認後、Codexが「本人テスト」を作成し、本人1名とビルド1.4.1を登録。「招待済み」を確認。自動配信は無効。実機インストールとPencil等の実機確認は未実施。
 
 ### ブラウザ版からのデータ引継ぎ
 
