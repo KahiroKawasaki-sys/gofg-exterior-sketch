@@ -106,7 +106,7 @@ export function LayerPanel({ e }: { e: EditorApi }) {
 }
 
 // ---------------- オブジェクト ----------------
-function Thumb({ l, size = 26 }: { l: LibItem; size?: number }) {
+export function Thumb({ l, size = 26 }: { l: LibItem; size?: number }) {
   const k = Math.min(size / l.vw, size / l.vh);
   return <svg className="v3-thumb" width={size} height={size} viewBox={`${-(size / k - l.vw) / 2} ${-(size / k - l.vh) / 2} ${size / k} ${size / k}`}><use href={`#lib-${l.id}`} /></svg>;
 }

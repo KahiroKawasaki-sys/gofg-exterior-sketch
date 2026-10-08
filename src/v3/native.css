@@ -26,3 +26,9 @@ html.v3-native {
 .v3-native .v3-hhead > .v3-mono:not(:last-child) {
   flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* かんたんモード：上下のバーをセーフエリアの内側へ。下部バーが下端の余白を受け持つ */
+.v3-native .sx-top { height: calc(54px + var(--v3-safe-top)); padding: var(--v3-safe-top) calc(8px + var(--v3-safe-right)) 0 calc(8px + var(--v3-safe-left)); }
+.v3-native .v3-simple .v3-body { margin-bottom: 0; }
+.v3-native .sx-dock { padding: 0 var(--v3-safe-right) var(--v3-safe-bottom) var(--v3-safe-left); }
+.v3-native .sx-help { max-height: 100%; }

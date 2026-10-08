@@ -22,8 +22,9 @@ import { LayerPanel, ObjectPanel, GuidePanel, AIPanel, HistoryPanel, TextsPanel,
 import { TextDialog, PromptDialog, Menu, Modal, type Field, type TextValue } from './Dialogs';
 import { readSource } from '../io';
 import { isNativeApp, saveFile } from './platform';
+import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, type TourStep } from './Simple';
 
-const VERSION = 'ver 2026.10.06-01 (home-app)';
+const VERSION = 'ver 2026.10.08-01 (simple-mode)';
 type PanelId = 'objects' | 'layers' | 'guides' | 'ai' | 'settings' | 'history' | 'texts' | null;
 
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'gaikou';
@@ -34,7 +35,14 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const [tool, setToolRaw] = useState<Tool>('pen');
   const [opts, setOpts] = useState<ToolOpts>({ brush: 'pen', dash: 'solid', width: 3, color: PALETTE[0], lineKind: 'line', shapeKind: 'rect', measure: 'line', unit: 'mm' });
   const [view, setView] = useState<View>(initial.view || { x: 0, y: 0, k: 1, r: 0 });
-  const [panel, setPanel] = useState<PanelId>('objects');
+  // かんたんモード（標準）と詳細モード。端末ごとに覚える
+  const [ui, setUiRaw] = useState<'simple' | 'full'>(() => readPref('gofg-v3-ui') === 'full' ? 'full' : 'simple');
+  const simple = ui === 'simple';
+  const [step, setStepRaw] = useState<Step>('draw');
+  const [tour, setTour] = useState(() => readPref('gofg-v3-ui') !== 'full' && readPref('gofg-v3-tour') !== 'done');
+  const [help, setHelp] = useState(false);
+  const [hintOn, setHintOn] = useState(true);
+  const [panel, setPanel] = useState<PanelId>(() => readPref('gofg-v3-ui') === 'full' ? 'objects' : null);
   const [sel, setSel] = useState<string[]>([]);
   const [guideSnap, setGuideSnap] = useState(true), [showGrid, setShowGrid] = useState(false), [gridMm, setGridMm] = useState(100);
   const [fingerMode, setFingerModeRaw] = useState<FingerMode>(() => { const v = readPref('gofg-v3-finger'); return v === 'draw' || v === 'pan' ? v : 'auto'; });
@@ -58,8 +66,12 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const toastTimer = useRef<number>(0);
   const toast = useCallback((m: string) => { setToastMsg(m); clearTimeout(toastTimer.current); toastTimer.current = window.setTimeout(() => setToastMsg(null), 2600); }, []);
   const setTool = useCallback((t: Tool) => { setToolRaw(t); if (t !== 'select') setSel([]); }, []);
+  const setStep = (s: Step) => { setStepRaw(s); setTool(s === 'draw' ? 'pen' : s === 'paint' ? 'aiFill' : 'select'); };
+  const setUi = (u: 'simple' | 'full') => { setUiRaw(u); writePref('gofg-v3-ui', u); if (u === 'simple') { setPanel(null); setStep('draw'); } else setPanel('objects'); };
+  const endTour = () => { setTour(false); writePref('gofg-v3-tour', 'done'); setStep('draw'); };
 
   useEffect(() => { listLibrary().then(setUserLib).catch(() => {}); }, []);
+  useEffect(() => { setHintOn(true); if (tool === 'place' || tool === 'aiFill' || (step === 'parts' && tool === 'select')) return; const t = setTimeout(() => setHintOn(false), 4000); return () => clearTimeout(t); }, [tool, step]);
   // 初回は図面全体が入るように表示
   useEffect(() => { if (!initial.view) requestAnimationFrame(() => fit()); }, []);
 
@@ -99,7 +111,8 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     const k = random ? 0.8 + Math.random() * 0.4 : 1, w = l.w * k, h = l.h * k;
     const it: ObjItem = { id: uid(), type: 'obj', ref: l.id, name: l.name, x: p.x - w / 2, y: p.y - h / 2, w, h, rot: random ? Math.round(Math.random() * 360) : 0, flip: random ? Math.random() < 0.5 : false, color: null };
     addItem(it, 'object');
-    if (!random) { setToolRaw('select'); setSel([it.id]); }
+    // かんたんモードは続けて置けるようにし、調整は「動かす」で行う
+    if (!random && !simple) { setToolRaw('select'); setSel([it.id]); }
   };
 
   const registerFrom = async (items: Item[], name?: string) => {
@@ -213,7 +226,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     text: (p, editId) => { const ex = editId ? findItem(doc, editId)?.item as TextItem | undefined : undefined; setTextDlg({ p, edit: ex }); },
     place: placeObj,
     lasso: (poly) => { const items: Item[] = []; for (const l of doc.layers) if (l.visible && (l.id === doc.activeLayer || l.kind === 'object' || l.kind === 'draw')) for (const it of l.items) { if (it.type === 'texture') continue; const b = itemBox(it); if (pointInPoly({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, poly)) items.push(it); } registerFrom(items); },
-    fill: async p => { const s = ensureSel(p); try { const ok = await fillAt(doc, lib, ctx, s, p); if (ok) { setAiVer(v => v + 1); toast('AIツール: 選択範囲を追加しました'); } else toast('閉じた輪郭の内側をタップしてください（線のすき間をふさぐと選べます）'); } catch { toast('範囲を判定できませんでした'); } },
+    fill: async p => { const s = ensureSel(p); try { const ok = await fillAt(doc, lib, ctx, s, p); if (ok) { setAiVer(v => v + 1); toast(simple ? '塗る場所を選びました。下から素材を選んでください' : 'AIツール: 選択範囲を追加しました'); } else toast('閉じた輪郭の内側をタップしてください（線のすき間をふさぐと選べます）'); } catch { toast('範囲を判定できませんでした'); } },
     aiBrushed: () => setAiVer(v => v + 1),
     calib, selectGuide: id => { setActiveGuide(id); },
   };
@@ -261,16 +274,29 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const panelBtn = (p: PanelId) => () => setPanel(cur => cur === p ? null : p);
   const P = (p: PanelId) => panel === p ? ' on' : '';
   const fs = () => { if (isNativeApp()) return toast('アプリは全画面で表示しています'); if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => toast('全画面にできませんでした')); };
+  const aiCount = aiSel && aiVer >= 0 ? aiSel.count() : 0;
+  const NEED_AREA = '先に、塗りたい場所（線で囲まれた所）をタップしてください';
+  const hintText = simple ? simpleHint(tool, aiCount, lib.find(l => l.id === libSel)?.name, step) : '';
+  const tourSteps: TourStep[] = [
+    { target: 'dock', title: 'この4つだけ覚えればOK', text: '左から順に使うと、外構図が1枚できあがります。', demo: 'flow', before: () => setStep('draw') },
+    { target: 'dockall', title: '① 描く', text: 'ペンを選んで、指かPencilでなぞるだけ。', demo: 'draw', before: () => setStep('draw') },
+    { target: 'dockall', title: '② 部品', text: '車や木を選んで、置きたい場所をタップ。', demo: 'parts', before: () => setStep('parts') },
+    { target: 'dockall', title: '③ 塗る', text: '線で囲まれた場所をタップ → 砂利や芝を選ぶ。', demo: 'paint', before: () => setStep('paint') },
+    { target: 'dockall', title: '④ 出力', text: 'PDFにして、そのままお客様へ。', demo: 'out', before: () => setStep('out') },
+    { target: 'undo', title: '間違えたら「戻す」', text: '1回押すごとに1つ前に戻ります。', demo: 'undo', before: () => setStep('draw') },
+    { target: 'stage', title: '画面の動かし方', text: '2本指で広げると拡大、ずらすと移動。', demo: 'pinch' },
+    { target: 'help', title: '迷ったらここ', text: '「使い方」から、いつでも動きで見返せます。' },
+  ];
   const selBox = sel.length ? (() => { const its = selItems(); return its.length ? unionBox(its.map(itemBox)) : null; })() : null;
 
   return (
-    <div className="v3">
+    <div className={'v3' + (simple ? ' v3-simple' : '')}>
       <input ref={fileRef} type="file" hidden accept="application/pdf,image/png,image/jpeg,image/webp" onChange={e => { onUnderlayFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={imgRef} type="file" hidden accept="image/*" onChange={e => { onImageFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={camRef} type="file" hidden accept="image/*" capture="environment" onChange={e => { onImageFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={jsonRef} type="file" hidden accept="application/json,.json" onChange={e => { importJson(e.target.files?.[0]); e.target.value = ''; }} />
 
-      <header className="v3-top">
+      {simple ? <SimpleTop name={doc.name} saved={saved} canUndo={D.canUndo} canRedo={D.canRedo} undo={D.undo} redo={D.redo} fit={fit} home={goHome} help={() => setHelp(true)} toFull={() => setUi('full')} /> : <header className="v3-top">
         <div className="v3-bar r1">
           <button className="v3-tb" aria-label="下絵を読み込む" title="下絵（PDF・画像）を読み込む" onClick={() => fileRef.current?.click()}><ImageIcon size={18} /></button>
           <button className="v3-tb" aria-label="書き出し" title="書き出し" onClick={openMenu('export')}><Download size={18} /></button>
@@ -308,6 +334,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <button className="v3-tb sm" aria-label="連続コピー" title="連続コピー" onClick={contCopy} disabled={!sel.length}><Copy size={16} /></button>
         </div>
         <div className="v3-bar r3">
+          <button className="sx-modebtn" onClick={() => setUi('simple')}>かんたんモード</button>
           <button className="v3-tb sm" aria-label="案件一覧" title="案件一覧へ" onClick={goHome}><House size={16} /></button>
           <span className="v3-mono status">{saved === 'saving' ? '保存中…' : saved === 'error' ? '保存エラー' : 'ローカル保存(端末)'}</span>
           <button className="v3-tb sm" aria-label="上書き保存" title="上書き保存" onClick={() => saveWithThumb().then(() => toast('端末に保存しました'))}><Save size={16} /></button>
@@ -333,13 +360,13 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <button className="v3-mono" title="回転を0°に戻す" onClick={() => zoomRot(-view.r)}>回転: {rotLabel}°</button>
           <button className={'v3-tb sm' + P('settings')} aria-label="設定" title="設定" onClick={panelBtn('settings')}><Settings size={16} /></button>
         </div>
-      </header>
+      </header>}
 
       <div className="v3-body">
-        <div className="v3-stage" ref={stageRef}>
+        <div className="v3-stage" ref={stageRef} data-tour="stage">
           <Canvas doc={doc} lib={lib} ctx={ctx} view={view} setView={setView} tool={tool} opts={opts} guideSnap={guideSnap} fingerMode={fingerMode} penSeen={penSeen} onPen={() => { setPenSeen(true); writePref('gofg-v3-pen-seen', '1'); if (fingerMode === 'auto') toast('Apple Pencilを検出しました。指1本は画面移動になります'); }} showGrid={showGrid} gridMm={gridMm}
             guideEdit={panel === 'guides'} activeGuide={activeGuide} sel={sel} setSel={setSel} api={api} aiSel={aiSel} aiVersion={aiVer} aiRadius={Math.max(4, opts.width * 4)} />
-          <nav className="v3-left" aria-label="よく使う操作">
+          {!simple && <nav className="v3-left" aria-label="よく使う操作">
             <button className="v3-fb" aria-label="やり直す" title="やり直す" disabled={!D.canRedo} onClick={D.redo}><Redo2 size={18} /></button>
             <button className={'v3-fb' + T('select')} aria-label="選択" title="選択（囲んで複数選択）" onClick={() => setTool('select')}><SquareDashedMousePointer size={18} /></button>
             <button className={'v3-fb' + T('pen')} aria-label="ペン" title="ペン" onClick={() => setTool('pen')}><PenTool size={18} /></button>
@@ -350,25 +377,28 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
             <button className={'v3-fb' + P('guides')} aria-label="ガイド線" title="ガイド線" onClick={panelBtn('guides')}><Ruler size={18} /></button>
             <span className="gap" />
             <button className="v3-fb" aria-label="元に戻す" title="元に戻す" disabled={!D.canUndo} onClick={D.undo}><Undo2 size={18} /></button>
-          </nav>
+          </nav>}
           {selBox && tool === 'select' && (
             <div className="v3-selbar">
               <button onClick={() => duplicate()} title="複製"><Copy size={15} />複製</button>
-              <button onClick={contCopy} title="連続コピー">連続</button>
-              <button onClick={flipSel} title="左右反転"><FlipHorizontal2 size={15} /></button>
-              <button onClick={() => orderSel(true)} title="前面へ"><ArrowUp size={15} /></button>
-              <button onClick={() => orderSel(false)} title="背面へ"><ArrowDown size={15} /></button>
-              <button onClick={() => registerFrom(selItems())} title="オブジェクトとして登録"><PackagePlus size={15} />登録</button>
-              <button onClick={deleteSel} className="danger" title="削除"><Trash2 size={15} /></button>
-              <button onClick={() => setSel([])} title="選択解除"><X size={15} /></button>
+              {!simple && <button onClick={contCopy} title="連続コピー">連続</button>}
+              <button onClick={flipSel} title="左右反転"><FlipHorizontal2 size={15} />{simple && '反転'}</button>
+              {!simple && <>
+                <button onClick={() => orderSel(true)} title="前面へ"><ArrowUp size={15} /></button>
+                <button onClick={() => orderSel(false)} title="背面へ"><ArrowDown size={15} /></button>
+                <button onClick={() => registerFrom(selItems())} title="オブジェクトとして登録"><PackagePlus size={15} />登録</button>
+              </>}
+              <button onClick={deleteSel} className="danger" title="削除"><Trash2 size={15} />{simple && '削除'}</button>
+              <button onClick={() => setSel([])} title="選択解除"><X size={15} />{simple && '解除'}</button>
             </div>
           )}
+          {simple && hintOn && hintText && !(selBox && tool === 'select') && <div className="sx-hint">{hintText}</div>}
           {tool === 'calib' && <div className="v3-hint">下絵上で、長さが分かる2点を順に押してください</div>}
-          {tool === 'register' && <div className="v3-hint">登録したい手描き・オブジェクトを囲んでください</div>}
-          {(tool === 'place' || tool === 'random') && <div className="v3-hint">{tool === 'random' ? 'ランダム配置' : '配置'}：{lib.find(l => l.id === libSel)?.name} — 図面をタップ</div>}
+          {!simple && tool === 'register' && <div className="v3-hint">登録したい手描き・オブジェクトを囲んでください</div>}
+          {!simple && (tool === 'place' || tool === 'random') && <div className="v3-hint">{tool === 'random' ? 'ランダム配置' : '配置'}：{lib.find(l => l.id === libSel)?.name} — 図面をタップ</div>}
           {toastMsg && <div className="v3-toast">{toastMsg}</div>}
         </div>
-        {panel && (
+        {panel && !simple && (
           <aside className="v3-side">
             {panel === 'objects' && <ObjectPanel e={editorApi} />}
             {panel === 'layers' && <LayerPanel e={editorApi} />}
@@ -380,6 +410,10 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           </aside>
         )}
       </div>
+      {simple && <SimpleDock step={step} setStep={setStep} tool={tool} setTool={setTool} opts={opts} setOpts={setOpts}
+        lib={lib} libSel={libSel} setLibSel={setLibSel} cat={cat} setCat={setCat}
+        aiCount={aiCount} clearAi={editorApi.clearAi} paint={(t, n) => aiCount ? applyTexture(t, n) : toast(NEED_AREA)} paintColor={() => aiCount ? aiKeyword('#color') : toast(NEED_AREA)}
+        exportAs={exportAs} />}
 
       {menu?.id === 'pen' && <Menu anchor={menu.rect} onClose={() => setMenu(null)}>
         {([['pen', 'ペン', '●'], ['marker', 'マーカー', '▬'], ['matte', 'マット塗り', '■'], ['pencil', '鉛筆', '✎']] as const).map(([b, l, ic]) => <button key={b} className={'mi' + (opts.brush === b ? ' on' : '')} onClick={() => { setOpts({ ...opts, brush: b }); setTool('pen'); setMenu(null); }}><span className="ic">{ic}</span>{l}</button>)}
@@ -410,6 +444,8 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         onCancel={() => setTextDlg(null)}
         onDelete={textDlg.edit ? () => { D.set(d => removeItems(d, new Set([textDlg.edit!.id])), '文字を削除'); setTextDlg(null); } : undefined}
         onOk={(v: TextValue) => { const ed = textDlg.edit; if (ed) D.set(d => updateItem(d, ed.id, it => ({ ...it, ...v }) as Item), '文字を編集'); else addItem({ id: uid(), type: 'text', x: textDlg.p.x, y: textDlg.p.y, text: v.text, size: Math.round(24 / view.k), color: v.color, bg: v.bg, border: v.border, rot: -view.r }); setTextDlg(null); }} />}
+      {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
+      {help && <HelpSheet items={HELP} onClose={() => setHelp(false)} onTour={() => { setHelp(false); setUi('simple'); setTour(true); }} />}
       {prompt && <PromptDialog title={prompt.title} fields={prompt.fields} note={prompt.note} okLabel={prompt.ok} onOk={prompt.run} onCancel={() => { setPrompt(null); if (tool === 'calib') setTool('select'); }} />}
     </div>
   );
