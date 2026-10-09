@@ -147,3 +147,16 @@ it('詳細モード：各パネルの「動画」でそのパネルの解説が�
   await click(q('.v3-side .sx-vbtn'));
   expect(q('.sx-player video')?.getAttribute('src')).toMatch(/f-layers.*\.mp4/);
 });
+
+it('詳細モード：「塗る」から素材の一覧がすぐ出て、AIツールは無い', async () => {
+  await openFull();
+  expect(q('[aria-label="AIツール"]')).toBeNull();
+  await click(q('.v3-left [aria-label="塗る"]'));
+  const side = q('.v3-side')!;
+  expect(side.textContent).toContain('① 塗る場所を選ぶ');
+  for (const name of ['芝', 'ウッド', 'いまの色', '写真から']) expect(byText('.v3-side .v3-texgrid button', name)).toBeTruthy();
+  expect(side.textContent).not.toMatch(/AI|ジョブ|生成/);
+  // 場所を選ぶ前に素材を押すと、先に場所を選ぶよう案内する
+  await click(byText('.v3-side .v3-texgrid button', '芝'));
+  expect(q('.v3-toast')?.textContent).toContain('塗りたい場所');
+});

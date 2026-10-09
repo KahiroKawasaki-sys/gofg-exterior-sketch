@@ -68,3 +68,6 @@ export function builtinTexture(id: string): string {
 // テクスチャ参照は「b:素材ID」か画像のdata URL
 export function textureSrc(tex: string) { return tex.startsWith('b:') ? builtinTexture(tex.slice(2)) : tex; }
 export function textureName(tex: string) { return tex.startsWith('b:') ? (TEXTURES.find(t => t.id === tex.slice(2))?.name || '素材') : '読み込み画像'; }
+
+// ボタン用の短い名前（砂利2種は色で見分ける）
+export const texLabel = (name: string) => name.replace('（ブルーグレー）', '・青').replace('（グレー）', '・灰').replace(/（.*）/, '');

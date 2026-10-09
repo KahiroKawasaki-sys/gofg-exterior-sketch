@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image as ImageIcon, Download, PenTool, ChevronDown, Eraser, Type, MoveHorizontal, Circle, Slash, SquareX, Grid3x3, Maximize, Spline,
   AlignJustify, Lock, LockOpen, RotateCw, RotateCcw, Copy, House, Save, SaveAll, FolderOpen, ArrowDownToLine, ArrowUpFromLine, CloudUpload,
-  User, LogOut, PanelRight, Layers, LayoutGrid, Ruler, FileText, Sparkles, History, Settings, Redo2, Undo2, SquareDashedMousePointer, Magnet,
-  Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, FolderOpen as Folder, CircleHelp, Play,
+  User, LogOut, PanelRight, Layers, LayoutGrid, Ruler, FileText, History, Settings, Redo2, Undo2, SquareDashedMousePointer, Magnet, PaintBucket,
+  Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, CircleHelp, Play,
 } from 'lucide-react';
 import { type Doc, type Item, type LibItem, type Pt, type ObjItem, type TextItem, type TextureItem, type GuideType, PALETTE, uid, itemBox, unionBox, boxOf, pointInPoly, transformItem, dist, rad, newLayer } from './types';
 import { useDoc, ensureLayer, findItem, removeItems, updateItem } from './useDoc';
@@ -15,18 +15,18 @@ const readPref = (k: string) => { try { return localStorage.getItem(k); } catch 
 const writePref = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* 保存できなくても続行 */ } };
 import { builtinLibrary, CATEGORIES } from './library';
 import { itemMarkup } from './markup';
-import { textureSrc, textureName, TEXTURES } from './textures';
-import { Selection, contentBox, fillAt, exportImage, exportPDF, thumbnail, docSVG, rasterize } from './raster';
+import { texLabel } from './textures';
+import { Selection, contentBox, fillAt, exportImage, exportPDF, thumbnail } from './raster';
 import { saveDoc, listLibrary, saveLibItem, deleteLibItem, validDoc } from './store';
-import { LayerPanel, ObjectPanel, GuidePanel, AIPanel, HistoryPanel, TextsPanel, TexturePicker, guideDefaults, type EditorApi, type Job, type GenKind } from './Panels';
-import { TextDialog, PromptDialog, Menu, Modal, type Field, type TextValue } from './Dialogs';
+import { LayerPanel, ObjectPanel, GuidePanel, PaintPanel, HistoryPanel, TextsPanel, guideDefaults, type EditorApi } from './Panels';
+import { TextDialog, PromptDialog, Menu, type Field, type TextValue } from './Dialogs';
 import { readSource } from '../io';
 import { isNativeApp, saveFile } from './platform';
 import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, type TourStep, type HelpTab } from './Simple';
 import { GUIDE_FULL } from './guideFull';
 
-const VERSION = 'ver 2026.10.09-01 (guide-videos)';
-type PanelId = 'objects' | 'layers' | 'guides' | 'ai' | 'settings' | 'history' | 'texts' | null;
+const VERSION = 'ver 2026.10.10-01 (paint-panel)';
+type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | 'texts' | null;
 
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'gaikou';
 
@@ -54,13 +54,11 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const lib = useMemo(() => [...builtinLibrary(), ...userLib], [userLib]);
   const [libSel, setLibSel] = useState<string | null>('b-bicycle'), [cat, setCat] = useState('乗り物');
   const [aiSel, setAiSel] = useState<Selection | null>(null), [aiVer, setAiVer] = useState(0);
-  const [genKind, setGenKind] = useState<GenKind>('texture');
-  const [jobs, setJobs] = useState<Job[]>([]), [activeTex, setActiveTex] = useState<string | null>(null);
+  const [activeTex, setActiveTex] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ id: string; rect: DOMRect } | null>(null);
   const [textDlg, setTextDlg] = useState<{ p: Pt; edit?: TextItem } | null>(null);
   const [prompt, setPrompt] = useState<{ title: string; fields: Field[]; note?: string; ok: string; run: (v: Record<string, string | number | boolean>) => void } | null>(null);
-  const [texPick, setTexPick] = useState(false);
   const [saved, setSaved] = useState<'saved' | 'saving' | 'error'>('saved');
   const stageRef = useRef<HTMLDivElement>(null), fileRef = useRef<HTMLInputElement>(null), imgRef = useRef<HTMLInputElement>(null), camRef = useRef<HTMLInputElement>(null), jsonRef = useRef<HTMLInputElement>(null);
   const ctx = useMemo(() => ({ mmPerPx: doc.mmPerPx, unit: opts.unit }), [doc.mmPerPx, opts.unit]);
@@ -126,6 +124,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     toast(`「${l.name}」を${l.cat}に登録しました`);
   };
 
+  const NEED_AREA = '先に、塗りたい場所（線で囲まれた所）をタップしてください';
   const ensureSel = (p?: Pt) => {
     if (aiSel) return aiSel;
     const b = contentBox(doc, 300), bb = p ? unionBox([b, { x: p.x - 50, y: p.y - 50, w: 100, h: 100 }]) : b;
@@ -134,25 +133,18 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   // 選択ブラシは選択範囲の入れ物が無いと何も塗れないため、道具を選んだ時点で用意する
   useEffect(() => { if (tool === 'aiBrush' && !aiSel) ensureSel(); }, [tool, aiSel]);
 
-  const applyTexture = (tex: string, texName: string, jobName = texName) => {
-    if (!aiSel || !aiSel.count()) return toast('先に「塗りつぶし追加」か「選択ブラシ」で範囲を選んでください');
+  const applyTexture = (tex: string, texName: string) => {
+    if (!aiSel || !aiSel.count()) return toast(NEED_AREA);
     const img = aiSel.image([255, 255, 255, 255], true); if (!img) return;
     const it: TextureItem = { id: uid(), type: 'texture', name: texName, mask: img.url, ...img.box, tex, texName, scale: tex.startsWith('data:image/png;base64,') && texName === '色' ? 1 : 1, rot: 0, hue: 0, sat: 100, bright: 100, contrast: 100 };
-    const n = doc.layers.filter(l => l.kind === 'texture').length + 1, layer = newLayer(`生成テクスチャ ${n}`, 'texture');
+    const n = doc.layers.filter(l => l.kind === 'texture').length + 1, layer = newLayer(`塗り ${n}（${texName}）`, 'texture');
     layer.items = [it];
     D.set(d => { const fi = d.layers.findIndex(l => l.kind === 'fill'), lastTex = d.layers.map(l => l.kind).lastIndexOf('texture'), at = Math.max(fi, lastTex) + 1; const layers = [...d.layers]; layers.splice(at, 0, layer); return { ...d, layers }; }, 'テクスチャを適用');
-    const now = new Date();
-    setJobs(j => [...j, { id: uid(), name: jobName, thumb: textureSrc(tex), tex, texName, sel: aiSel.count() > 0 ? j.length + 1 : 0, layer: layer.name, time: now.toTimeString().slice(0, 5) }]);
-    setActiveTex(it.id); setAiSel(null); toast('テクスチャを適用しました');
+    setActiveTex(it.id); setAiSel(null); toast(`${texLabel(texName)}で塗りました`);
   };
 
   const solidTex = (c: string) => { const cv = document.createElement('canvas'); cv.width = cv.height = 8; const g = cv.getContext('2d')!; g.fillStyle = c; g.fillRect(0, 0, 8, 8); return cv.toDataURL('image/png'); };
-  const aiKeyword = (k: string) => {
-    if (k === '#color') return applyTexture(solidTex(opts.color), '色', 'カラーオブジェクト');
-    const map: [RegExp, string][] = [[/青|ブルー|砂利|じゃり/, 'gravel-blue'], [/グレー|灰|砕石/, 'gravel-gray'], [/コンクリ|土間|モルタル/, 'concrete'], [/洗い出し|ベージュ/, 'washed'], [/土|チップ|ウッドチップ|マルチ|茶/, 'soil'], [/芝|草|グリーン/, 'grass'], [/レンガ|煉瓦/, 'brick'], [/タイル|石張/, 'tile'], [/デッキ|木|ウッド/, 'deck'], [/水|池/, 'water']];
-    const hit = map.find(([re]) => re.test(k)); const id = hit ? hit[1] : TEXTURES[Math.floor(Math.random() * TEXTURES.length)].id;
-    applyTexture('b:' + id, textureName('b:' + id), `「${k}」から生成`);
-  };
+  const paintColor = () => applyTexture(solidTex(opts.color), '色');
 
   const onImageFile = async (f: File | undefined) => {
     if (!f) return;
@@ -161,7 +153,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     // 大きい写真は縮小してテクスチャにする
     const img = new Image(); await new Promise(r => { img.onload = r; img.src = url; });
     const s = Math.min(1, 512 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s); c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
-    applyTexture(c.toDataURL('image/jpeg', 0.88), f.name.replace(/\.[^.]+$/, ''), f.name.replace(/\.[^.]+$/, ''));
+    applyTexture(c.toDataURL('image/jpeg', 0.88), '写真');
   };
 
   const onUnderlayFile = async (f: File | undefined) => {
@@ -229,7 +221,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     text: (p, editId) => { const ex = editId ? findItem(doc, editId)?.item as TextItem | undefined : undefined; setTextDlg({ p, edit: ex }); },
     place: placeObj,
     lasso: (poly) => { const items: Item[] = []; for (const l of doc.layers) if (l.visible && (l.id === doc.activeLayer || l.kind === 'object' || l.kind === 'draw')) for (const it of l.items) { if (it.type === 'texture') continue; const b = itemBox(it); if (pointInPoly({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, poly)) items.push(it); } registerFrom(items); },
-    fill: async p => { const s = ensureSel(p); try { const ok = await fillAt(doc, lib, ctx, s, p); if (ok) { setAiVer(v => v + 1); toast(simple ? '塗る場所を選びました。下から素材を選んでください' : 'AIツール: 選択範囲を追加しました'); } else toast('閉じた輪郭の内側をタップしてください（線のすき間をふさぐと選べます）'); } catch { toast('範囲を判定できませんでした'); } },
+    fill: async p => { const s = ensureSel(p); try { const ok = await fillAt(doc, lib, ctx, s, p); if (ok) { setAiVer(v => v + 1); toast(simple ? '塗る場所を選びました。下から素材を選んでください' : '塗る場所を選びました。右の一覧から素材を選んでください'); } else toast('閉じた輪郭の内側をタップしてください（線のすき間をふさぐと選べます）'); } catch { toast('範囲を判定できませんでした'); } },
     aiBrushed: () => setAiVer(v => v + 1),
     calib, selectGuide: id => { setActiveGuide(id); },
   };
@@ -242,12 +234,10 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     registerItem: id => { const f = findItem(doc, id); if (f) registerFrom([f.item], f.item.type === 'obj' ? f.item.name + '（登録）' : undefined); },
     activeGuide, setActiveGuide, unit: opts.unit,
     addGuide: (t: GuideType) => { const c = viewCenter(), span = 380 / view.k; const g = { ...guideDefaults(t, c, span), name: `ガイド` }; if (t !== 'line') g.name = guideDefaults(t, c, span).name; D.set(d => ({ ...d, guides: [...d.guides, g] }), 'ガイド線を追加'); setActiveGuide(g.id); },
-    aiSel, aiCount: aiSel && aiVer >= 0 ? aiSel.count() : 0, clearAi: () => { aiSel?.clear(); setAiSel(null); }, genKind, setGenKind, jobs,
-    applyJob: j => applyTexture(j.tex, j.texName, j.name),
-    pickImage: rect => setMenu({ id: 'apply', rect }),
-    activeTex, setActiveTex, recallSelection: async t => { setAiSel(await Selection.fromImage(t.mask, { x: t.x, y: t.y, w: t.w, h: t.h })); setAiVer(v => v + 1); toast('選択範囲を呼び出しました'); },
-    saveTexture: async t => { const svg = docSVG({ ...doc, underlay: undefined, layers: [{ id: 'x', name: 'x', kind: 'texture', visible: true, locked: false, opacity: 1, items: [t] }] }, lib, ctx, { x: t.x, y: t.y, w: t.w, h: t.h }, { pxW: t.w * 2, pxH: t.h * 2 }); const c = await rasterize(svg, t.w * 2, t.h * 2); c.toBlob(b => { if (b) void saveFile(b, safeName(t.texName) + '-texture.png').catch(() => toast('テクスチャを書き出せませんでした')); }); },
-    aiKeyword, openPanel: p => setPanel(p as PanelId),
+    aiCount: aiSel && aiVer >= 0 ? aiSel.count() : 0, clearAi: () => { aiSel?.clear(); setAiSel(null); },
+    paintTex: (t, n) => applyTexture(t, n), paintColor, color: opts.color,
+    pickPhoto: rect => aiSel?.count() ? setMenu({ id: 'apply', rect }) : toast(NEED_AREA),
+    activeTex, setActiveTex,
     history: D.history, restore: D.restore,
     video: id => setHelp({ tab: 'full', open: id }),
     editText: id => { const f = findItem(doc, id); if (f && f.item.type === 'text') setTextDlg({ p: { x: f.item.x, y: f.item.y }, edit: f.item }); },
@@ -280,7 +270,6 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const P = (p: PanelId) => panel === p ? ' on' : '';
   const fs = () => { if (isNativeApp()) return toast('アプリは全画面で表示しています'); if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => toast('全画面にできませんでした')); };
   const aiCount = aiSel && aiVer >= 0 ? aiSel.count() : 0;
-  const NEED_AREA = '先に、塗りたい場所（線で囲まれた所）をタップしてください';
   const hintText = simple ? simpleHint(tool, aiCount, lib.find(l => l.id === libSel)?.name, step) : '';
   const tourSteps: TourStep[] = [
     { target: 'dock', title: 'この4つだけ覚えればOK', text: '左から順に使うと、外構図が1枚できあがります。', demo: 'flow', before: () => setStep('draw') },
@@ -357,7 +346,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <button className={'v3-tb sm' + P('objects')} aria-label="オブジェクト" title="オブジェクト" onClick={panelBtn('objects')}><LayoutGrid size={16} /></button>
           <button className={'v3-tb sm' + P('guides')} aria-label="ガイド線" title="ガイド線" onClick={panelBtn('guides')}><Ruler size={16} /></button>
           <button className={'v3-tb sm' + P('texts')} aria-label="テキスト一覧" title="テキスト一覧" onClick={panelBtn('texts')}><FileText size={16} /></button>
-          <button className={'v3-tb sm' + P('ai')} aria-label="AIツール" title="AIツール（選択範囲・テクスチャ）" onClick={panelBtn('ai')}><Sparkles size={16} /></button>
+          <button className={'v3-tb sm' + P('paint')} aria-label="塗る" title="塗る（砂利・芝・ウッドなど）" onClick={() => { if (panel === 'paint') return setPanel(null); setPanel('paint'); setTool('aiFill'); }}><PaintBucket size={16} /></button>
           <button className="v3-tb sm" aria-label="左に回転" title="表示を左に15°回転" onClick={() => zoomRot(-15)}><RotateCcw size={16} /></button>
           <button className="v3-tb sm" aria-label="右に回転" title="表示を右に15°回転" onClick={() => zoomRot(15)}><RotateCw size={16} /></button>
           <button className={'v3-tb sm' + P('history')} aria-label="履歴" title="履歴" onClick={panelBtn('history')}><History size={16} /></button>
@@ -377,7 +366,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
             <button className={'v3-fb' + T('eraser')} aria-label="消しゴム" title="消しゴム" onClick={() => setTool('eraser')}><Eraser size={18} /></button>
             <button className={'v3-fb' + (guideSnap ? ' on' : '')} aria-label="ガイド吸着" title={guideSnap ? 'ガイド吸着 ON' : 'ガイド吸着 OFF'} onClick={() => { setGuideSnap(v => !v); toast(guideSnap ? 'ガイド吸着 OFF' : 'ガイド吸着 ON'); }}><Magnet size={18} /></button>
             <button className={'v3-fb' + P('layers')} aria-label="レイヤー" title="レイヤー" onClick={panelBtn('layers')}><AlignJustify size={18} /></button>
-            <button className={'v3-fb' + T('aiFill')} aria-label="塗りつぶし範囲" title="閉じた範囲を選ぶ（AIツール）" onClick={() => { setTool('aiFill'); setPanel('ai'); }}><Sparkles size={18} /></button>
+            <button className={'v3-fb' + (panel === 'paint' ? ' on' : '')} aria-label="塗る" title="塗る（砂利・芝・ウッドなど）" onClick={() => { setTool('aiFill'); setPanel('paint'); }}><PaintBucket size={18} /></button>
             <button className={'v3-fb' + P('guides')} aria-label="ガイド線" title="ガイド線" onClick={panelBtn('guides')}><Ruler size={18} /></button>
             <span className="gap" />
             <button className="v3-fb" aria-label="元に戻す" title="元に戻す" disabled={!D.canUndo} onClick={D.undo}><Undo2 size={18} /></button>
@@ -407,7 +396,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
             {panel === 'objects' && <ObjectPanel e={editorApi} />}
             {panel === 'layers' && <LayerPanel e={editorApi} />}
             {panel === 'guides' && <GuidePanel e={editorApi} />}
-            {panel === 'ai' && <AIPanel e={editorApi} />}
+            {panel === 'paint' && <PaintPanel e={editorApi} />}
             {panel === 'history' && <HistoryPanel e={editorApi} />}
             {panel === 'texts' && <TextsPanel e={editorApi} />}
             {panel === 'settings' && settingsPanel()}
@@ -416,7 +405,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       </div>
       {simple && <SimpleDock step={step} setStep={setStep} tool={tool} setTool={setTool} opts={opts} setOpts={setOpts}
         lib={lib} libSel={libSel} setLibSel={setLibSel} cat={cat} setCat={setCat}
-        aiCount={aiCount} clearAi={editorApi.clearAi} paint={(t, n) => aiCount ? applyTexture(t, n) : toast(NEED_AREA)} paintColor={() => aiCount ? aiKeyword('#color') : toast(NEED_AREA)}
+        aiCount={aiCount} clearAi={editorApi.clearAi} paint={(t, n) => aiCount ? applyTexture(t, n) : toast(NEED_AREA)} paintColor={() => aiCount ? paintColor() : toast(NEED_AREA)}
         exportAs={exportAs} />}
 
       {menu?.id === 'pen' && <Menu anchor={menu.rect} onClose={() => setMenu(null)}>
@@ -438,12 +427,9 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         <hr /><button className="mi" onClick={() => exportAs('json')}>編集データ（.json）</button>
       </Menu>}
       {menu?.id === 'apply' && <Menu anchor={menu.rect} onClose={() => setMenu(null)}>
-        <button className="mi" onClick={() => { setMenu(null); setTexPick(true); }}><LayoutGrid size={15} />素材ライブラリ</button>
-        <button className="mi" onClick={() => { setMenu(null); imgRef.current?.click(); }}><Images size={15} />写真ライブラリ</button>
+        <button className="mi" onClick={() => { setMenu(null); imgRef.current?.click(); }}><Images size={15} />写真を選ぶ</button>
         <button className="mi" onClick={() => { setMenu(null); camRef.current?.click(); }}><Camera size={15} />写真を撮る</button>
-        <button className="mi" onClick={() => { setMenu(null); imgRef.current?.click(); }}><Folder size={15} />ファイルを選択</button>
       </Menu>}
-      {texPick && <Modal title="素材ライブラリ" onClose={() => setTexPick(false)} wide><TexturePicker onPick={(t, n) => { setTexPick(false); applyTexture(t, n); }} /><div className="v3-actions"><span className="sp" /><button className="v3-btn" onClick={() => setTexPick(false)}>閉じる</button></div></Modal>}
       {textDlg && <TextDialog initial={textDlg.edit ? { text: textDlg.edit.text, color: textDlg.edit.color, bg: textDlg.edit.bg, border: textDlg.edit.border } : { text: '', color: opts.color === '#ffffff' ? PALETTE[0] : opts.color, bg: null, border: null }}
         onCancel={() => setTextDlg(null)}
         onDelete={textDlg.edit ? () => { D.set(d => removeItems(d, new Set([textDlg.edit!.id])), '文字を削除'); setTextDlg(null); } : undefined}

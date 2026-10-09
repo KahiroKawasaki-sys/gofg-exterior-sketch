@@ -78,7 +78,7 @@ export function dilate(src: Uint8Array, W: number, H: number, r: number): Uint8A
   return out;
 }
 
-// 選択範囲（AIツール）。図面上の固定範囲を画素で持つ。
+// 塗る場所（選択範囲）。図面上の固定範囲を画素で持つ。
 export class Selection {
   box: Box; k: number; W: number; H: number; bits: Uint8Array; version = 0;
   constructor(box: Box) {

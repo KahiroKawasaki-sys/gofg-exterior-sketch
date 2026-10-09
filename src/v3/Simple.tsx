@@ -9,7 +9,7 @@ import { type LibItem } from './types';
 import { type Tool, type ToolOpts } from './Canvas';
 import { Thumb } from './Panels';
 import { CATEGORIES } from './library';
-import { TEXTURES, textureSrc } from './textures';
+import { TEXTURES, textureSrc, texLabel } from './textures';
 import './simple.css';
 // 実画面の操作動画（scripts/record-guide.py で撮り直せる）
 import drawMp4 from './guide/draw.mp4';
@@ -150,7 +150,7 @@ function PaintSheet({ aiCount, clearAi, paint, paintColor, opts }: DockProps) {
       <i className="sx-sep" />
       <div className={'sx-texs' + (aiCount ? '' : ' wait')}>
         {TEXTURES.map(t => (
-          <button key={t.id} className="sx-tex" onClick={() => paint('b:' + t.id, t.name)}><img src={textureSrc('b:' + t.id)} alt="" /><span>{t.name.replace(/（.*）/, '')}</span></button>
+          <button key={t.id} className="sx-tex" onClick={() => paint('b:' + t.id, t.name)}><img src={textureSrc('b:' + t.id)} alt="" /><span>{texLabel(t.name)}</span></button>
         ))}
         <button className="sx-tex" onClick={paintColor}><b style={{ background: opts.color }} /><span>いまの色</span></button>
       </div>

@@ -119,7 +119,7 @@ export function Canvas(props: Props) {
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   });
 
-  // 選択範囲（AIツール）の表示
+  // 塗る場所（選択範囲）の表示
   useEffect(() => {
     const s = props.aiSel, c = selCanvas.current; if (!s || !c) return;
     if (c.width !== s.W || c.height !== s.H) { c.width = s.W; c.height = s.H; }

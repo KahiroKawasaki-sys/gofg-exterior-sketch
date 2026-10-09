@@ -1,15 +1,12 @@
-// 右側パネル（オブジェクト・レイヤー・ガイド線・AIツール・設定・履歴・テキスト）
+// 右側パネル（オブジェクト・レイヤー・ガイド線・塗る・設定・履歴・テキスト）
 import { useRef, useState, type ReactNode } from 'react';
-import { Plus, Copy, ArrowDownToLine, Combine, Trash2, Eye, EyeOff, Lock, LockOpen, GripVertical, X, CircleMinus, Pencil, Play } from 'lucide-react';
+import { Plus, Copy, ArrowDownToLine, Combine, Trash2, Eye, EyeOff, Lock, LockOpen, GripVertical, X, CircleMinus, Pencil, Play, Images } from 'lucide-react';
 import { type Doc, type Layer, type LibItem, type Guide, type GuideType, type ObjItem, type TextureItem, type TextItem, type Pt, dist, deg, rad, fmtLen, PALETTE } from './types';
 import { CATEGORIES } from './library';
-import { TEXTURES, textureSrc } from './textures';
-import { type Selection } from './raster';
+import { TEXTURES, textureSrc, texLabel } from './textures';
 import { type HistEntry } from './useDoc';
 import { type Tool } from './Canvas';
 
-export type Job = { id: string; name: string; thumb: string; tex: string; texName: string; sel: number; layer: string; time: string };
-export type GenKind = 'texture' | 'aiTexture' | 'aiPen' | 'aiObject' | 'color';
 
 export type EditorApi = {
   doc: Doc; set: (f: (d: Doc) => Doc, label?: string) => void; live: (f: (d: Doc) => Doc) => void; end: (label?: string) => void;
@@ -19,10 +16,9 @@ export type EditorApi = {
   sel: string[]; setSel: (ids: string[]) => void; removeLib: (id: string) => void; updateLib: (l: LibItem) => void; registerItem: (id: string) => void;
   // guides
   activeGuide: string | null; setActiveGuide: (id: string | null) => void; addGuide: (t: GuideType) => void; unit: string;
-  // ai
-  aiSel: Selection | null; aiCount: number; clearAi: () => void; genKind: GenKind; setGenKind: (g: GenKind) => void; jobs: Job[]; applyJob: (j: Job) => void;
-  pickImage: (anchor: DOMRect) => void; activeTex: string | null; setActiveTex: (id: string | null) => void; recallSelection: (t: TextureItem) => void; saveTexture: (t: TextureItem) => void; aiKeyword: (k: string) => void;
-  openPanel: (p: string) => void;
+  // paint
+  aiCount: number; clearAi: () => void; paintTex: (tex: string, name: string) => void; paintColor: () => void; color: string;
+  pickPhoto: (anchor: DOMRect) => void; activeTex: string | null; setActiveTex: (id: string | null) => void;
   // history
   history: HistEntry[]; restore: (i: number) => void;
   editText: (id: string) => void;
@@ -252,72 +248,42 @@ export function GuidePanel({ e }: { e: EditorApi }) {
   );
 }
 
-// ---------------- AIツール（選択範囲・テクスチャ） ----------------
-export function AIPanel({ e }: { e: EditorApi }) {
-  const { doc, tool, setTool, genKind, setGenKind } = e;
-  const [kw, setKw] = useState('砂利');
+// ---------------- 塗る（範囲を選んで素材を敷く） ----------------
+export function PaintPanel({ e }: { e: EditorApi }) {
+  const { doc, tool, setTool } = e;
   const texItems = doc.layers.flatMap(l => l.items.filter(i => i.type === 'texture').map(i => ({ item: i as TextureItem, layer: l })));
   const cur = texItems.find(t => t.item.id === e.activeTex) || texItems[texItems.length - 1];
   const updTex = (f: (t: TextureItem) => TextureItem) => cur && e.live(d => ({ ...d, layers: d.layers.map(l => l.id === cur.layer.id ? { ...l, items: l.items.map(i => i.id === cur.item.id ? f(i as TextureItem) : i) } : l) }));
-  const slider = (label: string, key: 'scale' | 'rot' | 'hue' | 'sat' | 'bright' | 'contrast', min: number, max: number, step = 1) => cur && (
-    <div className="v3-slider vlab"><span className="vert">{label}</span><input type="range" min={min} max={max} step={step} value={cur.item[key]} onChange={ev => updTex(t => ({ ...t, [key]: +ev.target.value }))} onPointerUp={() => e.end('テクスチャ設定')} onKeyUp={() => e.end('テクスチャ設定')} /><input className="num" type="number" step={step} value={cur.item[key]} onChange={ev => { updTex(t => ({ ...t, [key]: +ev.target.value })); e.end('テクスチャ設定'); }} /></div>
+  const slider = (label: string, key: 'scale' | 'rot' | 'hue' | 'bright', min: number, max: number, step = 1) => cur && (
+    <div className="v3-slider"><span>{label}</span><input type="range" min={min} max={max} step={step} value={cur.item[key]} onChange={ev => updTex(t => ({ ...t, [key]: +ev.target.value }))} onPointerUp={() => e.end('塗りの調整')} onKeyUp={() => e.end('塗りの調整')} /></div>
   );
+  const removeCur = () => cur && e.set(d => ({ ...d, layers: d.layers.flatMap(l => l.id !== cur.layer.id ? [l] : l.items.length > 1 ? [{ ...l, items: l.items.filter(i => i.id !== cur.item.id) }] : []) }), '塗りを消す');
   return (
     <div className="v3-panel">
-      <Head title="AIツール" onClose={e.close} video={() => e.video('f-paint')} />
-      <Card title="選択範囲">
-        <div className="v3-grid4">
-          <button className={'v3-pbtn sq' + (tool === 'aiBrush' ? ' on' : '')} onClick={() => setTool('aiBrush')}>選択ブラシ</button>
-          <button className={'v3-pbtn sq' + (tool === 'aiErase' ? ' on' : '')} onClick={() => setTool('aiErase')}>選択消しゴム</button>
-          <button className={'v3-pbtn sq' + (tool === 'aiFill' ? ' on' : '')} onClick={() => setTool('aiFill')}>塗りつぶし追加</button>
-          <button className="v3-pbtn sq" disabled={!e.aiCount} onClick={e.clearAi}>クリア</button>
+      <Head title="塗る" onClose={e.close} video={() => e.video('f-paint')} />
+      <Card title="① 塗る場所を選ぶ">
+        <div className="v3-grid3">
+          <button className={'v3-pbtn sm' + (tool === 'aiFill' ? ' on' : '')} onClick={() => setTool('aiFill')}>囲まれた所をタップ</button>
+          <button className={'v3-pbtn sm' + (tool === 'aiBrush' ? ' on' : '')} onClick={() => setTool('aiBrush')}>なぞって追加</button>
+          <button className={'v3-pbtn sm' + (tool === 'aiErase' ? ' on' : '')} onClick={() => setTool('aiErase')}>なぞって減らす</button>
         </div>
-        <span className="v3-badge">{e.aiCount ? `選択中 ${e.aiCount}` : '未選択'}</span>
-        <p className="v3-note">閉じた輪郭の内側をタップして、選択範囲に追加します。ブラシの太さは上部の線幅で変わります。</p>
+        <div className="v3-row"><span className="v3-badge">{e.aiCount ? '場所を選びました' : 'まだ選んでいません'}</span>{e.aiCount > 0 && <button className="v3-link" onClick={e.clearAi}>選び直す</button>}</div>
       </Card>
-      <Card title="生成種別">
-        <div className="v3-chips">
-          {([['texture', 'テクスチャツール'], ['aiTexture', 'AIテクスチャ'], ['aiPen', 'AIペン'], ['aiObject', 'AIオブジェクト'], ['color', 'カラーオブジェクト生成']] as [GenKind, string][]).map(([k, l]) => <button key={k} className={'v3-chip lg' + (genKind === k ? ' on soft' : '')} onClick={() => setGenKind(k)}>{l}</button>)}
+      <Card title="② 素材を選ぶ">
+        <div className={'v3-texgrid sm' + (e.aiCount ? '' : ' wait')}>
+          {TEXTURES.map(t => <button key={t.id} onClick={() => e.paintTex('b:' + t.id, t.name)}><img src={textureSrc('b:' + t.id)} alt="" /><span>{texLabel(t.name)}</span></button>)}
+          <button onClick={e.paintColor}><b style={{ background: e.color }} /><span>いまの色</span></button>
+          <button onClick={ev => e.pickPhoto(ev.currentTarget.getBoundingClientRect())}><b className="photo"><Images size={20} /></b><span>写真から</span></button>
         </div>
-        <p className="v3-note">{genKind === 'texture' ? '生成種別: テクスチャツール / 画像読込 / 繰返し適用' : genKind === 'aiTexture' ? 'キーワードから素材テクスチャを作ります（端末内で生成）' : genKind === 'color' ? '選択範囲を上部で選んだ色で塗ります' : 'AI接続を設定すると使えます（現在は未接続）'}</p>
       </Card>
-      <Card title="生成">
-        {genKind === 'texture' && <button className="v3-btn primary" onClick={ev => e.pickImage(ev.currentTarget.getBoundingClientRect())}>画像を適用…</button>}
-        {genKind === 'aiTexture' && <div className="v3-row"><input className="v3-in" value={kw} onChange={ev => setKw(ev.target.value)} placeholder="例: 砂利 芝 レンガ" /><button className="v3-btn primary" onClick={() => e.aiKeyword(kw)}>生成</button></div>}
-        {genKind === 'color' && <button className="v3-btn primary" onClick={() => e.aiKeyword('#color')}>色で塗る</button>}
-        {(genKind === 'aiPen' || genKind === 'aiObject') && <button className="v3-btn primary" disabled>生成</button>}
-        <p className="v3-note">接続先: {genKind === 'aiPen' || genKind === 'aiObject' ? '未設定' : 'ローカル画像'}</p>
-      </Card>
-      <Card title="ジョブ">
-        <div className="v3-jobs">
-          {!e.jobs.length && <div className="v3-empty">生成ジョブはありません。</div>}
-          {[...e.jobs].reverse().map(j => (
-            <div key={j.id} className="v3-job">
-              <img src={j.thumb} alt="" />
-              <div><b>{j.name}</b><em>DONE</em><p>Selection: {j.sel} / Ref: {j.texName} / Layer: {j.layer} / {j.time}</p><div className="bar"><i /></div><button className="v3-link" onClick={() => e.applyJob(j)}>適用</button></div>
-            </div>
-          ))}
-        </div>
-        <p className="v3-note">{e.jobs.length ? `完了 ${e.jobs.length}` : '待機中のジョブはありません。'}</p>
-      </Card>
-      <Card title="テクスチャ設定">
-        {cur ? <>
-          <p className="v3-note">{cur.item.texName} / {cur.layer.name}</p>
-          <div className="v3-grid3">
-            <button className="v3-pbtn sm" onClick={() => e.recallSelection(cur.item)}>選択範囲を呼び出す</button>
-            <button className="v3-pbtn sm" onClick={() => { e.set(d => ({ ...d, activeLayer: cur.layer.id }), 'レイヤーを選択'); e.openPanel('layers'); }}>レイヤーを選択</button>
-            <button className="v3-pbtn sm" onClick={() => e.saveTexture(cur.item)}>テクスチャ画像を保存</button>
-          </div>
-          {texItems.length > 1 && <select className="v3-in" value={cur.item.id} onChange={ev => e.setActiveTex(ev.target.value)}>{texItems.map(t => <option key={t.item.id} value={t.item.id}>{t.layer.name}：{t.item.texName}</option>)}</select>}
-          {slider('拡大', 'scale', 0.1, 5, 0.1)}{slider('回転', 'rot', -180, 180)}{slider('色相', 'hue', -180, 180)}{slider('彩度', 'sat', 0, 200)}{slider('明るさ', 'bright', 20, 200)}{slider('コントラスト', 'contrast', 20, 200)}
-        </> : <p className="v3-note">保存済みのテクスチャを選ぶと、ここで拡大縮小や回転、色味、明るさを調整できます。</p>}
-      </Card>
+      {cur && <Card title="塗った素材の調整">
+        {texItems.length > 1 && <select className="v3-in" value={cur.item.id} onChange={ev => e.setActiveTex(ev.target.value)}>{texItems.map((t, i) => <option key={t.item.id} value={t.item.id}>{i + 1}. {t.item.texName}</option>)}</select>}
+        {texItems.length <= 1 && <p className="v3-note">{cur.item.texName}</p>}
+        {slider('大きさ', 'scale', 0.1, 5, 0.1)}{slider('向き', 'rot', -180, 180)}{slider('明るさ', 'bright', 20, 200)}{slider('色味', 'hue', -180, 180)}
+        <button className="v3-btn danger" onClick={removeCur}>この塗りを消す</button>
+      </Card>}
     </div>
   );
-}
-
-export function TexturePicker({ onPick }: { onPick: (tex: string, name: string) => void }) {
-  return <div className="v3-texgrid">{TEXTURES.map(t => <button key={t.id} onClick={() => onPick('b:' + t.id, t.name)}><img src={textureSrc('b:' + t.id)} alt="" /><span>{t.name}</span></button>)}</div>;
 }
 
 // ---------------- 履歴・テキスト ----------------

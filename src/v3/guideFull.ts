@@ -29,7 +29,7 @@ export const GUIDE_FULL: GuideVideo[] = [
   { id: 'f-objects', title: '部品（オブジェクト）', text: '配置・サイズ調整・ランダム配置・囲って登録', video: objectsMp4, poster: objectsJpg },
   { id: 'f-layers', title: 'レイヤー', text: '下描き→清書、透明度・非表示・ロック', video: layersMp4, poster: layersJpg },
   { id: 'f-guides', title: 'ガイド線', text: '向きを合わせて平行に描く、勾配・円ガイド', video: guidesMp4, poster: guidesJpg },
-  { id: 'f-paint', title: '塗り・素材（AIツール）', text: '範囲を選んで素材、大きさ・色味の調整、言葉から素材', video: paintMp4, poster: paintJpg },
+  { id: 'f-paint', title: '塗る（砂利・芝・ウッド）', text: '囲まれた所をタップして素材を選ぶ、大きさ・向きの調整', video: paintMp4, poster: paintJpg },
   { id: 'f-underlay', title: '下絵と縮尺合わせ', text: 'PDFを敷く、濃さ、2点で実寸に合わせる', video: underlayMp4, poster: underlayJpg },
   { id: 'f-save', title: '保存・書き出し・履歴', text: '別名保存、PDF・編集データ、履歴で戻す', video: saveMp4, poster: saveJpg },
 ];
