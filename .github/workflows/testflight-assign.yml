@@ -1,0 +1,26 @@
+name: Add build to TestFlight testers
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: 内部テスターへ配信するビルド番号（例 1.5.1）
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  assign:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Add the build to internal TestFlight groups
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          GOFG_BUILD: ${{ inputs.build }}
+        run: python3 scripts/testflight_assign.py

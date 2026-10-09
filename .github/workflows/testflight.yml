@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       upload:
-        description: 検査後にAppleへアップロード（本人が手動実行）
+        description: 検査後にAppleへアップロードし、内部テスターへ配信
         type: boolean
         required: true
         default: false
@@ -46,3 +46,11 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GOFG_UPLOAD: ${{ inputs.upload }}
         run: python3 scripts/distribute.py
+      - name: Add the uploaded build to internal TestFlight groups
+        if: inputs.upload
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          GOFG_BUILD: 1.${{ github.run_number }}.${{ github.run_attempt }}
+        run: python3 scripts/testflight_assign.py
