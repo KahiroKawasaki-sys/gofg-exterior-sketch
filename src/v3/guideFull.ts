@@ -22,11 +22,11 @@ import saveMp4 from './guide/f-save.mp4';
 import saveJpg from './guide/f-save.jpg';
 
 export const GUIDE_FULL: GuideVideo[] = [
-  { id: 'f-screen', title: '画面の見方', text: '3段の道具・左のボタン・右のパネル', video: screenMp4, poster: screenJpg },
+  { id: 'f-screen', title: '画面の見方', text: '2段の道具・左のボタン・右のパネル', video: screenMp4, poster: screenJpg },
   { id: 'f-pen', title: 'ペン・線・図形', text: 'ペンの種類、太さ・色、矢印・楕円・円・曲線、破線', video: penMp4, poster: penJpg },
   { id: 'f-dim', title: '寸法・文字', text: '寸法線と単位、文字の背景・枠、あとから直す', video: dimMp4, poster: dimJpg },
   { id: 'f-select', title: '選択・コピー・回転', text: '移動・拡大・回転、複製、連続コピー、まとめて選択', video: selectMp4, poster: selectJpg },
-  { id: 'f-objects', title: '部品（オブジェクト）', text: '配置・サイズ調整・ランダム配置・囲って登録', video: objectsMp4, poster: objectsJpg },
+  { id: 'f-objects', title: '部品（車・植栽など）', text: '押して置く・大きさ調整・ランダム配置・手描きを登録', video: objectsMp4, poster: objectsJpg },
   { id: 'f-layers', title: 'レイヤー', text: '下描き→清書、透明度・非表示・ロック', video: layersMp4, poster: layersJpg },
   { id: 'f-guides', title: 'ガイド線', text: '向きを合わせて平行に描く、勾配・円ガイド', video: guidesMp4, poster: guidesJpg },
   { id: 'f-paint', title: '塗る（砂利・芝・ウッド）', text: '囲まれた所をタップして素材を選ぶ、大きさ・向きの調整', video: paintMp4, poster: paintJpg },

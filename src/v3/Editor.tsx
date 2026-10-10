@@ -1,9 +1,8 @@
-// v0.3 エディタ：上部3段の道具、左の縦ボタン、右のパネル、作図領域
+// v0.3 エディタ：上部2段の道具、左の縦ボタン、右のパネル、作図領域
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Image as ImageIcon, Download, PenTool, ChevronDown, Eraser, Type, MoveHorizontal, Circle, Slash, SquareX, Grid3x3, Maximize, Spline,
-  AlignJustify, Lock, LockOpen, RotateCw, RotateCcw, Copy, House, Save, SaveAll, FolderOpen, ArrowDownToLine, ArrowUpFromLine, CloudUpload,
-  User, LogOut, PanelRight, Layers, LayoutGrid, Ruler, FileText, History, Settings, Redo2, Undo2, SquareDashedMousePointer, Magnet, PaintBucket,
+  Image as ImageIcon, Download, PenTool, ChevronDown, Eraser, Type, MoveHorizontal, Circle, Slash, SquareX, Grid3x3, Spline, RotateCcw,
+  Copy, House, SaveAll, Layers, LayoutGrid, Ruler, History, Settings, Redo2, Undo2, SquareDashedMousePointer, Magnet, PaintBucket, Scan,
   Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, CircleHelp, Play,
 } from 'lucide-react';
 import { type Doc, type Item, type LibItem, type Pt, type ObjItem, type TextItem, type TextureItem, type GuideType, PALETTE, uid, itemBox, unionBox, boxOf, pointInPoly, transformItem, dist, rad, newLayer } from './types';
@@ -18,15 +17,15 @@ import { itemMarkup } from './markup';
 import { texLabel } from './textures';
 import { Selection, contentBox, fillAt, exportImage, exportPDF, thumbnail } from './raster';
 import { saveDoc, listLibrary, saveLibItem, deleteLibItem, validDoc } from './store';
-import { LayerPanel, ObjectPanel, GuidePanel, PaintPanel, HistoryPanel, TextsPanel, guideDefaults, type EditorApi } from './Panels';
+import { LayerPanel, ObjectPanel, GuidePanel, PaintPanel, HistoryPanel, guideDefaults, type EditorApi } from './Panels';
 import { TextDialog, PromptDialog, Menu, type Field, type TextValue } from './Dialogs';
 import { readSource } from '../io';
 import { isNativeApp, saveFile } from './platform';
 import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, type TourStep, type HelpTab } from './Simple';
 import { GUIDE_FULL } from './guideFull';
 
-const VERSION = 'ver 2026.10.10-01 (paint-panel)';
-type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | 'texts' | null;
+const VERSION = 'ver 2026.10.10-02 (simpler-full)';
+type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | null;
 
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'gaikou';
 
@@ -106,7 +105,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   }, [D.set, toast]);
 
   const placeObj = (p: Pt, random: boolean) => {
-    const l = lib.find(v => v.id === libSel); if (!l) return toast('一覧から登録オブジェクトを選んでください');
+    const l = lib.find(v => v.id === libSel); if (!l) return toast('一覧から部品を選んでください');
     const k = random ? 0.8 + Math.random() * 0.4 : 1, w = l.w * k, h = l.h * k;
     const it: ObjItem = { id: uid(), type: 'obj', ref: l.id, name: l.name, x: p.x - w / 2, y: p.y - h / 2, w, h, rot: random ? Math.round(Math.random() * 360) : 0, flip: random ? Math.random() < 0.5 : false, color: null };
     addItem(it, 'object');
@@ -119,7 +118,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     const b = unionBox(usable.map(itemBox)), pad = 2;
     const svg = `<g transform="translate(${-b.x + pad} ${-b.y + pad})">${usable.map(i => itemMarkup(i, ctx)).join('')}</g>`;
     const n = userLib.length + 1;
-    const l: LibItem = { id: 'u-' + uid(), name: name || `登録オブジェクト ${n}`, cat: CATEGORIES.includes(cat) ? cat : '未分類', w: b.w + pad * 2, h: b.h + pad * 2, vw: b.w + pad * 2, vh: b.h + pad * 2, svg, tint: false };
+    const l: LibItem = { id: 'u-' + uid(), name: name || `登録した部品 ${n}`, cat: CATEGORIES.includes(cat) ? cat : '未分類', w: b.w + pad * 2, h: b.h + pad * 2, vw: b.w + pad * 2, vh: b.h + pad * 2, svg, tint: false };
     await saveLibItem(l); setUserLib(u => [...u, l]); setLibSel(l.id); setCat(l.cat); setPanel('objects');
     toast(`「${l.name}」を${l.cat}に登録しました`);
   };
@@ -240,7 +239,6 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     activeTex, setActiveTex,
     history: D.history, restore: D.restore,
     video: id => setHelp({ tab: 'full', open: id }),
-    editText: id => { const f = findItem(doc, id); if (f && f.item.type === 'text') setTextDlg({ p: { x: f.item.x, y: f.item.y }, edit: f.item }); },
   };
 
   // キーボード
@@ -291,67 +289,48 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       <input ref={jsonRef} type="file" hidden accept="application/json,.json" onChange={e => { importJson(e.target.files?.[0]); e.target.value = ''; }} />
 
       {simple ? <SimpleTop name={doc.name} saved={saved} canUndo={D.canUndo} canRedo={D.canRedo} undo={D.undo} redo={D.redo} fit={fit} home={goHome} help={() => setHelp({ tab: 'simple' })} toFull={() => setUi('full')} /> : <header className="v3-top">
+        {/* 1段目：描く道具と太さ・色 */}
         <div className="v3-bar r1">
-          <button className="v3-tb" aria-label="下絵を読み込む" title="下絵（PDF・画像）を読み込む" onClick={() => fileRef.current?.click()}><ImageIcon size={18} /></button>
-          <button className="v3-tb" aria-label="書き出し" title="書き出し" onClick={openMenu('export')}><Download size={18} /></button>
+          <button className="v3-tb" aria-label="案件一覧" title="案件一覧へ戻る" onClick={goHome}><House size={18} /></button>
           <i className="sep" />
           <button className={'v3-tb' + T('pen')} aria-label="ペン" title="ペン" onClick={() => setTool('pen')}><PenTool size={18} /></button>
           <button className="v3-tb dd" aria-label="ペンの種類" onClick={openMenu('pen')}><ChevronDown size={15} /></button>
           <button className={'v3-tb' + T('eraser')} aria-label="消しゴム" title="消しゴム" onClick={() => setTool('eraser')}><Eraser size={18} /></button>
-          <button className={'v3-tb' + T('text')} aria-label="テキスト" title="テキスト" onClick={() => setTool('text')}><Type size={18} /></button>
-          <button className={'v3-tb' + T('dim')} aria-label="寸法" title="寸法線" onClick={() => setTool('dim')}><MoveHorizontal size={18} /></button>
-          <button className={'v3-tb' + T('circle')} aria-label="円" title="円" onClick={() => setTool('circle')}><Circle size={17} /></button>
+          <button className={'v3-tb' + T('curve')} aria-label="曲線" title="曲線" onClick={() => setTool('curve')}><Spline size={17} /></button>
           <button className={'v3-tb' + T('line')} aria-label="直線" title={opts.lineKind === 'polyline' ? '折れ線' : opts.lineKind === 'arrow' ? '矢印' : '直線'} onClick={() => setTool('line')}><Slash size={17} /></button>
           <button className="v3-tb dd" aria-label="線の種類" onClick={openMenu('line')}><ChevronDown size={15} /></button>
           <button className={'v3-tb' + T('shape')} aria-label="図形" title={opts.shapeKind === 'rect' ? '四角形' : '楕円'} onClick={() => setTool('shape')}><SquareX size={17} /></button>
           <button className="v3-tb dd" aria-label="図形の種類" onClick={openMenu('shape')}><ChevronDown size={15} /></button>
-          <button className={'v3-tb' + (showGrid ? ' on' : '')} aria-label="グリッド" title="グリッド表示" onClick={() => setShowGrid(v => !v)}><Grid3x3 size={18} /></button>
-          <button className="v3-tb" aria-label="全画面" title="全画面" onClick={fs}><Maximize size={17} /></button>
-          <button className={'v3-tb' + T('curve')} aria-label="曲線" title="曲線" onClick={() => setTool('curve')}><Spline size={17} /></button>
+          <button className={'v3-tb' + T('circle')} aria-label="円" title="円" onClick={() => setTool('circle')}><Circle size={17} /></button>
+          <button className={'v3-tb' + T('dim')} aria-label="寸法" title="寸法線" onClick={() => setTool('dim')}><MoveHorizontal size={18} /></button>
+          <button className={'v3-tb' + T('text')} aria-label="テキスト" title="文字（置いた文字をタップで直す）" onClick={() => setTool('text')}><Type size={18} /></button>
           <i className="sep" />
           <div className="v3-width"><span className="dotmin" /><input type="range" min={1} max={30} value={opts.width} onChange={e => setOpts({ ...opts, width: +e.target.value })} aria-label="線の太さ" /><em>{opts.width}</em></div>
           <div className="v3-colors">
             <button className={'clear' + (opts.color === '#ffffff' ? ' on' : '')} aria-label="白（消し色）" onClick={() => setOpts({ ...opts, color: '#ffffff' })} />
             {PALETTE.map(c => <button key={c} aria-label={c} className={opts.color === c ? 'on' : ''} style={{ background: c }} onClick={() => setOpts({ ...opts, color: c })} />)}
           </div>
-          <select className="v3-sel" value={opts.measure} onChange={e => setOpts({ ...opts, measure: e.target.value })} aria-label="距離表示"><option value="line">直線距離</option><option value="off">表示なし</option></select>
-          <select className="v3-sel" value={opts.unit} onChange={e => setOpts({ ...opts, unit: e.target.value })} aria-label="単位"><option>mm</option><option>cm</option><option>m</option></select>
+          <span className="v3-mono status">{saved === 'saving' ? '保存中…' : saved === 'error' ? '保存エラー' : '端末に保存済み'}</span>
         </div>
+        {/* 2段目：ファイル・表示・右パネル */}
         <div className="v3-bar r2">
-          <button className="v3-tb sm" aria-label="グリッド間隔" title="グリッド・連続コピーの間隔" onClick={() => setShowGrid(v => !v)}><AlignJustify size={16} /></button>
-          <input className="v3-num" type="number" value={gridMm} min={10} step={10} onChange={e => setGridMm(Math.max(10, +e.target.value || 100))} aria-label="グリッド間隔mm" /><span className="unit">mm</span>
-          <i className="sep" />
-          <button className="v3-mono" title="縮尺を切り替え" onClick={() => D.set(d => ({ ...d, mmPerPx: d.mmPerPx === 10 ? 20 : d.mmPerPx === 20 ? 5 : 10 }), '縮尺を変更')}>縮尺: 1/{doc.mmPerPx * 10} (1px = {doc.mmPerPx} mm)</button>
-          <i className="sep" />
-          <button className={'v3-tb sm' + (doc.underlay?.locked !== false ? ' on' : '')} aria-label="下絵のロック" title={doc.underlay ? (doc.underlay.locked ? '下絵はロック中（押すと移動できます）' : '下絵を移動できます') : '下絵なし'} onClick={() => doc.underlay ? D.set(d => ({ ...d, underlay: d.underlay && { ...d.underlay, locked: !d.underlay.locked } }), '下絵ロック') : toast('下絵はまだありません')}>{doc.underlay?.locked === false ? <LockOpen size={16} /> : <Lock size={16} />}</button>
-          <button className="v3-tb sm" aria-label="表示を全体に合わせる" title="全体表示" onClick={fit}><RotateCw size={16} /></button>
-          <button className="v3-tb sm" aria-label="連続コピー" title="連続コピー" onClick={contCopy} disabled={!sel.length}><Copy size={16} /></button>
-        </div>
-        <div className="v3-bar r3">
           <button className="sx-modebtn" onClick={() => setUi('simple')}>かんたんモード</button>
           <button className="sx-modebtn" onClick={() => setHelp({ tab: 'full' })}><CircleHelp size={15} />使い方</button>
-          <button className="v3-tb sm" aria-label="案件一覧" title="案件一覧へ" onClick={goHome}><House size={16} /></button>
-          <span className="v3-mono status">{saved === 'saving' ? '保存中…' : saved === 'error' ? '保存エラー' : '端末に保存済み'}</span>
-          <button className="v3-tb sm" aria-label="上書き保存" title="上書き保存" onClick={() => saveWithThumb().then(() => toast('端末に保存しました'))}><Save size={16} /></button>
-          <button className="v3-tb sm on" aria-label="別名で保存" title="別名で保存" onClick={() => setPrompt({ title: '別名で保存', fields: [{ key: 'name', label: '名前', value: doc.name + ' 別案' }], ok: '保存', run: async v => { setPrompt(null); const nd = { ...doc, id: uid(), name: String(v.name || doc.name), updatedAt: new Date().toISOString() }; await saveDoc(nd, await thumbnail(nd, lib, ctx)); D.reset(nd); toast('別案として保存しました'); } })}><SaveAll size={16} /></button>
-          <button className="v3-tb sm" aria-label="開く" title="案件一覧から開く" onClick={goHome}><FolderOpen size={16} /></button>
-          <button className="v3-tb sm" aria-label="編集データを読み込む" title="編集データ(.json)を読み込む" onClick={() => jsonRef.current?.click()}><ArrowDownToLine size={16} /></button>
-          <button className="v3-tb sm" aria-label="編集データを書き出す" title="編集データ(.json)を書き出す" onClick={() => exportAs('json')}><ArrowUpFromLine size={16} /></button>
-          <button className="v3-tb sm" aria-label="クラウド" title="クラウド同期（公開版では停止中）" onClick={() => toast('開発版はこの端末に保存します。端末間は編集データで引き継ぎます')}><CloudUpload size={16} /></button>
-          <button className="v3-tb sm on" aria-label="利用者" title="利用者" onClick={() => toast('この端末で利用中（ログインなし）')}><User size={16} /></button>
-          <button className="v3-tb sm" aria-label="ログアウト（一覧へ）" title="案件一覧へ戻る" onClick={goHome}><LogOut size={16} /></button>
           <i className="sep" />
-          <button className={'v3-tb sm' + (panel ? ' on' : '')} aria-label="パネル" title="右パネルの表示" onClick={() => setPanel(p => p ? null : 'objects')}><PanelRight size={16} /></button>
-          <button className={'v3-tb sm' + P('layers')} aria-label="レイヤー" title="レイヤー" onClick={panelBtn('layers')}><Layers size={16} /></button>
-          <button className={'v3-tb sm' + P('objects')} aria-label="オブジェクト" title="オブジェクト" onClick={panelBtn('objects')}><LayoutGrid size={16} /></button>
-          <button className={'v3-tb sm' + P('guides')} aria-label="ガイド線" title="ガイド線" onClick={panelBtn('guides')}><Ruler size={16} /></button>
-          <button className={'v3-tb sm' + P('texts')} aria-label="テキスト一覧" title="テキスト一覧" onClick={panelBtn('texts')}><FileText size={16} /></button>
-          <button className={'v3-tb sm' + P('paint')} aria-label="塗る" title="塗る（砂利・芝・ウッドなど）" onClick={() => { if (panel === 'paint') return setPanel(null); setPanel('paint'); setTool('aiFill'); }}><PaintBucket size={16} /></button>
-          <button className="v3-tb sm" aria-label="左に回転" title="表示を左に15°回転" onClick={() => zoomRot(-15)}><RotateCcw size={16} /></button>
-          <button className="v3-tb sm" aria-label="右に回転" title="表示を右に15°回転" onClick={() => zoomRot(15)}><RotateCw size={16} /></button>
-          <button className={'v3-tb sm' + P('history')} aria-label="履歴" title="履歴" onClick={panelBtn('history')}><History size={16} /></button>
-          <button className="v3-mono" title="回転を0°に戻す" onClick={() => zoomRot(-view.r)}>回転: {rotLabel}°</button>
-          <button className={'v3-tb sm' + P('settings')} aria-label="設定" title="設定" onClick={panelBtn('settings')}><Settings size={16} /></button>
+          <button className="v3-tl" aria-label="下絵を読み込む" title="下絵（PDF・画像）を読み込む" onClick={() => fileRef.current?.click()}><ImageIcon size={16} /><span className="lb">下絵</span></button>
+          <button className="v3-tl" aria-label="書き出し" title="PDF・画像・編集データ" onClick={openMenu('export')}><Download size={16} /><span className="lb">書き出し</span></button>
+          <button className="v3-tl" aria-label="別名で保存" title="別案として保存" onClick={() => setPrompt({ title: '別名で保存', fields: [{ key: 'name', label: '名前', value: doc.name + ' 別案' }], ok: '保存', run: async v => { setPrompt(null); const nd = { ...doc, id: uid(), name: String(v.name || doc.name), updatedAt: new Date().toISOString() }; await saveDoc(nd, await thumbnail(nd, lib, ctx)); D.reset(nd); toast('別案として保存しました'); } })}><SaveAll size={16} /><span className="lb">別名で保存</span></button>
+          <i className="sep" />
+          <button className="v3-tl" aria-label="表示を全体に合わせる" title="図面全体が入るように表示" onClick={fit}><Scan size={16} /><span className="lb">全体表示</span></button>
+          <button className={'v3-tl' + (showGrid ? ' on' : '')} aria-label="グリッド" title="グリッド表示（間隔は設定で変更）" onClick={() => setShowGrid(v => !v)}><Grid3x3 size={16} /><span className="lb">グリッド</span></button>
+          {rotLabel !== 0 && <button className="v3-tl" aria-label="回転を戻す" title="画面の回転を0°に戻す" onClick={() => zoomRot(-view.r)}><RotateCcw size={16} /><span className="lb">{rotLabel}°→0°</span></button>}
+          <i className="sep" />
+          <button className={'v3-tl' + P('objects')} aria-label="部品" title="部品（車・植栽など）" onClick={panelBtn('objects')}><LayoutGrid size={16} />部品</button>
+          <button className={'v3-tl' + P('paint')} aria-label="塗る" title="塗る（砂利・芝・ウッドなど）" onClick={() => { if (panel === 'paint') return setPanel(null); setPanel('paint'); setTool('aiFill'); }}><PaintBucket size={16} />塗る</button>
+          <button className={'v3-tl' + P('layers')} aria-label="レイヤー" title="レイヤー" onClick={panelBtn('layers')}><Layers size={16} />レイヤー</button>
+          <button className={'v3-tl' + P('guides')} aria-label="ガイド線" title="ガイド線" onClick={panelBtn('guides')}><Ruler size={16} />ガイド</button>
+          <button className={'v3-tl' + P('history')} aria-label="履歴" title="履歴" onClick={panelBtn('history')}><History size={16} />履歴</button>
+          <button className={'v3-tl' + P('settings')} aria-label="設定" title="設定（下絵・縮尺・単位など）" onClick={panelBtn('settings')}><Settings size={16} />設定</button>
         </div>
       </header>}
 
@@ -362,32 +341,27 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           {!simple && <nav className="v3-left" aria-label="よく使う操作">
             <button className="v3-fb" aria-label="やり直す" title="やり直す" disabled={!D.canRedo} onClick={D.redo}><Redo2 size={18} /></button>
             <button className={'v3-fb' + T('select')} aria-label="選択" title="選択（囲んで複数選択）" onClick={() => setTool('select')}><SquareDashedMousePointer size={18} /></button>
-            <button className={'v3-fb' + T('pen')} aria-label="ペン" title="ペン" onClick={() => setTool('pen')}><PenTool size={18} /></button>
-            <button className={'v3-fb' + T('eraser')} aria-label="消しゴム" title="消しゴム" onClick={() => setTool('eraser')}><Eraser size={18} /></button>
             <button className={'v3-fb' + (guideSnap ? ' on' : '')} aria-label="ガイド吸着" title={guideSnap ? 'ガイド吸着 ON' : 'ガイド吸着 OFF'} onClick={() => { setGuideSnap(v => !v); toast(guideSnap ? 'ガイド吸着 OFF' : 'ガイド吸着 ON'); }}><Magnet size={18} /></button>
-            <button className={'v3-fb' + P('layers')} aria-label="レイヤー" title="レイヤー" onClick={panelBtn('layers')}><AlignJustify size={18} /></button>
-            <button className={'v3-fb' + (panel === 'paint' ? ' on' : '')} aria-label="塗る" title="塗る（砂利・芝・ウッドなど）" onClick={() => { setTool('aiFill'); setPanel('paint'); }}><PaintBucket size={18} /></button>
-            <button className={'v3-fb' + P('guides')} aria-label="ガイド線" title="ガイド線" onClick={panelBtn('guides')}><Ruler size={18} /></button>
             <span className="gap" />
             <button className="v3-fb" aria-label="元に戻す" title="元に戻す" disabled={!D.canUndo} onClick={D.undo}><Undo2 size={18} /></button>
           </nav>}
           {selBox && tool === 'select' && (
             <div className="v3-selbar">
               <button onClick={() => duplicate()} title="複製"><Copy size={15} />複製</button>
-              {!simple && <button onClick={contCopy} title="連続コピー">連続</button>}
-              <button onClick={flipSel} title="左右反転"><FlipHorizontal2 size={15} />{simple && '反転'}</button>
+              {!simple && <button onClick={contCopy} title="間隔と個数を決めて並べる">連続</button>}
+              <button onClick={flipSel} title="左右反転"><FlipHorizontal2 size={15} />反転</button>
               {!simple && <>
-                <button onClick={() => orderSel(true)} title="前面へ"><ArrowUp size={15} /></button>
-                <button onClick={() => orderSel(false)} title="背面へ"><ArrowDown size={15} /></button>
-                <button onClick={() => registerFrom(selItems())} title="オブジェクトとして登録"><PackagePlus size={15} />登録</button>
+                <button onClick={() => orderSel(true)} title="前面へ"><ArrowUp size={15} />前へ</button>
+                <button onClick={() => orderSel(false)} title="背面へ"><ArrowDown size={15} />後ろへ</button>
+                <button onClick={() => registerFrom(selItems())} title="部品として登録"><PackagePlus size={15} />部品に登録</button>
               </>}
-              <button onClick={deleteSel} className="danger" title="削除"><Trash2 size={15} />{simple && '削除'}</button>
-              <button onClick={() => setSel([])} title="選択解除"><X size={15} />{simple && '解除'}</button>
+              <button onClick={deleteSel} className="danger" title="削除"><Trash2 size={15} />削除</button>
+              <button onClick={() => setSel([])} title="選択解除"><X size={15} />解除</button>
             </div>
           )}
           {simple && hintOn && hintText && !(selBox && tool === 'select') && <div className="sx-hint">{hintText}</div>}
           {tool === 'calib' && <div className="v3-hint">下絵上で、長さが分かる2点を順に押してください</div>}
-          {!simple && tool === 'register' && <div className="v3-hint">登録したい手描き・オブジェクトを囲んでください</div>}
+          {!simple && tool === 'register' && <div className="v3-hint">登録したい手描き・部品を囲んでください</div>}
           {!simple && (tool === 'place' || tool === 'random') && <div className="v3-hint">{tool === 'random' ? 'ランダム配置' : '配置'}：{lib.find(l => l.id === libSel)?.name} — 図面をタップ</div>}
           {toastMsg && <div className="v3-toast">{toastMsg}</div>}
         </div>
@@ -398,7 +372,6 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
             {panel === 'guides' && <GuidePanel e={editorApi} />}
             {panel === 'paint' && <PaintPanel e={editorApi} />}
             {panel === 'history' && <HistoryPanel e={editorApi} />}
-            {panel === 'texts' && <TextsPanel e={editorApi} />}
             {panel === 'settings' && settingsPanel()}
           </aside>
         )}
@@ -424,7 +397,8 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         <button className="mi" onClick={() => exportAs('png')}>PNG画像</button>
         <button className="mi" onClick={() => exportAs('a4')}>PDF（A4横）</button>
         <button className="mi" onClick={() => exportAs('a3')}>PDF（A3横）</button>
-        <hr /><button className="mi" onClick={() => exportAs('json')}>編集データ（.json）</button>
+        <hr /><button className="mi" onClick={() => exportAs('json')}>編集データを書き出す（.json）</button>
+        <button className="mi" onClick={() => { setMenu(null); jsonRef.current?.click(); }}>編集データを読み込む</button>
       </Menu>}
       {menu?.id === 'apply' && <Menu anchor={menu.rect} onClose={() => setMenu(null)}>
         <button className="mi" onClick={() => { setMenu(null); imgRef.current?.click(); }}><Images size={15} />写真を選ぶ</button>
@@ -458,6 +432,13 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
             <div className="v3-row wrap"><button className="v3-btn" onClick={() => { setTool('calib'); toast('長さが分かる2点を順に押してください'); }}>縮尺合わせ（2点）</button><button className="v3-btn danger" onClick={() => D.set(d => ({ ...d, underlay: undefined }), '下絵を削除')}>下絵を外す</button></div>
           </>}
         </section>
+        <section className="v3-card"><h4>表示</h4>
+          <label className="v3-kv"><span>単位</span><select aria-label="単位" value={opts.unit} onChange={e => setOpts({ ...opts, unit: e.target.value })}><option>mm</option><option>cm</option><option>m</option></select></label>
+          <label className="v3-kv"><span>線の長さ</span><select aria-label="距離表示" value={opts.measure} onChange={e => setOpts({ ...opts, measure: e.target.value })}><option value="line">描くときに表示</option><option value="off">表示しない</option></select></label>
+          <label className="v3-kv"><span>縮尺</span><select aria-label="縮尺" value={doc.mmPerPx} onChange={e => { const v = +e.target.value; D.set(d => ({ ...d, mmPerPx: v }), '縮尺を変更'); }}><option value={5}>1/50</option><option value={10}>1/100</option><option value={20}>1/200</option></select></label>
+          <label className="v3-kv"><span>グリッド間隔</span><input aria-label="グリッド間隔mm" type="number" value={gridMm} min={10} step={10} onChange={e => setGridMm(Math.max(10, +e.target.value || 100))} /><em>mm</em></label>
+          {!isNativeApp() && <button className="v3-btn" onClick={fs}>全画面にする</button>}
+        </section>
         <section className="v3-card"><h4>入力</h4>
           <div className="v3-chk v3-finger">指1本の操作
             <select className="v3-sel" value={fingerMode} onChange={e => setFingerMode(e.target.value as FingerMode)}>
@@ -469,7 +450,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <p className="v3-note">2本指で移動・拡大縮小・回転。マウスはホイールで拡大縮小、右ドラッグかSpace＋ドラッグで移動。Shiftで15°単位。</p>
         </section>
         <section className="v3-card"><h4>書き出し</h4>
-          <div className="v3-row wrap"><button className="v3-btn" onClick={() => exportAs('png')}>PNG</button><button className="v3-btn" onClick={() => exportAs('a4')}>PDF A4</button><button className="v3-btn" onClick={() => exportAs('a3')}>PDF A3</button><button className="v3-btn" onClick={() => exportAs('json')}>編集データ</button></div>
+          <div className="v3-row wrap"><button className="v3-btn" onClick={() => exportAs('png')}>PNG</button><button className="v3-btn" onClick={() => exportAs('a4')}>PDF A4</button><button className="v3-btn" onClick={() => exportAs('a3')}>PDF A3</button><button className="v3-btn" onClick={() => exportAs('json')}>編集データ</button><button className="v3-btn" onClick={() => jsonRef.current?.click()}>編集データを読み込む</button></div>
         </section>
         <section className="v3-card"><h4>このアプリ</h4><p className="v3-note">{VERSION}　保存先：この端末（クラウド同期は停止中。端末間は編集データで引き継ぎ）</p></section>
         {!isNativeApp() && <section className="v3-card"><h4>旧バージョン</h4><p className="v3-note">v0.2（下絵の原本保管・クラウド同期つき）は <a href="?v=2">こちら</a> から開けます。</p></section>}

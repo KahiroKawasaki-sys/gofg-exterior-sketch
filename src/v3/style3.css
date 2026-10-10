@@ -20,8 +20,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .v3-bar { display: flex; align-items: center; gap: 2px; padding: 0 8px; overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
 .v3-bar::-webkit-scrollbar { display: none; }
 .v3-bar.r1 { height: 46px; }
-.v3-bar.r2 { height: 34px; }
-.v3-bar.r3 { height: 42px; border-top: 1px solid #ebebe8; }
+.v3-bar.r2 { height: 42px; border-top: 1px solid #ebebe8; gap: 4px; }
 .v3-bar .sep { width: 1px; height: 22px; background: #dcdcd8; margin: 0 8px; flex: none; }
 .v3-tb { flex: none; width: 36px; height: 36px; border: 0; background: transparent; border-radius: 9px; display: grid; place-items: center; color: #3a3e3c; }
 .v3-tb.sm { width: 32px; height: 32px; }
@@ -246,3 +245,19 @@ button.v3-mono:hover { color: var(--green); }
 .v3-texgrid.wait { opacity: .55; }
 .v3-texgrid b { display: grid; place-items: center; width: 100%; aspect-ratio: 1; border-radius: 6px; border: 1px solid #e0e0dc; font-size: 10px; font-weight: 600; color: #666; }
 .v3-texgrid b.photo { background: #f2f2f0; }
+
+/* 2段目：アイコン＋文字のボタン */
+.v3-tl { flex: none; height: 32px; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border: 0; background: transparent; border-radius: 9px; color: #3a3e3c; font-size: 12px; white-space: nowrap; }
+.v3-tl:hover:not(:disabled) { background: #ebebe8; }
+.v3-tl.on { background: var(--soft); color: var(--green); font-weight: 600; }
+/* 部品パネルの「その他」 */
+.v3-more > summary { cursor: pointer; font-size: 12px; color: #555; padding: 4px 0; }
+.v3-more[open] > summary { margin-bottom: 6px; }
+.v3-bar.r1 .status { margin-left: auto; padding-left: 12px; }
+@media (max-width: 1100px) {
+  .v3-tl .lb, .v3-bar.r1 .status { display: none; }
+  .v3-tl { padding: 0 5px; }
+  .v3-bar.r2 { gap: 1px; }
+  .v3-bar .sep { margin: 0 4px; }
+  .v3-width input { width: 70px; }
+}

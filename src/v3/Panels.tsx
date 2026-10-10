@@ -1,4 +1,4 @@
-// 右側パネル（オブジェクト・レイヤー・ガイド線・塗る・設定・履歴・テキスト）
+// 右側パネル（部品・レイヤー・ガイド線・塗る・履歴）
 import { useRef, useState, type ReactNode } from 'react';
 import { Plus, Copy, ArrowDownToLine, Combine, Trash2, Eye, EyeOff, Lock, LockOpen, GripVertical, X, CircleMinus, Pencil, Play, Images } from 'lucide-react';
 import { type Doc, type Layer, type LibItem, type Guide, type GuideType, type ObjItem, type TextureItem, type TextItem, type Pt, dist, deg, rad, fmtLen, PALETTE } from './types';
@@ -21,7 +21,6 @@ export type EditorApi = {
   pickPhoto: (anchor: DOMRect) => void; activeTex: string | null; setActiveTex: (id: string | null) => void;
   // history
   history: HistEntry[]; restore: (i: number) => void;
-  editText: (id: string) => void;
   video: (id: string) => void;
 };
 
@@ -125,45 +124,43 @@ export function ObjectPanel({ e }: { e: EditorApi }) {
     liveOnly ? e.live(g) : e.set(g, label);
   };
   const mode = (t: Tool, label: string) => { setTool(t); e.toast(label); };
+  const placing = tool === 'place' || tool === 'random';
   const allHidden = placed.length > 0 && placed.every(o => o.hidden);
   const libOf = (o: ObjItem) => lib.find(l => l.id === o.ref);
   return (
     <div className="v3-panel">
-      <Head title="オブジェクト" onClose={e.close} video={() => e.video('f-objects')} />
-      <Card title="ツールモード">
-        <div className="v3-grid2">
-          <button className={'v3-pbtn' + (tool === 'select' ? ' on' : '')} onClick={() => mode('select', 'オブジェクト選択 ON')}>選択</button>
-          <button className={'v3-pbtn' + (tool === 'register' ? ' on' : '')} onClick={() => mode('register', '登録したい範囲を囲んでください')}>囲って登録</button>
-          <button className={'v3-pbtn' + (tool === 'place' ? ' on' : '')} onClick={() => selLib ? mode('place', `「${selLib.name}」をタップで配置`) : e.toast('一覧から登録オブジェクトを選んでください')}>登録を配置</button>
-          <button className={'v3-pbtn' + (tool === 'random' ? ' on' : '')} onClick={() => selLib ? mode('random', 'タップごとに向き・大きさを変えて配置') : e.toast('一覧から登録オブジェクトを選んでください')}>ランダム配置</button>
-          <button className="v3-pbtn" disabled={!placed.length || allHidden} onClick={() => e.set(d => ({ ...d, layers: d.layers.map(l => l.kind === 'object' ? { ...l, items: l.items.map(i => ({ ...i, hidden: true })) } : l) }), '一括非表示')}>一括非表示</button>
-          <button className="v3-pbtn" disabled={!placed.some(o => o.hidden)} onClick={() => e.set(d => ({ ...d, layers: d.layers.map(l => l.kind === 'object' ? { ...l, items: l.items.map(i => ({ ...i, hidden: false })) } : l) }), '一括表示')}>一括表示</button>
-        </div>
-        <p className="v3-note">登録後はこの端末に保存され、別キャンバスでも配置できます。ランダム配置はタップごとに左右反転・回転・80〜120%サイズへ更新されます。</p>
-      </Card>
-      <Card title="登録オブジェクト">
+      <Head title="部品" onClose={e.close} video={() => e.video('f-objects')} />
+      <Card title="部品を選んで、図面をタップ">
+        <details className="v3-more">
+          <summary>その他（ランダム配置・手描きを登録・まとめて隠す）</summary>
+          <div className="v3-grid2">
+            <button className={'v3-pbtn' + (tool === 'random' ? ' on' : '')} onClick={() => selLib ? mode(tool === 'random' ? 'place' : 'random', tool === 'random' ? 'ふつうの配置に戻しました' : 'タップごとに向き・大きさを変えて置きます') : e.toast('先に部品を選んでください')}>ランダム配置</button>
+            <button className={'v3-pbtn' + (tool === 'register' ? ' on' : '')} onClick={() => mode('register', '登録したい手描きを囲んでください')}>手描きを囲って登録</button>
+            <button className="v3-pbtn" disabled={!placed.length || allHidden} onClick={() => e.set(d => ({ ...d, layers: d.layers.map(l => l.kind === 'object' ? { ...l, items: l.items.map(i => ({ ...i, hidden: true })) } : l) }), '一括非表示')}>部品をすべて隠す</button>
+            <button className="v3-pbtn" disabled={!placed.some(o => o.hidden)} onClick={() => e.set(d => ({ ...d, layers: d.layers.map(l => l.kind === 'object' ? { ...l, items: l.items.map(i => ({ ...i, hidden: false })) } : l) }), '一括表示')}>すべて表示</button>
+          </div>
+        </details>
         <div className="v3-chips">
           {[...CATEGORIES, ...extra].map(c => <button key={c} className={'v3-chip' + (c === cat ? ' on' : '')} onClick={() => setCat(c)}>{c} ({counts[c] ?? lib.filter(l => l.cat === c).length})</button>)}
         </div>
         <div className="v3-list">
           {list.map(l => (
             <div key={l.id}>
-              <button className={'v3-item' + (l.id === libSel ? ' on' : '')} onClick={() => setLibSel(l.id === libSel ? null : l.id)}><Thumb l={l} /><span>{l.name}</span></button>
-              {l.id === libSel && (
+              <button className={'v3-item' + (l.id === libSel && placing ? ' on' : '')} onClick={() => { setLibSel(l.id); mode(tool === 'random' ? 'random' : 'place', `「${l.name}」：図面をタップで置けます`); }}><Thumb l={l} /><span>{l.name}</span><em>{Math.round(l.w * doc.mmPerPx)}×{Math.round(l.h * doc.mmPerPx)}</em></button>
+              {l.id === libSel && placing && !l.builtin && (
                 <div className="v3-detail">
-                  <div className="v3-row"><button className="v3-link" onClick={() => mode('place', `「${l.name}」をタップで配置`)}>配置</button><button className="v3-link" onClick={() => mode('random', 'タップごとに向き・大きさを変えて配置')}>ランダム配置</button>{!l.builtin && <button className="v3-link" onClick={() => e.removeLib(l.id)}>削除</button>}</div>
-                  <label className="v3-kv"><span>名前</span><input value={l.name} disabled={l.builtin} onChange={ev => e.updateLib({ ...l, name: ev.target.value })} /></label>
-                  <label className="v3-kv"><span>カテゴリ</span><select value={l.cat} disabled={l.builtin} onChange={ev => e.updateLib({ ...l, cat: ev.target.value })}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></label>
-                  <p className="v3-note">寸法 {Math.round(l.w * doc.mmPerPx)}×{Math.round(l.h * doc.mmPerPx)} mm</p>
+                  <label className="v3-kv"><span>名前</span><input value={l.name} onChange={ev => e.updateLib({ ...l, name: ev.target.value })} /></label>
+                  <label className="v3-kv"><span>種類</span><select value={l.cat} onChange={ev => e.updateLib({ ...l, cat: ev.target.value })}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></label>
+                  <button className="v3-link danger" onClick={() => e.removeLib(l.id)}>この部品を一覧から消す</button>
                 </div>
               )}
             </div>
           ))}
-          {!list.length && <p className="v3-note">このカテゴリはまだありません。「囲って登録」で手描きを登録できます。</p>}
+          {!list.length && <p className="v3-note">この種類はまだありません。上の「その他」から、手描きを部品として登録できます。</p>}
         </div>
       </Card>
-      <Card title="配置オブジェクト">
-        {!placed.length && <p className="v3-note">配置したオブジェクトがここに並びます。</p>}
+      <Card title="置いた部品">
+        {!placed.length && <p className="v3-note">置いた部品がここに並びます。押すと大きさ・向き・色を変えられます。</p>}
         <div className="v3-list">
           {[...placed].reverse().map(o => {
             const l = libOf(o);
@@ -175,10 +172,9 @@ export function ObjectPanel({ e }: { e: EditorApi }) {
                 </div>
                 {selObj?.id === o.id && (
                   <div className="v3-detail">
-                    <p className="v3-note">種別　{l?.cat || '—'}　{l?.name}</p>
                     <label className="v3-chk"><input type="checkbox" checked={!o.hidden} onChange={ev => updObj(x => ({ ...x, hidden: !ev.target.checked }), '表示切替')} />表示</label>
                     <div className="v3-row wrap">
-                      <button className="v3-link" onClick={() => e.registerItem(o.id)}>このオブジェクトを登録</button>
+                      <button className="v3-link" onClick={() => e.registerItem(o.id)}>部品として登録</button>
                       <button className="v3-link" onClick={() => updObj(x => ({ ...x, flip: !x.flip }), '左右反転')}>左右反転</button>
                       <button className="v3-link" onClick={() => updObj(x => ({ ...x, color: null }), '元色')}>元色</button>
                       <button className="v3-link danger" onClick={() => { e.set(d => ({ ...d, layers: d.layers.map(x => x.kind === 'object' ? { ...x, items: x.items.filter(i => i.id !== o.id) } : x) }), '削除'); e.setSel([]); }}>削除</button>
@@ -212,7 +208,7 @@ export function GuidePanel({ e }: { e: EditorApi }) {
         <button className="v3-ib" aria-label="閉じる" onClick={e.close}><X size={16} /></button>
       </div>
       <div className="v3-card"><div className="v3-grid3">
-        {(['line', 'slope', 'face', 'circle', 'curve', 'golden', 'grid', 'ruler'] as GuideType[]).map(t => <button key={t} className="v3-pbtn sm" onClick={() => e.addGuide(t)}>{t === 'line' ? '直線ガイド' : t === 'slope' ? '線勾配' : t === 'face' ? '面勾配' : t === 'circle' ? '円ガイド' : t === 'curve' ? '曲線ガイド' : t === 'golden' ? '黄金比ガイド' : t === 'grid' ? 'グリッド' : '定規'}</button>)}
+        {(['line', 'slope', 'face', 'circle', 'grid'] as GuideType[]).map(t => <button key={t} className="v3-pbtn sm" onClick={() => e.addGuide(t)}>{t === 'line' ? '直線ガイド' : t === 'slope' ? '線勾配' : t === 'face' ? '面勾配' : t === 'circle' ? '円ガイド' : 'グリッド'}</button>)}
       </div></div>
       <div className="v3-list">
         {[...doc.guides].reverse().map(g => {
@@ -242,7 +238,7 @@ export function GuidePanel({ e }: { e: EditorApi }) {
             </div>
           );
         })}
-        {!doc.guides.length && <p className="v3-note pad">上のボタンでガイド線を追加します。ガイドに沿って引いた線は平行・同心円にそろいます。</p>}
+        {!doc.guides.length && <p className="v3-note pad">上のボタンでガイド線を追加します。ガイドに沿って引いた線は平行・同心円にそろいます。勾配ガイドは高さを入れると勾配（%）が出ます。</p>}
       </div>
     </div>
   );
@@ -286,7 +282,7 @@ export function PaintPanel({ e }: { e: EditorApi }) {
   );
 }
 
-// ---------------- 履歴・テキスト ----------------
+// ---------------- 履歴 ----------------
 export function HistoryPanel({ e }: { e: EditorApi }) {
   return (
     <div className="v3-panel">
@@ -298,19 +294,6 @@ export function HistoryPanel({ e }: { e: EditorApi }) {
         ))}
       </div>
       <p className="v3-note pad">行を押すと、その操作の直前の状態に戻します（戻した操作も履歴に残ります）。</p>
-    </div>
-  );
-}
-
-export function TextsPanel({ e }: { e: EditorApi }) {
-  const texts = e.doc.layers.flatMap(l => l.items.filter(i => i.type === 'text')) as TextItem[];
-  return (
-    <div className="v3-panel">
-      <Head title="テキスト" onClose={e.close} video={() => e.video('f-dim')} />
-      <div className="v3-list">
-        {!texts.length && <p className="v3-note pad">「T」で図面をタップすると、寸法やメモを置けます。</p>}
-        {texts.map(t => <button key={t.id} className={'v3-item' + (e.sel.includes(t.id) ? ' on' : '')} onClick={() => { e.setSel([t.id]); e.setTool('select'); }} onDoubleClick={() => e.editText(t.id)}><span style={{ color: t.color }}>{t.text.split('\n')[0]}</span></button>)}
-      </div>
     </div>
   );
 }

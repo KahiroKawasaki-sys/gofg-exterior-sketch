@@ -151,7 +151,7 @@ it('詳細モード：各パネルの「動画」でそのパネルの解説が�
 it('詳細モード：「塗る」から素材の一覧がすぐ出て、AIツールは無い', async () => {
   await openFull();
   expect(q('[aria-label="AIツール"]')).toBeNull();
-  await click(q('.v3-left [aria-label="塗る"]'));
+  await click(q('.v3-top [aria-label="塗る"]'));
   const side = q('.v3-side')!;
   expect(side.textContent).toContain('① 塗る場所を選ぶ');
   for (const name of ['芝', 'ウッド', 'いまの色', '写真から']) expect(byText('.v3-side .v3-texgrid button', name)).toBeTruthy();
@@ -159,4 +159,35 @@ it('詳細モード：「塗る」から素材の一覧がすぐ出て、AIツ�
   // 場所を選ぶ前に素材を押すと、先に場所を選ぶよう案内する
   await click(byText('.v3-side .v3-texgrid button', '芝'));
   expect(q('.v3-toast')?.textContent).toContain('塗りたい場所');
+});
+
+it('詳細モード：ツールバーは2段で、重複・飾りのボタンは無い', async () => {
+  await openFull();
+  expect(qa('.v3-top .v3-bar').length).toBe(2);
+  for (const gone of ['開く', 'ログアウト（一覧へ）', 'クラウド', '利用者', '左に回転', '右に回転', 'パネル', 'テキスト一覧', 'AIツール']) expect(q(`[aria-label="${gone}"]`)).toBeNull();
+  expect(qa('.v3-top [aria-label="案件一覧"]').length).toBe(1);
+  // 全体表示は文字つき、回転していなければ「0°に戻す」は出さない
+  expect(byText('.v3-top .v3-tl', '全体表示')).toBeTruthy();
+  expect(q('[aria-label="回転を戻す"]')).toBeNull();
+  // 左の縦は上と重ならない操作だけ
+  expect(qa('.v3-left button').map(b => b.getAttribute('aria-label'))).toEqual(['やり直す', '選択', 'ガイド吸着', '元に戻す']);
+  // 単位・縮尺・グリッド間隔は設定へ
+  await click(q('.v3-top [aria-label="設定"]'));
+  for (const label of ['単位', '縮尺', '距離表示', 'グリッド間隔mm']) expect(q(`.v3-side [aria-label="${label}"]`)).toBeTruthy();
+});
+
+it('詳細モード：部品は押すとすぐ置ける状態になり、細かい機能は「その他」にまとまる', async () => {
+  await openFull();
+  if (!q('.v3-side')?.textContent?.includes('部品を選んで')) await click(q('.v3-top [aria-label="部品"]'));
+  expect(q('.v3-side')?.textContent).not.toContain('登録を配置');
+  await click(q('.v3-side .v3-list .v3-item'));
+  expect(q('.v3-toast')?.textContent).toContain('図面をタップで置けます');
+  expect(q('.v3-side .v3-list .v3-item.on')).toBeTruthy();
+  expect(byText('.v3-more summary', 'その他')).toBeTruthy();
+});
+
+it('詳細モード：ガイド線は外構で使う5種類だけ', async () => {
+  await openFull();
+  await click(q('.v3-top [aria-label="ガイド線"]'));
+  expect(qa('.v3-side .v3-grid3 .v3-pbtn').map(b => b.textContent)).toEqual(['直線ガイド', '線勾配', '面勾配', '円ガイド', 'グリッド']);
 });
