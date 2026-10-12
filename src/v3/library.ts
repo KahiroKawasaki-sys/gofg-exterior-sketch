@@ -128,6 +128,63 @@ function radiating(id: string, name: string, cat: string, size: number, seed: nu
   return item(id, name, cat, size, size, s, false);
 }
 
+// ---------- 水彩調の植栽（丸い樹冠・生垣） ----------
+// 円を重ねて「輪郭だけ先に太く描き、その上を塗る」と、雲形の外形が1本の線でつながる。
+// 円ごとに左上が明るいグラデーションを付けてふっくら見せ、足元にぼかした影を敷く。
+type Tone = { hi: string; base: string; lo: string; line: string };
+const TONES: Record<string, Tone> = {
+  light: { hi: '#d3e8a4', base: '#a3c96e', lo: '#6e9a45', line: '#5d8238' },
+  mid: { hi: '#b5d88a', base: '#7fae54', lo: '#4c7a33', line: '#46702e' },
+  dark: { hi: '#8fbb6c', base: '#5a8a40', lo: '#2f5824', line: '#2c5022' },
+  olive: { hi: '#dbe5c8', base: '#aabb92', lo: '#748a62', line: '#66784f' },
+  autumn: { hi: '#f2b77e', base: '#d9774a', lo: '#9c4527', line: '#8a4126' },
+};
+
+// whole を渡すと樹冠全体で1つの陰影（1本の木に見える）。無いときは円ごと（生垣）に柔らかい陰影
+function wcDefs(id: string, t: Tone, whole?: { x: number; y: number; r: number }, band?: number) {
+  const g = band ? `<linearGradient id="wc-${id}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${f(band)}"><stop offset="0" stop-color="${t.hi}"/><stop offset=".5" stop-color="${t.base}"/><stop offset="1" stop-color="${t.lo}"/></linearGradient>`
+    : whole
+    ? `<radialGradient id="wc-${id}" gradientUnits="userSpaceOnUse" cx="${f(whole.x - whole.r * 0.3)}" cy="${f(whole.y - whole.r * 0.35)}" r="${f(whole.r * 1.45)}"><stop offset="0" stop-color="${t.hi}"/><stop offset=".45" stop-color="${t.base}"/><stop offset="1" stop-color="${t.lo}"/></radialGradient>`
+    : `<radialGradient id="wc-${id}" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="${t.hi}"/><stop offset=".6" stop-color="${t.base}"/><stop offset="1" stop-color="${t.base}"/></radialGradient>`;
+  return `<defs>${g}`
+    + `<radialGradient id="sh-${id}"><stop offset=".5" stop-color="#1f3324" stop-opacity=".3"/><stop offset="1" stop-color="#1f3324" stop-opacity="0"/></radialGradient></defs>`;
+}
+
+// 円の集まり → 影・輪郭・塗り・ハイライト・花の順に重ねる
+function wcBlobs(id: string, t: Tone, blobs: { x: number; y: number; r: number }[], r: () => number, unit: number, flowers: string[], whole?: { x: number; y: number; r: number }, band?: number) {
+  let s = wcDefs(id, t, whole, band);
+  for (const b of blobs) s += `<circle cx="${f(b.x + unit * 0.16)}" cy="${f(b.y + unit * 0.2)}" r="${f(b.r * 1.22)}" fill="url(#sh-${id})"/>`;
+  for (const b of blobs) s += `<circle cx="${f(b.x)}" cy="${f(b.y)}" r="${f(b.r)}" fill="${t.line}" stroke="${t.line}" stroke-width="${f(unit * 0.05)}"/>`;
+  for (const b of blobs) s += `<circle cx="${f(b.x)}" cy="${f(b.y)}" r="${f(b.r)}" fill="url(#wc-${id})"/>`;
+  // 円の右下に薄い影の弧を入れて、葉の塊の重なりを見せる
+  for (const b of blobs) { const a0 = 0.15 + r() * 0.3, a1 = a0 + 1.4; s += `<path d="M${f(b.x + Math.cos(a0) * b.r * 0.82)} ${f(b.y + Math.sin(a0) * b.r * 0.82)}A${f(b.r * 0.82)} ${f(b.r * 0.82)} 0 0 1 ${f(b.x + Math.cos(a1) * b.r * 0.82)} ${f(b.y + Math.sin(a1) * b.r * 0.82)}" fill="none" stroke="${t.lo}" stroke-opacity=".2" stroke-width="${f(unit * 0.035)}" stroke-linecap="round"/>`; }
+  // 水彩のにじみ（明るい点・暗い点）
+  for (let i = 0; i < blobs.length * 3; i++) { const b = blobs[Math.floor(r() * blobs.length)], a = r() * Math.PI * 2, d = b.r * 0.75 * Math.sqrt(r()); s += `<circle cx="${f(b.x + Math.cos(a) * d)}" cy="${f(b.y + Math.sin(a) * d)}" r="${f(unit * (0.05 + r() * 0.07))}" fill="${r() < 0.55 ? t.hi : t.lo}" fill-opacity="${f(0.25 + r() * 0.3)}"/>`; }
+  for (let i = 0; i < flowers.length * 9; i++) { const b = blobs[Math.floor(r() * blobs.length)], a = r() * Math.PI * 2, d = b.r * 0.8 * Math.sqrt(r()), x = b.x + Math.cos(a) * d, y = b.y + Math.sin(a) * d; s += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(unit * 0.07)}" fill="${flowers[i % flowers.length]}" stroke="#fff" stroke-opacity=".7" stroke-width="${f(unit * 0.015)}"/>`; }
+  return s;
+}
+
+function roundTree(id: string, name: string, cat: string, size: number, seed: number, tone: string, opts: { flowers?: string[]; branches?: boolean } = {}): LibItem {
+  const r = rng(seed), R = size / 2, cx = R, cy = R, n = 6 + Math.floor(r() * 2), unit = R * 0.5;
+  const blobs = [{ x: cx, y: cy, r: R * 0.58 }];
+  for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + r() * 0.5, d = R * (0.42 + r() * 0.08), rr = R * (0.42 + r() * 0.1); blobs.push({ x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d, r: rr }); }
+  let s = wcBlobs(id, TONES[tone], blobs, r, unit, opts.flowers || [], { x: cx, y: cy, r: R });
+  if (opts.branches) { let d = ''; for (let i = 0; i < 5; i++) { const a = r() * Math.PI * 2, l = R * (0.3 + r() * 0.3); d += `M${f(cx)} ${f(cy)}L${f(cx + Math.cos(a) * l)} ${f(cy + Math.sin(a) * l)}`; } s += `<path d="${d}" stroke="#5b4a35" stroke-opacity=".18" stroke-width="${f(R * 0.02)}" stroke-linecap="round"/>`; }
+  return item(id, name, cat, size, size, s, false);
+}
+
+// 生垣：細長い帯に円を2列で並べる（長さ w × 奥行き h）
+function hedge(id: string, name: string, w: number, h: number, seed: number, tone: string, flowers: string[] = []): LibItem {
+  const r = rng(seed), unit = h * 0.45, blobs: { x: number; y: number; r: number }[] = [];
+  const step = h * 0.5;
+  for (let x = h * 0.45; x <= w - h * 0.45 + 0.1; x += step) {
+    blobs.push({ x: x + (r() - 0.5) * step * 0.4, y: h * (0.4 + r() * 0.06), r: h * (0.36 + r() * 0.1) });
+    blobs.push({ x: x + step * 0.5 + (r() - 0.5) * step * 0.4, y: h * (0.58 + r() * 0.06), r: h * (0.34 + r() * 0.1) });
+  }
+  const kept = blobs.filter(b => b.x + b.r * 0.6 <= w && b.x - b.r * 0.6 >= 0);
+  return item(id, name, '低木', w, h, wcBlobs(id, TONES[tone], kept, r, unit, flowers, undefined, h), false);
+}
+
 function stone(id: string, name: string, w: number, h: number, seed: number): LibItem {
   const r = rng(seed), n = 9, cx = w / 2, cy = h / 2; let d = '';
   for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2, k = 0.78 + r() * 0.2; d += (i ? 'L' : 'M') + `${f(cx + Math.cos(a) * w / 2 * k)} ${f(cy + Math.sin(a) * h / 2 * k)}`; }
@@ -223,6 +280,12 @@ export function builtinLibrary(): LibItem[] {
   L.push(broadleaf('olive', 'オリーブ', '植栽', 200, 81, ['#9bb08f', '#b1c4a6', '#86a07a', '#c4d3ba'], { leaf: 0.17, density: 1.3 }));
   L.push(broadleaf('chuboku1', '中木1', '植栽', 160, 91, LEAF_PALETTES.mid));
   L.push(broadleaf('chuboku2', '中木2', '植栽', 150, 97, LEAF_PALETTES.light));
+  // 植栽（水彩調・丸い樹冠。足元に影つき）
+  L.push(roundTree('wc-symbol', 'シンボルツリー（まる）', '植栽', 360, 131, 'light', { branches: true }));
+  L.push(roundTree('wc-tree-m', '樹木（まる・緑）', '植栽', 260, 137, 'mid', { branches: true }));
+  L.push(roundTree('wc-tree-d', '樹木（まる・濃緑）', '植栽', 220, 141, 'dark'));
+  L.push(roundTree('wc-olive', 'オリーブ（まる）', '植栽', 200, 149, 'olive'));
+  L.push(roundTree('wc-maple', 'モミジ（紅葉・まる）', '植栽', 240, 157, 'autumn', { branches: true }));
   L.push(radiating('palm', 'ヤシ', '植栽', 260, 101, 'palm'));
   L.push(radiating('conifer', 'コニファー', '植栽', 120, 111, 'conifer'));
   L.push(radiating('agave', 'アガベ', '植栽', 110, 121, 'agave'));
@@ -231,6 +294,11 @@ export function builtinLibrary(): LibItem[] {
   L.push(broadleaf('tsutsuji', 'ツツジ', '低木', 90, 251, ['#5f8b45', '#6f9b52', '#e08ab1', '#4d7a37'], { leaf: 0.2 }));
   L.push(broadleaf('ajisai', 'アジサイ', '低木', 100, 257, ['#6f9b52', '#8fb4e0', '#a7c1ea', '#5d8a40'], { leaf: 0.22 }));
   L.push(radiating('boxwood', 'ツゲ玉', '低木', 80, 263, 'conifer'));
+  L.push(roundTree('wc-shrub', '低木（まる）', '低木', 100, 271, 'mid'));
+  L.push(roundTree('wc-shrub-d', '低木（まる・濃緑）', '低木', 90, 277, 'dark'));
+  L.push(roundTree('wc-azalea', '花木（ピンク・まる）', '低木', 100, 281, 'mid', { flowers: ['#ef8fb1', '#e2638f', '#ffd1e0'] }));
+  L.push(hedge('wc-hedge', '生垣 1.8m', 180, 60, 287, 'mid'));
+  L.push(hedge('wc-hedge-f', '花の生垣 1.8m', 180, 60, 293, 'mid', ['#e8576a', '#f29bb4', '#ffe08a']));
   // 下草
   for (let i = 1; i <= 5; i++) L.push(radiating('shitakusa' + i, '下草' + i, '下草', 40 + i * 6, 300 + i * 5, i % 2 ? 'tuft' : 'grass'));
   L.push(radiating('grass1', 'グラス1', '下草', 70, 331, 'grass'));

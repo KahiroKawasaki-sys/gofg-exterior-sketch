@@ -41,6 +41,29 @@ function blotches(c: CanvasRenderingContext2D, s: number, r: () => number, color
   }
 }
 
+// 乱形石：ゆがんだ格子を三角・四角に割って石にする。端の点を反対側と共有してつなぎ目を消す
+function randomStone(c: CanvasRenderingContext2D, s: number, r: () => number) {
+  c.fillStyle = '#9b9384'; c.fillRect(0, 0, s, s);
+  const n = 5, cell = s / n, J: [number, number][][] = [];
+  for (let i = 0; i < n; i++) { J[i] = []; for (let j = 0; j < n; j++) J[i][j] = [(r() - 0.5) * cell * 0.7, (r() - 0.5) * cell * 0.7]; }
+  const P = (i: number, j: number): [number, number] => { const q = J[i % n][j % n]; return [i * cell + q[0], j * cell + q[1]]; };
+  const cols = ['#e6d7b6', '#dccaa3', '#ece0c6', '#d0bb93', '#e3d5b9', '#d6c8ab', '#c8b597', '#dcd3c2'];
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const q = [P(i, j), P(i + 1, j), P(i + 1, j + 1), P(i, j + 1)];
+    for (const poly of r() < 0.45 ? [[q[0], q[1], q[2]], [q[0], q[2], q[3]]] : [q]) {
+      const cx = poly.reduce((a, p) => a + p[0], 0) / poly.length, cy = poly.reduce((a, p) => a + p[1], 0) / poly.length;
+      const col = cols[Math.floor(r() * cols.length)];
+      for (const dx of [0, -s, s]) for (const dy of [0, -s, s]) {
+        c.beginPath(); poly.forEach(([x, y], k) => { const X = cx + (x - cx) * 0.87 + dx, Y = cy + (y - cy) * 0.87 + dy; if (k) c.lineTo(X, Y); else c.moveTo(X, Y); }); c.closePath();
+        const g = c.createLinearGradient(cx + dx - cell * 0.4, cy + dy - cell * 0.4, cx + dx + cell * 0.4, cy + dy + cell * 0.4);
+        g.addColorStop(0, '#f4eddd'); g.addColorStop(0.18, col); g.addColorStop(1, col);
+        c.fillStyle = g; c.fill(); c.strokeStyle = 'rgba(95,82,60,.45)'; c.lineWidth = 1.2; c.stroke();
+      }
+    }
+  }
+  noise(c, s, r, 10);
+}
+
 export const TEXTURES: TexDef[] = [
   { id: 'gravel-blue', name: '砂利（ブルーグレー）', draw: (c, s, r) => { speckle(c, s, r, '#c9d3da', ['#6f8496', '#9fb0bf', '#e9eef2', '#ffffff', '#3d4c5c', '#b8c4cd', '#87969f'], 2600, 1.2, 3.6); noise(c, s, r, 14); } },
   { id: 'gravel-gray', name: '砂利（グレー）', draw: (c, s, r) => { speckle(c, s, r, '#c5c4c0', ['#8c8b87', '#a9a7a2', '#e5e3de', '#ffffff', '#5e5d5a', '#bdbab3'], 2600, 1.2, 3.6); noise(c, s, r, 14); } },
@@ -48,6 +71,17 @@ export const TEXTURES: TexDef[] = [
   { id: 'washed', name: '洗い出し', draw: (c, s, r) => { speckle(c, s, r, '#cdbfa8', ['#a8977c', '#e7dccb', '#8a7a62', '#f3ede2', '#b9a88d'], 2400, 1.2, 3.2); noise(c, s, r, 12); } },
   { id: 'soil', name: 'ウッドチップ・土', draw: (c, s, r) => { speckle(c, s, r, '#9a6a45', ['#7b4f30', '#b98257', '#5e3a22', '#c9976a', '#8d5d3b', '#a77550'], 1900, 1.5, 5); noise(c, s, r, 20); } },
   { id: 'grass', name: '芝', draw: (c, s, r) => { c.fillStyle = '#88ad5c'; c.fillRect(0, 0, s, s); for (let i = 0; i < 3800; i++) { const x = r() * s, y = r() * s, a = -Math.PI / 2 + (r() - 0.5) * 1.2, l = 3 + r() * 5; c.strokeStyle = ['#6f9646', '#a3c374', '#5b7f38', '#b7d18c'][Math.floor(r() * 4)]; c.lineWidth = 1; wrap(s, x, y, l, (X, Y) => { c.beginPath(); c.moveTo(X, Y); c.lineTo(X + Math.cos(a) * l, Y + Math.sin(a) * l); c.stroke(); }); } } },
+  { id: 'lawn', name: '芝生（やわらか）', draw: (c, s, r) => {
+    c.fillStyle = '#b3d37f'; c.fillRect(0, 0, s, s);
+    // 水彩のムラ（同じ色の透明へ向かうグラデーションにして、色を濁らせない）
+    for (let i = 0; i < 16; i++) {
+      const x = r() * s, y = r() * s, rad = 50 + r() * 70, [R, G, B, A] = [[210, 232, 156, 0.5], [158, 198, 106, 0.3], [226, 240, 178, 0.45]][i % 3];
+      wrap(s, x, y, rad, (X, Y) => { const g = c.createRadialGradient(X, Y, 0, X, Y, rad); g.addColorStop(0, `rgba(${R},${G},${B},${A})`); g.addColorStop(1, `rgba(${R},${G},${B},0)`); c.fillStyle = g; c.fillRect(X - rad, Y - rad, rad * 2, rad * 2); });
+    }
+    for (let i = 0; i < 2200; i++) { const x = r() * s, y = r() * s, a = -Math.PI / 2 + (r() - 0.5) * 0.9, l = 2 + r() * 3; c.strokeStyle = ['rgba(128,170,84,.3)', 'rgba(222,238,170,.45)', 'rgba(150,190,104,.28)'][Math.floor(r() * 3)]; c.lineWidth = 1; wrap(s, x, y, l, (X, Y) => { c.beginPath(); c.moveTo(X, Y); c.lineTo(X + Math.cos(a) * l, Y + Math.sin(a) * l); c.stroke(); }); }
+    noise(c, s, r, 5);
+  } },
+  { id: 'stone-random', name: '乱形石', draw: randomStone },
   { id: 'brick', name: 'レンガ敷き', draw: (c, s, r) => { c.fillStyle = '#e4d7c8'; c.fillRect(0, 0, s, s); const bw = s / 4, bh = s / 8; for (let row = 0; row < 8; row++) for (let col = -1; col < 5; col++) { const x = col * bw + (row % 2 ? bw / 2 : 0), y = row * bh; const k = r(); c.fillStyle = k < 0.33 ? '#b0623f' : k < 0.66 ? '#a2563a' : '#bf7350'; c.fillRect(x + 2, y + 2, bw - 4, bh - 4); } noise(c, s, r, 16); } },
   { id: 'tile', name: 'タイル', draw: (c, s, r) => { c.fillStyle = '#d9d6cf'; c.fillRect(0, 0, s, s); const t = s / 4; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { const v = 205 + Math.floor(r() * 20); c.fillStyle = `rgb(${v},${v - 3},${v - 9})`; c.fillRect(i * t + 2, j * t + 2, t - 4, t - 4); } noise(c, s, r, 8); } },
   { id: 'deck', name: 'ウッドデッキ', draw: (c, s, r) => { const h = s / 8; for (let i = 0; i < 8; i++) { const v = r(); c.fillStyle = v < 0.5 ? '#a8774e' : '#9a6b44'; c.fillRect(0, i * h, s, h); c.fillStyle = '#6e4a2c'; c.fillRect(0, i * h + h - 2, s, 2); for (let k = 0; k < 30; k++) { c.fillStyle = 'rgba(80,50,30,.18)'; c.fillRect(r() * s, i * h + r() * (h - 3), 20 + r() * 50, 1); } } } },
