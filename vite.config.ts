@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
@@ -32,5 +33,7 @@ export default defineConfig(({ mode }) => {
     server: { host: '127.0.0.1', port: 4173, strictPort: true },
     preview: { host: '127.0.0.1', port: 4173, strictPort: true },
     build: { chunkSizeWarningLimit: 900, ...(app ? { outDir: 'dist-app' } : {}) },
+    // 実DB（Miniflare）を使う同期テストは、混んだPCだと既定の5秒を超えることがあるため長めにする
+    test: { testTimeout: 20000, hookTimeout: 30000 },
   };
 });
