@@ -33,6 +33,8 @@ export const saveLibItem = (l: LibItem) => tx<void>('library', 'readwrite', s =>
 export const deleteLibItem = (id: string) => tx<void>('library', 'readwrite', s => { s.delete(id); });
 export const getMeta = <T,>(id: string) => tx<{ id: string; value: T } | undefined>('meta', 'readonly', s => s.get(id)).then(v => v?.value);
 export const setMeta = (id: string, value: unknown) => tx<void>('meta', 'readwrite', s => { s.put({ id, value }); });
+export const deleteMeta = (id: string) => tx<void>('meta', 'readwrite', s => { s.delete(id); });
+export const listMeta = async <T,>(prefix: string) => ((await tx<{ id: string; value: T }[]>('meta', 'readonly', s => s.getAll())) || []).filter(m => m.id.startsWith(prefix));
 
 export function validDoc(v: unknown): Doc {
   const d = v as Doc;

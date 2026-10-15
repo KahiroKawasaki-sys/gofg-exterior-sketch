@@ -261,3 +261,12 @@ button.v3-mono:hover { color: var(--green); }
   .v3-bar .sep { margin: 0 4px; }
   .v3-width input { width: 70px; }
 }
+/* ホームのクラウド保存の状態 */
+.v3-cloud { display: inline-flex; align-items: center; gap: 6px; max-width: 46vw; font-size: 11.5px; color: #5b5f5d; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff; cursor: pointer; }
+.v3-cloud span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v3-cloud svg { flex: none; }
+.v3-cloud.synced { color: var(--green); }
+.v3-cloud.pending { color: #a35a1f; }
+.v3-cloud.error { color: #c4473d; border-color: #e8b4ae; }
+.v3-cloud.syncing svg { animation: v3-spin 1s linear infinite; }
+@keyframes v3-spin { to { transform: rotate(360deg); } }
