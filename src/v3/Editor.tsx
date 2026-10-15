@@ -21,6 +21,7 @@ import { LayerPanel, ObjectPanel, GuidePanel, PaintPanel, HistoryPanel, guideDef
 import { TextDialog, PromptDialog, Menu, type Field, type TextValue } from './Dialogs';
 import { readSource } from '../io';
 import { isNativeApp, saveFile } from './platform';
+import { schedulePush } from './cloudSync';
 import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, type TourStep, type HelpTab } from './Simple';
 import { GUIDE_FULL } from './guideFull';
 
@@ -77,10 +78,10 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const docRef = useRef(doc); docRef.current = doc;
   useEffect(() => {
     setSaved('saving');
-    const t = setTimeout(() => { saveDoc({ ...doc, view }).then(() => setSaved('saved')).catch(() => setSaved('error')); }, 700);
+    const t = setTimeout(() => { saveDoc({ ...doc, view }).then(() => { setSaved('saved'); schedulePush(); }).catch(() => setSaved('error')); }, 700);
     return () => clearTimeout(t);
   }, [doc]);
-  const saveWithThumb = async () => { try { const th = await thumbnail(docRef.current, lib, ctx); await saveDoc({ ...docRef.current, view }, th); setSaved('saved'); } catch { setSaved('error'); } };
+  const saveWithThumb = async () => { try { const th = await thumbnail(docRef.current, lib, ctx); await saveDoc({ ...docRef.current, view }, th); setSaved('saved'); schedulePush(); } catch { setSaved('error'); } };
   const goHome = async () => { await saveWithThumb(); onHome(); };
 
   function fit() {

@@ -1,17 +1,18 @@
 import {Buffer} from 'node:buffer';
 import type {D1Database} from '@cloudflare/workers-types';
 import {validatePlan} from '../src/model';
+import {canvases} from './canvas';
 const CHUNK=1024*1024,LIMIT=400*1024*1024;
-const idOK=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
+export const idOK=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
 const planOK=(v:string)=>/^[a-zA-Z0-9_-]{1,100}$/.test(v);
 export const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'private, no-store'}});
-const error=(message:string,status=400)=>json({error:message},status);
+export const error=(message:string,status=400)=>json({error:message},status);
 const hash=async(data:BufferSource)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),v=>v.toString(16).padStart(2,'0')).join('');
 async function readBytes(req:Request,max:number){if(Number(req.headers.get('content-length'))>max)throw Error('入力が大きすぎます');const reader=req.body?.getReader();if(!reader)return new Uint8Array(0);const pieces:Uint8Array[]=[];let size=0;try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>max){await reader.cancel();throw Error('入力が大きすぎます');}pieces.push(value);}const joined=new Uint8Array(size);let offset=0;for(const piece of pieces){joined.set(piece,offset);offset+=piece.length;}return joined;}finally{reader.releaseLock();}}
-async function readJSON(req:Request,max:number){return JSON.parse(new TextDecoder().decode(await readBytes(req,max)));}
-type Manifest={owner:string;id:string;bytes:number;parts:number;hashes:string;media:string;name:string;complete:number;created:string};
-async function manifest(db:D1Database,owner:string,id:string){return db.prepare('SELECT * FROM blobs WHERE owner=? AND id=?').bind(owner,id).first<Manifest>();}
-async function payload(db:D1Database,owner:string,id:string){const m=await manifest(db,owner,id);if(!m?.complete||m.media!=='application/json'||m.bytes>12*CHUNK)throw Error('編集データが未完成です');const r=await db.prepare('SELECT body FROM chunks WHERE owner=? AND blob_id=? ORDER BY n').bind(owner,id).all<{body:string}>();let offset=0;const bytes=new Uint8Array(m.bytes);for(const part of r.results){const piece=Buffer.from(part.body,'base64');bytes.set(piece,offset);offset+=piece.length;}if(offset!==m.bytes)throw Error('編集データが欠けています');return JSON.parse(new TextDecoder().decode(bytes));}
+export async function readJSON(req:Request,max:number){return JSON.parse(new TextDecoder().decode(await readBytes(req,max)));}
+export type Manifest={owner:string;id:string;bytes:number;parts:number;hashes:string;media:string;name:string;complete:number;created:string};
+export async function manifest(db:D1Database,owner:string,id:string){return db.prepare('SELECT * FROM blobs WHERE owner=? AND id=?').bind(owner,id).first<Manifest>();}
+export async function payload(db:D1Database,owner:string,id:string){const m=await manifest(db,owner,id);if(!m?.complete||m.media!=='application/json'||m.bytes>12*CHUNK)throw Error('編集データが未完成です');const r=await db.prepare('SELECT body FROM chunks WHERE owner=? AND blob_id=? ORDER BY n').bind(owner,id).all<{body:string}>();let offset=0;const bytes=new Uint8Array(m.bytes);for(const part of r.results){const piece=Buffer.from(part.body,'base64');bytes.set(piece,offset);offset+=piece.length;}if(offset!==m.bytes)throw Error('編集データが欠けています');return JSON.parse(new TextDecoder().decode(bytes));}
 export async function cloud(req:Request,db:D1Database,owner:string):Promise<Response>{
  const url=new URL(req.url),path=url.pathname,method=req.method;
  if(!['GET','HEAD','POST','PUT'].includes(method))return error('この操作には対応していません',405);
@@ -36,6 +37,7 @@ export async function cloud(req:Request,db:D1Database,owner:string):Promise<Resp
    if(method==='GET'&&m.complete){const result=await db.prepare('SELECT body FROM chunks WHERE owner=? AND blob_id=? AND n=?').bind(owner,id,n).first<{body:string}>();return result?json(result):error('ファイルの一部がありません',404);}
   }return error('この操作には対応していません',405);
  }
+ if(path==='/api/canvases'||path.startsWith('/api/canvases/'))return await canvases(req,db,owner);
  if(path==='/api/plans'&&method==='GET'){const result=await db.prepare('SELECT id,name,assignee,archived,revision,payload,updated FROM plans WHERE owner=? ORDER BY updated DESC LIMIT 1000').bind(owner).all();return json({plans:result.results});}
  const route=path.match(/^\/api\/plans\/([^/]+)(?:\/(history))?$/);
  if(route){const id=decodeURIComponent(route[1]);if(!planOK(id))return error('案件IDが正しくありません');
@@ -59,7 +61,7 @@ export async function cloud(req:Request,db:D1Database,owner:string):Promise<Resp
    return json({revision,updated});
   }
  }
- if(path==='/api/maintenance'&&method==='POST'){await db.prepare("DELETE FROM blobs WHERE owner=? AND created<? AND NOT EXISTS(SELECT 1 FROM version_assets WHERE version_assets.owner=blobs.owner AND version_assets.blob_id=blobs.id)").bind(owner,new Date(Date.now()-86400000).toISOString()).run();return json({ok:true});}
+ if(path==='/api/maintenance'&&method==='POST'){await db.prepare("DELETE FROM blobs WHERE owner=? AND created<? AND NOT EXISTS(SELECT 1 FROM version_assets WHERE version_assets.owner=blobs.owner AND version_assets.blob_id=blobs.id) AND NOT EXISTS(SELECT 1 FROM canvas_assets WHERE canvas_assets.owner=blobs.owner AND canvas_assets.blob_id=blobs.id)").bind(owner,new Date(Date.now()-86400000).toISOString()).run();return json({ok:true});}
  return error('この保存操作は見つかりません',404);
  }catch(e){const message=e instanceof Error?e.message:'';if(/SQLITE|D1_|quota|limit/i.test(message))return error('クラウド保存を利用できません。端末の編集は残っています。時間を置いて再試行してください',503);return error(message||'保存データを確認してください');}
 }
