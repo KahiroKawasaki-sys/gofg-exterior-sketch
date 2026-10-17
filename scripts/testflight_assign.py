@@ -60,9 +60,14 @@ class Client:
                              f'{error.read().decode(errors="replace")[:500]}') from None
         return json.loads(text) if text else {}
 
+def find_app(api, bundle):
+    # filter[bundleId] は前方一致で返ることがある（com.kawakahi.gofgsketch で .pro も返る）ので完全一致で絞る
+    apps = api.call('GET', '/apps', {'filter[bundleId]': bundle, 'fields[apps]': 'bundleId'})['data']
+    return [a for a in apps if a.get('attributes', {}).get('bundleId') == bundle]
+
 def create_group_like_main(api, app_id):
     """Pro の初回だけ：外構スケッチ（2D）と同じ内部テスターで「本人テスト」グループを作る。"""
-    main_app = api.call('GET', '/apps', {'filter[bundleId]': BUNDLE})['data']
+    main_app = find_app(api, BUNDLE)
     require(len(main_app) == 1, 'Main app not found')
     groups = api.call('GET', f'/apps/{main_app[0]["id"]}/betaGroups', {'fields[betaGroups]': 'name,isInternalGroup'})['data']
     testers = []
@@ -93,7 +98,7 @@ def main():
         del key_text
         api = Client(key, key_id, issuer)
         bundle, display = EDITIONS[edition()]
-        apps = api.call('GET', '/apps', {'filter[bundleId]': bundle})['data']
+        apps = find_app(api, bundle)
         require(len(apps) == 1, f'{display} ({bundle}) is not registered in App Store Connect yet')
         app_id = apps[0]['id']
         deadline = time.time() + 45 * 60
