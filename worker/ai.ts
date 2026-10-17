@@ -1,8 +1,9 @@
 // 打ち合わせAI：iPadで文字にした会話から、お客様の要望を読み取って返す。
 // キー（ANTHROPIC_API_KEY）はサーバーの秘密の設定にだけ置き、画面には渡さない。録音・会話は保存しない。
 import {error,json,readJSON} from './cloud';
+import {anthropicEvent,reportUsage,type UsageEnv} from './usage';
 
-export type AiEnv={ANTHROPIC_API_KEY?:string;AI_MODEL?:string};
+export type AiEnv={ANTHROPIC_API_KEY?:string;AI_MODEL?:string}&UsageEnv;
 const DEFAULT_MODEL='claude-opus-5-5';
 const KINDS=['駐車場','舗装・素材','塀・フェンス','門まわり','植栽','設備','予算','工期','その他'] as const;
 
@@ -48,17 +49,19 @@ export function buildPrompt(b:Body){
 }
 
 // app：アプリからの呼び出し（ブラウザではないので Origin が付かない。通行証は index.ts で確認済み）
-export async function meeting(req:Request,env:AiEnv,app=false):Promise<Response>{
+export async function meeting(req:Request,env:AiEnv,app=false,ctx?:Pick<ExecutionContext,'waitUntil'>):Promise<Response>{
  const url=new URL(req.url);
  if(req.method!=='POST')return error('この操作には対応していません',405);
  if((!app&&req.headers.get('Origin')!==url.origin)||req.headers.get('X-Sketch-Client')!=='2')return error('この画面から操作をやり直してください',403);
  if(!env.ANTHROPIC_API_KEY)return error('AIのキーがまだ登録されていません',503);
  let b:Body;try{b=await readJSON(req,200000);}catch{return error('送られた内容を読めません');}
  if(!str(b.transcript,60000).trim())return error('会話がまだありません');
+ const model=env.AI_MODEL||DEFAULT_MODEL,started=Date.now();
  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':env.ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01'},
-  body:JSON.stringify({model:env.AI_MODEL||DEFAULT_MODEL,max_tokens:4000,system:SYSTEM,tools:[TOOL],tool_choice:{type:'tool',name:TOOL.name},messages:[{role:'user',content:buildPrompt(b)}]})});
- if(!r.ok){const status=r.status===429||r.status===529?503:502;return error(r.status===401?'AIのキーが正しくありません':r.status===429||r.status===529?'AIが混み合っています。少し待ってから読み取ってください':'AIから返事がありませんでした',status);}
+  body:JSON.stringify({model,max_tokens:4000,system:SYSTEM,tools:[TOOL],tool_choice:{type:'tool',name:TOOL.name},messages:[{role:'user',content:buildPrompt(b)}]})});
+ if(!r.ok){reportUsage(env,ctx,anthropicEvent(model,'打ち合わせAI',false,undefined,Date.now()-started));const status=r.status===429||r.status===529?503:502;return error(r.status===401?'AIのキーが正しくありません':r.status===429||r.status===529?'AIが混み合っています。少し待ってから読み取ってください':'AIから返事がありませんでした',status);}
  const data=await r.json() as {content?:{type:string;name?:string;input?:{requests?:unknown}}[];usage?:{input_tokens?:number;output_tokens?:number}};
+ reportUsage(env,ctx,anthropicEvent(model,'打ち合わせAI',true,data.usage,Date.now()-started));
  const used=data.content?.find(c=>c.type==='tool_use'&&c.name===TOOL.name);
  const requests=Array.isArray(used?.input?.requests)?used.input.requests:[];
  return json({requests,usage:{input:data.usage?.input_tokens||0,output:data.usage?.output_tokens||0}});

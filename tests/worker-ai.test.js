@@ -43,3 +43,32 @@ describe('打ち合わせAI',()=>{
   r=await worker.fetch(req({transcript:'a'}),env());expect(r.status).toBe(503);expect((await r.json()).error).toContain('混み合って');
  });
 });
+describe('AI利用記録の送信',()=>{
+ it('トークンがあれば応答の後に利用記録を送る（会話の本文は送らない）',async()=>{
+  globalThis.fetch=vi.fn(async(url)=>String(url).includes('anthropic')
+   ?new Response(JSON.stringify({content:[{type:'tool_use',name:'record_requests',input:{requests:[]}}],usage:{input_tokens:1000,output_tokens:200,cache_read_input_tokens:50}}),{status:200})
+   :new Response('{}',{status:200}));
+  const waits=[];const ctx={waitUntil:(p)=>waits.push(p)};
+  const r=await worker.fetch(req({transcript:'駐車場は2台ほしいです'}),env({AI_USAGE_TOKEN:'usage-test'}),ctx);
+  expect(r.status).toBe(200);await Promise.all(waits);
+  const [url,init]=globalThis.fetch.mock.calls[1];
+  expect(url).toBe('https://fukugyo-manager.vercel.app/api/ai-usage/ingest');expect(init.headers.authorization).toBe('Bearer usage-test');
+  const sent=JSON.parse(init.body);
+  expect(sent).toMatchObject({provider:'anthropic',model:'claude-opus-5-5',feature:'打ち合わせAI',status:'ok',inputTokens:1000,outputTokens:200,cachedInputTokens:50});
+  expect(init.body).not.toContain('駐車場は2台');
+ });
+ it('失敗も記録する。トークンが無ければ送らない',async()=>{
+  globalThis.fetch=vi.fn(async(url)=>String(url).includes('anthropic')?new Response('{}',{status:400}):new Response('{}',{status:200}));
+  const waits=[];const ctx={waitUntil:(p)=>waits.push(p)};
+  expect((await worker.fetch(req({transcript:'a'}),env({AI_USAGE_TOKEN:'usage-test'}),ctx)).status).toBe(502);await Promise.all(waits);
+  expect(JSON.parse(globalThis.fetch.mock.calls[1][1].body).status).toBe('error');
+  globalThis.fetch.mockClear();
+  await worker.fetch(req({transcript:'a'}),env(),ctx);
+  expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+ });
+ it('記録の送信先が落ちていても応答は返る',async()=>{
+  globalThis.fetch=vi.fn(async(url)=>{if(!String(url).includes('anthropic'))throw new Error('down');return new Response(JSON.stringify({content:[],usage:{input_tokens:1,output_tokens:1}}),{status:200});});
+  const waits=[];const r=await worker.fetch(req({transcript:'a'}),env({AI_USAGE_TOKEN:'usage-test'}),{waitUntil:(p)=>waits.push(p)});
+  expect(r.status).toBe(200);await expect(Promise.all(waits)).resolves.toBeDefined();
+ });
+});

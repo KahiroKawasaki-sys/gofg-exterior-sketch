@@ -7,7 +7,7 @@ async function serveAssets(request:Request,env:Env):Promise<Response>{
  const response=await env.ASSETS.fetch(request);const secured=new Response(response.body,response);secured.headers.set('Cache-Control','private, no-store');secured.headers.set('X-Content-Type-Options','nosniff');secured.headers.set('Referrer-Policy','no-referrer');secured.headers.set('X-Frame-Options','DENY');secured.headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data: blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'");return secured;
 }
 export default {
- async fetch(request:Request,env:Env & AiEnv & {DB?:D1Database;PUBLIC_APP?:string;APP_SERVICE_TOKEN_ID?:string}):Promise<Response>{
+ async fetch(request:Request,env:Env & AiEnv & {DB?:D1Database;PUBLIC_APP?:string;APP_SERVICE_TOKEN_ID?:string},ctx?:ExecutionContext):Promise<Response>{
   const url=new URL(request.url),isAPI=url.pathname==='/api'||url.pathname.startsWith('/api/');
   if(env.PUBLIC_APP==='true'){
    if(isAPI){
@@ -28,7 +28,7 @@ export default {
    app=typeof payload.email!=='string'&&typeof payload.common_name==='string'&&!!payload.common_name&&(!env.APP_SERVICE_TOKEN_ID||payload.common_name===env.APP_SERVICE_TOKEN_ID);
    if(!app&&(typeof payload.email!=='string'||payload.email.toLowerCase()!==env.ALLOWED_EMAIL.trim().toLowerCase()))return deny('このアカウントには利用権限がありません。',403);}
   catch{return deny('ログインを確認できません。再ログインしてください。',401);}
-  if(url.pathname==='/api/ai/meeting')return meeting(request,env,app);
+  if(url.pathname==='/api/ai/meeting')return meeting(request,env,app,ctx);
   if(app)return deny('アプリからはこの操作はできません。',403);
   if(isAPI){if(!env.DB)return json({available:false,error:'クラウド接続の準備中です。端末保存とバックアップを利用できます。'},url.pathname==='/api/session'?200:503);return cloud(request,env.DB,env.ALLOWED_EMAIL.trim().toLowerCase());}
   return serveAssets(request,env);
