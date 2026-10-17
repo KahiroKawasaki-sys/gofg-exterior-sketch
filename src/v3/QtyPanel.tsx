@@ -1,14 +1,19 @@
-// 集計パネル：素材の面積・線の長さ・部品の数。行を押すと図面のその箇所を選ぶ
+// 集計パネル：素材の面積・線の長さ・部品の数。行を押すと図面のその箇所を選ぶ。「概算見積」タブで単価を掛ける
 import { useEffect, useState } from 'react';
 import { X, FileSpreadsheet } from 'lucide-react';
-import { type Doc, type LibItem, type Role3 } from './types';
+import { type Doc, type DocEstimate, type LibItem, type Role3 } from './types';
 import { quantities, textureAreas, type QtyRow, type QtyGroup } from './quantities';
 import { ROLE_LABELS } from './scene3d';
+import { buildEstimate, type Estimate, type PriceBook } from './estimate';
+import { EstView } from './EstView';
 
-export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet }: {
+export type EstProps = { book: PriceBook; onBook: (b: PriceBook) => void; onEst: (est: DocEstimate) => void; onEstCsv: (e: Estimate) => void; onImport: (f: File) => void; onExportBook: () => void };
+
+export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet, estp, tab: tab0 = 'qty' }: {
   doc: Doc; lib: LibItem[]; onPick: (ids: string[]) => void; onSetRole: (ids: string[], role: Role3) => void;
-  onCsv: (rows: QtyRow[]) => void; onClose: () => void; sheet?: boolean;
+  onCsv: (rows: QtyRow[]) => void; onClose: () => void; sheet?: boolean; estp?: EstProps; tab?: 'qty' | 'est';
 }) {
+  const [tab, setTab] = useState<'qty' | 'est'>(tab0);
   const [areas, setAreas] = useState<Map<string, number> | null>(null);
   // 塗りの面積は画像を読むので、描き終わって少ししてから数え直す
   useEffect(() => {
@@ -22,10 +27,21 @@ export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet }:
 
   return (
     <div className={'v3-panel v3-qty' + (sheet ? ' sheet' : '')} aria-label="集計">
-      <div className="v3-qty-head"><b>集計</b><span className="sp" />
-        <button className="v3-btn" onClick={() => onCsv(rows)} disabled={!rows.length}><FileSpreadsheet size={14} />CSV</button>
+      <div className="v3-qty-head">
+        {estp ? <div className="v3-seg" role="tablist">
+          <button role="tab" aria-selected={tab === 'qty'} className={tab === 'qty' ? 'on' : ''} onClick={() => setTab('qty')}>数量</button>
+          <button role="tab" aria-selected={tab === 'est'} className={tab === 'est' ? 'on' : ''} onClick={() => setTab('est')}>概算見積</button>
+        </div> : <b>集計</b>}
+        <span className="sp" />
+        {tab === 'qty' && <button className="v3-btn" onClick={() => onCsv(rows)} disabled={!rows.length}><FileSpreadsheet size={14} />CSV</button>}
         <button className="v3-ib" onClick={onClose} aria-label="集計を閉じる"><X size={16} /></button>
       </div>
+      {tab === 'est' && estp && (() => {
+        const e = buildEstimate(rows, estp.book, doc.est);
+        return <EstView e={e} book={estp.book} est={doc.est || {}} onBook={estp.onBook} onEst={estp.onEst} onPick={onPick}
+          onCsv={() => estp.onEstCsv(e)} onImport={estp.onImport} onExportBook={estp.onExportBook} />;
+      })()}
+      {tab === 'qty' && <>
       {!rows.length && <p className="v3-note pad">まだ数えるものがありません。素材を塗る・部品を置く・実線を引くと、ここに数量が出ます。</p>}
       {groups.map(g => {
         const rs = rows.filter(r => r.group === g);
@@ -51,6 +67,7 @@ export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet }:
         );
       })}
       <p className="v3-note pad">行を押すと図面でその箇所を選びます。「自動判定」は種類を選んでいない実線を、塀・建物と見なして数えたものです。点線・手描きの線は、種類を選んだときだけ数えます。車と人は数えません。面積は塗った範囲からの概算です。</p>
+      </>}
     </div>
   );
 }
