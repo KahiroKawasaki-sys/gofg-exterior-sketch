@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, CapacitorHttp, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 export const isNativeApp = () => Capacitor.isNativePlatform();
 
@@ -54,3 +54,27 @@ export async function saveFile(blob: Blob, fileName: string): Promise<'saved' | 
     await Filesystem.rmdir({ directory: Directory.Cache, path: folder, recursive: true }).catch(() => {});
   }
 }
+
+// サーバーのAPIを呼ぶ。Webは同じサイトへ普通に送る。アプリはWeb画面の外（端末の通信）から本番サーバーへ送る
+export const API_ORIGIN = 'https://gofg-exterior-sketch.kawakahi135.workers.dev';
+export async function apiPost(path: string, body: unknown): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Sketch-Client': '2' };
+  if (!isNativeApp()) {
+    const r = await fetch(path, { method: 'POST', headers, credentials: 'same-origin', body: JSON.stringify(body) });
+    return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
+  }
+  const { appAuthHeaders } = await import('./appAuth');
+  const r = await CapacitorHttp.post({ url: API_ORIGIN + path, headers: { ...headers, ...await appAuthHeaders() }, data: body, connectTimeout: 30000, readTimeout: 120000 });
+  // ログイン画面（HTML）が返ってきたときは、通行証が通っていない
+  const data = r.data && typeof r.data === 'object' ? r.data as Record<string, unknown> : {};
+  const ok = r.status >= 200 && r.status < 300 && typeof r.data === 'object';
+  return { ok, status: ok ? r.status : r.status < 300 ? 401 : r.status, data };
+}
+
+// 端末本体の音声認識（ios/App/App/SpeechPlugin.swift）
+export type NativeSpeech = {
+  available(): Promise<{ available: boolean }>; start(): Promise<void>; stop(): Promise<void>;
+  addListener(event: 'partial' | 'final', fn: (e: { text: string }) => void): Promise<PluginListenerHandle>;
+};
+let speech: NativeSpeech | undefined;
+export const nativeSpeech = () => speech ??= registerPlugin<NativeSpeech>('GofgSpeech');

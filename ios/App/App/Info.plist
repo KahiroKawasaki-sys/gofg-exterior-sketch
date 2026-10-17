@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>ja</string>
 	<key>CFBundleDisplayName</key>
-	<string>外構スケッチ</string>
+	<string>$(GOFG_DISPLAY_NAME)</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -64,6 +64,10 @@
 	<string>現場の写真を撮って図面に貼り付けるために使います</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>写真を図面に貼り付けるために使います</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>打ち合わせの会話を文字にするために使います。音声は保存しません</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>打ち合わせの会話を文字にして、要望をまとめるために使います</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>書き出した図面を写真に保存するために使います</string>
 	<key>UIUserInterfaceStyle</key>

@@ -11,7 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from distribute import BUNDLE, REQUIRED, normalize_private_key, require
+from distribute import BUNDLE, EDITIONS, REQUIRED, edition, normalize_private_key, require
 
 API = 'https://api.appstoreconnect.apple.com/v1'
 
@@ -60,6 +60,24 @@ class Client:
                              f'{error.read().decode(errors="replace")[:500]}') from None
         return json.loads(text) if text else {}
 
+def create_group_like_main(api, app_id):
+    """Pro の初回だけ：外構スケッチ（2D）と同じ内部テスターで「本人テスト」グループを作る。"""
+    main_app = api.call('GET', '/apps', {'filter[bundleId]': BUNDLE})['data']
+    require(len(main_app) == 1, 'Main app not found')
+    groups = api.call('GET', f'/apps/{main_app[0]["id"]}/betaGroups', {'fields[betaGroups]': 'name,isInternalGroup'})['data']
+    testers = []
+    for g in groups:
+        if g['attributes'].get('isInternalGroup'):
+            testers += [t['id'] for t in api.call('GET', f'/betaGroups/{g["id"]}/relationships/betaTesters')['data']]
+    group = api.call('POST', '/betaGroups', body={'data': {'type': 'betaGroups', 'attributes': {'name': '本人テスト', 'isInternalGroup': True},
+                     'relationships': {'app': {'data': {'type': 'apps', 'id': app_id}}}}})['data']
+    print('Created internal TestFlight group 本人テスト', flush=True)
+    if testers:
+        api.call('POST', f'/betaGroups/{group["id"]}/relationships/betaTesters',
+                 body={'data': [{'type': 'betaTesters', 'id': t} for t in dict.fromkeys(testers)]})
+        print(f'Added {len(set(testers))} internal tester(s) from 外構スケッチ', flush=True)
+    return group
+
 def main():
     missing = [name for name in REQUIRED[:3] if not os.environ.get(name)]
     require(not missing, 'Missing secrets: ' + ', '.join(missing))
@@ -74,8 +92,9 @@ def main():
         key.chmod(0o600)
         del key_text
         api = Client(key, key_id, issuer)
-        apps = api.call('GET', '/apps', {'filter[bundleId]': BUNDLE})['data']
-        require(len(apps) == 1, 'App not found in App Store Connect')
+        bundle, display = EDITIONS[edition()]
+        apps = api.call('GET', '/apps', {'filter[bundleId]': bundle})['data']
+        require(len(apps) == 1, f'{display} ({bundle}) is not registered in App Store Connect yet')
         app_id = apps[0]['id']
         deadline = time.time() + 45 * 60
         while True:
@@ -91,6 +110,8 @@ def main():
         build_id = found[0]['id']
         groups = api.call('GET', f'/apps/{app_id}/betaGroups', {'fields[betaGroups]': 'name,isInternalGroup'})['data']
         internal = [g for g in groups if g['attributes'].get('isInternalGroup')]
+        if not internal and bundle != BUNDLE:
+            internal = [create_group_like_main(api, app_id)]
         require(internal, 'No internal TestFlight group found')
         for group in internal:
             api.call('POST', f'/betaGroups/{group["id"]}/relationships/builds',
@@ -98,7 +119,7 @@ def main():
             print(f'Added build {build} to TestFlight group: {group["attributes"]["name"]}', flush=True)
     if summary := os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(summary, 'a', encoding='utf-8') as f:
-            f.write(f'外構スケッチ build {build}: added to {len(internal)} internal TestFlight group(s).\n')
+            f.write(f'{display} build {build}: added to {len(internal)} internal TestFlight group(s).\n')
 
 if __name__ == '__main__':
     try:

@@ -7,7 +7,7 @@ async function serveAssets(request:Request,env:Env):Promise<Response>{
  const response=await env.ASSETS.fetch(request);const secured=new Response(response.body,response);secured.headers.set('Cache-Control','private, no-store');secured.headers.set('X-Content-Type-Options','nosniff');secured.headers.set('Referrer-Policy','no-referrer');secured.headers.set('X-Frame-Options','DENY');secured.headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data: blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'");return secured;
 }
 export default {
- async fetch(request:Request,env:Env & AiEnv & {DB?:D1Database;PUBLIC_APP?:string}):Promise<Response>{
+ async fetch(request:Request,env:Env & AiEnv & {DB?:D1Database;PUBLIC_APP?:string;APP_SERVICE_TOKEN_ID?:string}):Promise<Response>{
   const url=new URL(request.url),isAPI=url.pathname==='/api'||url.pathname.startsWith('/api/');
   if(env.PUBLIC_APP==='true'){
    if(isAPI){
@@ -21,9 +21,14 @@ export default {
   if(!/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(env.ACCESS_TEAM_DOMAIN))return deny('認証設定を確認してください。',503);
   if(!isAPI&&!['GET','HEAD'].includes(request.method))return deny('Method not allowed',405);
   const token=request.headers.get('Cf-Access-Jwt-Assertion');if(!token)return deny('ログインが必要です。',401);
-  try{const issuer='https://'+env.ACCESS_TEAM_DOMAIN;const jwks=keySets.get(issuer)||createRemoteJWKSet(new URL(issuer+'/cdn-cgi/access/certs'));keySets.set(issuer,jwks);const {payload}=await jwtVerify(token,jwks,{issuer,audience:env.ACCESS_AUD,algorithms:['RS256']});if(typeof payload.email!=='string'||payload.email.toLowerCase()!==env.ALLOWED_EMAIL.trim().toLowerCase())return deny('このアカウントには利用権限がありません。',403);}
+  let app=false;
+  try{const issuer='https://'+env.ACCESS_TEAM_DOMAIN;const jwks=keySets.get(issuer)||createRemoteJWKSet(new URL(issuer+'/cdn-cgi/access/certs'));keySets.set(issuer,jwks);const {payload}=await jwtVerify(token,jwks,{issuer,audience:env.ACCESS_AUD,algorithms:['RS256']});
+   // iPhone／iPadアプリ（Pro）はメールのログインではなく、Accessのサービストークンで通る。使えるのは打ち合わせAIだけ
+   app=typeof payload.email!=='string'&&!!env.APP_SERVICE_TOKEN_ID&&payload.common_name===env.APP_SERVICE_TOKEN_ID;
+   if(!app&&(typeof payload.email!=='string'||payload.email.toLowerCase()!==env.ALLOWED_EMAIL.trim().toLowerCase()))return deny('このアカウントには利用権限がありません。',403);}
   catch{return deny('ログインを確認できません。再ログインしてください。',401);}
-  if(url.pathname==='/api/ai/meeting')return meeting(request,env);
+  if(url.pathname==='/api/ai/meeting')return meeting(request,env,app);
+  if(app)return deny('アプリからはこの操作はできません。',403);
   if(isAPI){if(!env.DB)return json({available:false,error:'クラウド接続の準備中です。端末保存とバックアップを利用できます。'},url.pathname==='/api/session'?200:503);return cloud(request,env.DB,env.ALLOWED_EMAIL.trim().toLowerCase());}
   return serveAssets(request,env);
  }

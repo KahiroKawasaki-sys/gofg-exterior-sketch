@@ -3,6 +3,7 @@
 import { type Doc, type Item, type DocEstimate, type AiAction, type MeetRequest, type Meeting, uid } from './types';
 import { canRaise, resolveRole } from './scene3d';
 import { type PriceBook } from './estimate';
+import { apiPost, isNativeApp, nativeSpeech } from './platform';
 
 export type { AiAction, MeetRequest, MeetLine, Meeting } from './types';
 
@@ -68,10 +69,11 @@ type SR = { lang: string; continuous: boolean; interimResults: boolean; start():
   onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null };
 const SRClass = () => (globalThis as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR }).SpeechRecognition
   || (globalThis as unknown as { webkitSpeechRecognition?: new () => SR }).webkitSpeechRecognition;
-export const speechAvailable = () => !!SRClass();
+export const speechAvailable = () => isNativeApp() || !!SRClass();
 
 // 止めるまで聞き続ける（Safari は無音が続くと止まるので、自動でつなぎ直す）
 export function listen(onFinal: (text: string) => void, onInterim: (text: string) => void, onError: (msg: string) => void): () => void {
+  if (isNativeApp()) return listenNative(onFinal, onInterim, onError);
   const C = SRClass(); if (!C) { onError('この端末では音声認識が使えません。iPadのSafariで開いてください'); return () => {}; }
   let active = true, rec: SR | null = null;
   const start = () => {
@@ -94,13 +96,23 @@ export function listen(onFinal: (text: string) => void, onInterim: (text: string
   return () => { active = false; try { rec?.stop(); } catch { /* 停止済み */ } };
 }
 
+// アプリでは端末本体の音声認識を使う（アプリの中の画面ではWebの音声認識が安定しないため）
+function listenNative(onFinal: (text: string) => void, onInterim: (text: string) => void, onError: (msg: string) => void): () => void {
+  let stopped = false;
+  const sp = nativeSpeech();
+  const subs = Promise.all([sp.addListener('final', e => onFinal(e.text)), sp.addListener('partial', e => onInterim(e.text))]);
+  sp.start().catch((e: Error) => { if (!stopped) onError(e.message || '音声認識を始められませんでした'); });
+  return () => {
+    stopped = true;
+    sp.stop().catch(() => {}).finally(() => subs.then(hs => hs.forEach(h => h.remove())));
+    onInterim('');
+  };
+}
+
 // サーバーのAIに読み取らせる
 export async function readRequests(m: Meeting, book: PriceBook): Promise<{ requests: MeetRequest[]; usage?: { input: number; output: number } }> {
-  const r = await fetch('/api/ai/meeting', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Sketch-Client': '2' }, credentials: 'same-origin',
-    body: JSON.stringify({ transcript: transcriptText(m), previous: m.requests.map(q => ({ id: q.id, text: q.text })), items: [...new Set(book.items.map(i => i.name))].slice(0, 150) }),
-  });
-  const data = await r.json().catch(() => ({})) as { requests?: unknown[]; error?: string; usage?: { input: number; output: number } };
-  if (!r.ok) throw Error(data.error || (r.status === 401 ? 'ログインし直してください' : 'AIにつながりませんでした'));
+  const r = await apiPost('/api/ai/meeting', { transcript: transcriptText(m), previous: m.requests.map(q => ({ id: q.id, text: q.text })), items: [...new Set(book.items.map(i => i.name))].slice(0, 150) });
+  const data = r.data as { requests?: unknown[]; error?: string; usage?: { input: number; output: number } };
+  if (!r.ok) throw Error(data.error || (r.status === 401 || r.status === 403 ? (isNativeApp() ? 'AIの通行証が通りませんでした。アプリを最新版にしてください' : 'ログインし直してください') : 'AIにつながりませんでした'));
   return { requests: mergeRequests(m.requests, data.requests || []), usage: data.usage };
 }
