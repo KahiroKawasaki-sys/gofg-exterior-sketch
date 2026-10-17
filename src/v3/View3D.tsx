@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { X, Camera, RotateCcw } from 'lucide-react';
+import { type Role3 } from './types';
 import { type Doc, type LibItem, rad } from './types';
 import { type RenderCtx } from './markup';
 import { contentBox, docSVG, rasterize } from './raster';
-import { buildScene, groundDoc, DEFAULT_SCENE_OPTS, type Solid, type SceneOpts } from './scene3d';
+import { buildScene, groundDoc, pickRaisable, canRaise, itemOutline, ROLE_LABELS, DEFAULT_SCENE_OPTS, type Solid, type SceneOpts } from './scene3d';
 import { saveFile } from './platform';
 
 type ViewKind = 'bird' | 'top' | 'eye';
@@ -30,6 +31,47 @@ function solidObject(s: Solid): THREE.Object3D {
       m.position.set((s.a.x + s.b.x) / 2, s.h / 2, (s.a.z + s.b.z) / 2);
       m.rotation.y = -Math.atan2(s.b.z - s.a.z, s.b.x - s.a.x);
       g.add(m); break;
+    }
+    case 'fence': {
+      // ブロック基礎＋柱＋横板のフェンス
+      const len = Math.hypot(s.b.x - s.a.x, s.b.z - s.a.z);
+      const base = new THREE.Mesh(new THREE.BoxGeometry(len + 0.15, s.base, 0.15), mat('#cbc7bf'));
+      base.position.y = s.base / 2; g.add(base);
+      const n = Math.max(1, Math.ceil(len / 2)), postM = mat('#3f3b38'), slatM = mat('#6b4f3a');
+      for (let i = 0; i <= n; i++) {
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.06, s.h - s.base, 0.06), postM);
+        p.position.set(-len / 2 + len * i / n, s.base + (s.h - s.base) / 2, 0); g.add(p);
+      }
+      const rows = Math.max(1, Math.floor((s.h - s.base) / 0.12));
+      for (let j = 0; j < rows; j++) {
+        const sl = new THREE.Mesh(new THREE.BoxGeometry(len, 0.09, 0.02), slatM);
+        sl.position.set(0, s.base + 0.06 + j * (s.h - s.base - 0.06) / rows, 0.04); g.add(sl);
+      }
+      g.position.set((s.a.x + s.b.x) / 2, 0, (s.a.z + s.b.z) / 2);
+      g.rotation.y = -Math.atan2(s.b.z - s.a.z, s.b.x - s.a.x); break;
+    }
+    case 'gate': {
+      // 門柱2本＋両開きの扉（縦格子）
+      const len = Math.hypot(s.b.x - s.a.x, s.b.z - s.a.z), frameM = mat('#3d3a37', { roughness: 0.5, metalness: 0.3 });
+      for (const x of [-len / 2, len / 2]) {
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, s.h + 0.1, 0.12), frameM);
+        p.position.set(x, (s.h + 0.1) / 2, 0); g.add(p);
+      }
+      const leaves = len > 1.4 ? 2 : 1, lw = (len - 0.16) / leaves;
+      for (let i = 0; i < leaves; i++) {
+        const leaf = new THREE.Group(), y0 = 0.08, lh = s.h - 0.12;
+        for (const [w, h, x, y] of [[lw, 0.04, 0, y0], [lw, 0.04, 0, y0 + lh], [0.04, lh, -lw / 2, y0 + lh / 2], [0.04, lh, lw / 2, y0 + lh / 2]]) {
+          const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.04), frameM); b.position.set(x, y, 0); leaf.add(b);
+        }
+        const bars = Math.max(2, Math.floor(lw / 0.11));
+        for (let j = 1; j < bars; j++) {
+          const b = new THREE.Mesh(new THREE.BoxGeometry(0.02, lh, 0.02), frameM);
+          b.position.set(-lw / 2 + lw * j / bars, y0 + lh / 2, 0); leaf.add(b);
+        }
+        leaf.position.x = -len / 2 + 0.08 + lw * (i + 0.5); g.add(leaf);
+      }
+      g.position.set((s.a.x + s.b.x) / 2, 0, (s.a.z + s.b.z) / 2);
+      g.rotation.y = -Math.atan2(s.b.z - s.a.z, s.b.x - s.a.x); break;
     }
     case 'building': {
       // 図面の (x, z) を XY 平面の形にして押し出し、寝かせる（z → -y なので回転で戻す）
@@ -113,6 +155,7 @@ function solidObject(s: Solid): THREE.Object3D {
       g.position.set(s.x, 0, s.z); break;
     }
   }
+  g.userData.src = s.src;
   return shadowed(g);
 }
 
@@ -133,13 +176,23 @@ function disposeAll(o: THREE.Object3D) {
   });
 }
 
-export default function View3D({ doc, lib, ctx, onClose }: { doc: Doc; lib: LibItem[]; ctx: RenderCtx; onClose: () => void }) {
+export type Raise3Change = { role3?: Role3; h3?: number };
+type Api = { setView: (v: ViewKind) => void; build: (d: Doc, o: SceneOpts) => Promise<void>; snap: () => Promise<Blob | null>; highlight: (id: string | null) => void };
+
+// 選んだ線の種類ごとの高さの範囲（m）
+const H_RANGE: Record<string, [number, number, number]> = { wall: [0.4, 2.4, 0.1], fence: [0.6, 2.4, 0.1], gate: [0.8, 2.0, 0.1], building: [3, 9, 0.5] };
+
+export default function View3D({ doc, lib, ctx, onClose, onRaise }: { doc: Doc; lib: LibItem[]; ctx: RenderCtx; onClose: () => void; onRaise?: (id: string, v: Raise3Change) => void }) {
   const host = useRef<HTMLDivElement>(null);
-  const api = useRef<{ setView: (v: ViewKind) => void; build: (o: SceneOpts) => Promise<void>; snap: () => Promise<Blob | null> } | null>(null);
+  const api = useRef<Api | null>(null);
+  const docRef = useRef(doc); docRef.current = doc;
   const [opts, setOpts] = useState<SceneOpts>(DEFAULT_SCENE_OPTS);
   const [viewKind, setViewKind] = useState<ViewKind>('bird');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(true);
+  const [picked, setPicked] = useState<string | null>(null);
+  // 高さスライダーは動かしている間は表示だけ変え、離したときに図面へ反映する（毎回作り直すと重いため）
+  const [dragH, setDragH] = useState<number | null>(null);
 
   useEffect(() => {
     const el = host.current!;
@@ -163,9 +216,9 @@ export default function View3D({ doc, lib, ctx, onClose }: { doc: Doc; lib: LibI
     // 敷地の外側（ぼんやりした地面）
     const outer = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), mat('#dcdccf'));
     outer.rotation.x = -Math.PI / 2; outer.position.y = -0.01; outer.receiveShadow = true; scene.add(outer);
-    let world = new THREE.Group(); scene.add(world);
-    let center = new THREE.Vector3(), span = 20, eyeZ = 0;
-    let alive = true, framed = false;
+    let world = new THREE.Group(), ground: THREE.Mesh | null = null; scene.add(world);
+    let center = new THREE.Vector3(), span = 20, eyeZ = 0, lit: string | null = null;
+    let alive = true, framed = false, seq = 0;
 
     const setView = (v: ViewKind) => {
       const c = center;
@@ -175,41 +228,98 @@ export default function View3D({ doc, lib, ctx, onClose }: { doc: Doc; lib: LibI
       controls.update();
     };
 
-    const build = async (o: SceneOpts) => {
-      const { solids, raised } = buildScene(doc, lib, o);
-      const { canvas, box } = await groundTexture(groundDoc(doc, raised), lib, ctx);
-      if (!alive) return;
+    // 選んだ線を少し光らせて、どれを変えているか分かるようにする
+    let mark: THREE.Line | null = null;
+    const highlight = (id: string | null) => {
+      lit = id;
+      if (mark) { scene.remove(mark); mark.geometry.dispose(); (mark.material as THREE.Material).dispose(); mark = null; }
+      const pts = id ? itemOutline(docRef.current, id) : null;
+      if (pts && pts.length > 1) {
+        mark = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(p.x, 0.03, p.z))), new THREE.LineBasicMaterial({ color: '#2e9d6b' }));
+        scene.add(mark);
+      }
+      world.traverse(o => {
+        const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+        if (!m || !('emissive' in m)) return;
+        let src: string | undefined, p: THREE.Object3D | null = o;
+        while (p && !src) { src = p.userData.src; p = p.parent; }
+        m.emissive.set(id && src === id ? '#3a7d5c' : '#000000');
+      });
+    };
+
+    const build = async (d: Doc, o: SceneOpts) => {
+      const my = ++seq;
+      const { solids, raised } = buildScene(d, lib, o);
+      const { canvas, box } = await groundTexture(groundDoc(d, raised), lib, ctx);
+      if (!alive || my !== seq) return;
       scene.remove(world); disposeAll(world); world = new THREE.Group();
-      const k = doc.mmPerPx / 1000, gw = box.w * k, gd = box.h * k;
+      const k = d.mmPerPx / 1000, gw = box.w * k, gd = box.h * k;
       const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      const ground = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+      ground = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
       ground.rotation.x = -Math.PI / 2; ground.position.set((box.x + box.w / 2) * k, 0, (box.y + box.h / 2) * k); ground.receiveShadow = true;
       world.add(ground);
       for (const s of solids) world.add(solidObject(s));
       scene.add(world);
+      highlight(lit);
+      if (framed) return;
+      framed = true;
       center = new THREE.Vector3((box.x + box.w / 2) * k, 0, (box.y + box.h / 2) * k);
       span = Math.max(gw, gd, 8); eyeZ = (box.y + box.h) * k;
       // 手前（図面の下側）斜め左から照らし、見る側の面が明るくなるようにする
       sun.position.set(center.x - span * 0.5, span * 1.1, center.z + span * 0.8); sun.target.position.copy(center);
       const sc = sun.shadow.camera; sc.left = sc.bottom = -span * 0.8; sc.right = sc.top = span * 0.8; sc.near = 0.5; sc.far = span * 4; sc.updateProjectionMatrix();
-      if (!framed) { framed = true; setView('bird'); }
+      setView('bird');
     };
+
+    // タップ（ほとんど動かさずに離した）で、その場所の線・図形を選ぶ
+    const ray = new THREE.Raycaster(), down = { x: 0, y: 0, t: 0 };
+    const onDown = (e: PointerEvent) => { down.x = e.clientX; down.y = e.clientY; down.t = Date.now(); };
+    const onUp = (e: PointerEvent) => {
+      if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6 || Date.now() - down.t > 500) return;
+      const r = renderer.domElement.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
+      const d = docRef.current;
+      const isRaisable = (id: string) => d.layers.some(l => l.items.some(i => i.id === id && canRaise(i)));
+      let id: string | null = null;
+      for (const hit of ray.intersectObject(world, true)) {
+        let src: string | undefined, p: THREE.Object3D | null = hit.object;
+        while (p && !src) { src = p.userData.src; p = p.parent; }
+        if (src) { id = isRaisable(src) ? src : null; break; }
+        if (hit.object === ground) { id = pickRaisable(d, { x: hit.point.x, z: hit.point.z }); break; }
+      }
+      setPicked(id); highlight(id);
+    };
+    renderer.domElement.addEventListener('pointerdown', onDown);
+    renderer.domElement.addEventListener('pointerup', onUp);
 
     const resize = () => { const w = el.clientWidth, h = el.clientHeight; renderer.setSize(w, h); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix(); };
     const ro = new ResizeObserver(resize); ro.observe(el); resize();
     renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
-    const snap = () => new Promise<Blob | null>(res => { renderer.render(scene, camera); renderer.domElement.toBlob(res, 'image/png'); });
-    api.current = { setView, build, snap };
-    build(DEFAULT_SCENE_OPTS).catch(() => setErr('図面を3Dにできませんでした')).finally(() => setBusy(false));
+    const snap = () => new Promise<Blob | null>(res => { highlight(null); renderer.render(scene, camera); renderer.domElement.toBlob(res, 'image/png'); });
+    api.current = { setView, build, snap, highlight };
     return () => {
       alive = false; api.current = null; ro.disconnect(); renderer.setAnimationLoop(null); controls.dispose();
+      renderer.domElement.removeEventListener('pointerdown', onDown); renderer.domElement.removeEventListener('pointerup', onUp);
       disposeAll(scene); renderer.dispose(); renderer.domElement.remove();
     };
-  }, [doc, lib, ctx]);
+  }, [lib, ctx]);
 
-  const change = (o: SceneOpts) => { setOpts(o); api.current?.build(o).catch(() => setErr('図面を3Dにできませんでした')); };
+  // 図面や高さ設定が変わったら作り直す（カメラの位置はそのまま）
+  useEffect(() => {
+    api.current?.build(doc, opts).catch(() => setErr('図面を3Dにできませんでした')).finally(() => setBusy(false));
+  }, [doc, opts, lib, ctx]);
+
   const pick = (v: ViewKind) => { setViewKind(v); api.current?.setView(v); };
-  const save = async () => { const b = await api.current?.snap(); if (b) await saveFile(b, `${doc.name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'gaikou'}_3D.png`); };
+  const save = async () => { const b = await api.current?.snap(); api.current?.highlight(picked); if (b) await saveFile(b, `${doc.name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'gaikou'}_3D.png`); };
+  const unpick = () => { setPicked(null); api.current?.highlight(null); };
+
+  const item = picked ? doc.layers.flatMap(l => l.items).find(i => i.id === picked) : undefined;
+  const sel = item && canRaise(item) ? item : null;
+  const role = sel?.role3 || 'auto';
+  const range = H_RANGE[role];
+  const defH = role === 'building' ? opts.buildingH : role === 'gate' ? 1.2 : opts.wallH;
+  const curH = dragH ?? (sel?.h3 ? sel.h3 / 1000 : defH);
+  const commitH = () => { if (sel && onRaise && dragH !== null) onRaise(sel.id, { role3: role, h3: Math.round(dragH * 1000) }); setDragH(null); };
 
   return (
     <div className="v3-3d" role="dialog" aria-label="3Dビュー">
@@ -226,15 +336,30 @@ export default function View3D({ doc, lib, ctx, onClose }: { doc: Doc; lib: LibI
         <button className="v3-3d-btn" onClick={save} aria-label="画像で保存"><Camera size={17} /><span>画像で保存</span></button>
       </header>
       <div className="v3-3d-stage" ref={host} />
-      <div className="v3-3d-panel">
-        <label>塀の高さ <b>{opts.wallH.toFixed(1)} m</b>
-          <input type="range" min={0.4} max={2.4} step={0.1} value={opts.wallH} onChange={e => change({ ...opts, wallH: +e.target.value })} aria-label="塀の高さ" />
-        </label>
-        <label>建物の高さ <b>{opts.buildingH.toFixed(1)} m</b>
-          <input type="range" min={3} max={9} step={0.5} value={opts.buildingH} onChange={e => change({ ...opts, buildingH: +e.target.value })} aria-label="建物の高さ" />
-        </label>
-        <p>実線の線は塀、20㎡以上の実線の囲みは建物として立ち上げています。点線・矢印・寸法は地面の絵のままです。1本指で回転、2本指で移動・拡大。</p>
-      </div>
+      {sel && onRaise ? (
+        <div className="v3-3d-panel" aria-label="選んだ線の3D設定">
+          <div className="v3-3d-ph"><b>選んだ線を3Dで</b><button className="v3-3d-x" onClick={unpick} aria-label="選択をやめる"><X size={15} /></button></div>
+          <div className="v3-3d-roles" role="group" aria-label="3Dでの種類">
+            {ROLE_LABELS.map(([r, l]) => (
+              <button key={r} className={role === r ? 'on' : ''} onClick={() => onRaise(sel.id, { role3: r, h3: undefined })}>{l}</button>
+            ))}
+          </div>
+          {range && <label>高さ <b>{curH.toFixed(1)} m</b>
+            <input type="range" min={range[0]} max={range[1]} step={range[2]} value={curH} onChange={e => setDragH(+e.target.value)} onPointerUp={commitH} onKeyUp={commitH} onBlur={commitH} aria-label="選んだ線の高さ" />
+          </label>}
+          <p>平面図の線にも保存されます（元に戻すで取り消せます）。</p>
+        </div>
+      ) : (
+        <div className="v3-3d-panel">
+          <label>塀・フェンスの高さ <b>{opts.wallH.toFixed(1)} m</b>
+            <input type="range" min={0.4} max={2.4} step={0.1} value={opts.wallH} onChange={e => setOpts({ ...opts, wallH: +e.target.value })} aria-label="塀の高さ" />
+          </label>
+          <label>建物の高さ <b>{opts.buildingH.toFixed(1)} m</b>
+            <input type="range" min={3} max={9} step={0.5} value={opts.buildingH} onChange={e => setOpts({ ...opts, buildingH: +e.target.value })} aria-label="建物の高さ" />
+          </label>
+          <p>線をタップすると、塀・フェンス・門扉・建物・地面のままを選べます。種類を選んでいない実線は塀、20㎡以上の実線の囲みは建物になります。1本指で回転、2本指で移動・拡大。</p>
+        </div>
+      )}
       {busy && <div className="v3-3d-msg">3Dを準備しています…</div>}
       {err && <div className="v3-3d-msg err">{err}</div>}
     </div>

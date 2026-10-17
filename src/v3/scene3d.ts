@@ -1,10 +1,12 @@
 // 平面図 → 3Dの立体リスト。描画ライブラリに依存しない純粋な変換（テストしやすくするため）。
 // 座標は m。図面の x → x、図面の y（下向き）→ z。高さは y（上向き）。
-import { type Doc, type Item, type LibItem, type Pt, corners } from './types';
+import { type Doc, type Item, type LibItem, type Pt, type Role3, corners, segDist } from './types';
 
 export type P2 = { x: number; z: number };
-export type Solid =
+export type Solid = (
   | { kind: 'wall'; a: P2; b: P2; h: number; t: number; color: string }
+  | { kind: 'fence'; a: P2; b: P2; h: number; base: number }
+  | { kind: 'gate'; a: P2; b: P2; h: number }
   | { kind: 'building'; poly: P2[]; h: number }
   | { kind: 'tree'; x: number; z: number; r: number; h: number; form: 'round' | 'cone' | 'palm'; color: string }
   | { kind: 'shrub'; x: number; z: number; rx: number; rz: number; h: number; rot: number; color: string }
@@ -13,7 +15,8 @@ export type Solid =
   | { kind: 'carport'; x: number; z: number; w: number; d: number; h: number; rot: number }
   | { kind: 'cylinder'; x: number; z: number; r: number; h: number; color: string }
   | { kind: 'person'; x: number; z: number; h: number; color: string }
-  | { kind: 'stone'; x: number; z: number; rx: number; rz: number; h: number; rot: number };
+  | { kind: 'stone'; x: number; z: number; rx: number; rz: number; h: number; rot: number }
+) & { src?: string };
 
 export type SceneOpts = { wallH: number; buildingH: number };
 export const DEFAULT_SCENE_OPTS: SceneOpts = { wallH: 1.2, buildingH: 6 };
@@ -25,18 +28,67 @@ export type Scene = { solids: Solid[]; raised: Set<string> };
 
 const polyArea = (p: P2[]) => Math.abs(p.reduce((s, a, i) => { const b = p[(i + 1) % p.length]; return s + a.x * b.z - b.x * a.z; }, 0)) / 2;
 
-function lineSolids(it: Item & { type: 'line' }, m: (p: Pt) => P2, o: SceneOpts): Solid[] {
-  if (it.kind === 'arrow' || it.dash !== 'solid' || it.pts.length < 2) return [];
-  const pts = it.pts.map(m), first = pts[0], last = pts[pts.length - 1];
-  const closed = pts.length > 3 && Math.hypot(first.x - last.x, first.z - last.z) < 0.05;
-  if (closed) {
-    const poly = pts.slice(0, -1);
-    if (polyArea(poly) >= BUILDING_MIN_AREA) return [{ kind: 'building', poly, h: o.buildingH }];
+export const ROLE_LABELS: [Role3, string][] = [['auto', '自動'], ['wall', '塀'], ['fence', 'フェンス'], ['gate', '門扉'], ['building', '建物'], ['ground', '地面のまま']];
+// 線・図形で3Dの種類を選べるもの
+export const canRaise = (it: Item): it is Item & { type: 'line' | 'stroke' | 'shape' } => (it.type === 'line' && it.kind !== 'arrow') || it.type === 'stroke' || it.type === 'shape';
+const FENCE_BASE = 0.2, GATE_H = 1.2;
+
+// 手描きの線は点が多いので、壁にする前に間引く（Ramer–Douglas–Peucker）
+export function simplify(pts: P2[], tol: number): P2[] {
+  if (pts.length < 3) return pts;
+  const a = pts[0], b = pts[pts.length - 1];
+  let far = 0, idx = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = segDist({ x: pts[i].x, y: pts[i].z }, { x: a.x, y: a.z }, { x: b.x, y: b.z });
+    if (d > far) { far = d; idx = i; }
+  }
+  if (far <= tol) return [a, b];
+  return [...simplify(pts.slice(0, idx + 1), tol).slice(0, -1), ...simplify(pts.slice(idx), tol)];
+}
+
+function outline(it: Item & { type: 'line' | 'stroke' | 'shape' }, m: (p: Pt) => P2): { pts: P2[]; closed: boolean } {
+  if (it.type === 'shape') {
+    if (it.shape === 'rect') { const c = corners(it.x, it.y, it.w, it.h, it.rot).map(m); return { pts: [...c, c[0]], closed: true }; }
+    const cx = it.x + it.w / 2, cy = it.y + it.h / 2, a = it.rot * Math.PI / 180, out: P2[] = [];
+    for (let i = 0; i <= 24; i++) {
+      const t = i / 24 * Math.PI * 2, x = Math.cos(t) * it.w / 2, y = Math.sin(t) * it.h / 2;
+      out.push(m({ x: cx + x * Math.cos(a) - y * Math.sin(a), y: cy + x * Math.sin(a) + y * Math.cos(a) }));
+    }
+    return { pts: out, closed: true };
+  }
+  let pts = it.pts.map(m);
+  if (it.type === 'stroke') pts = simplify(pts, 0.1);
+  const f = pts[0], l = pts[pts.length - 1];
+  return { pts, closed: pts.length > 3 && Math.hypot(f.x - l.x, f.z - l.z) < 0.05 };
+}
+
+// 指定がなければ今までどおり自動で決める：実線の線は塀、20㎡以上の実線の囲み（線・四角）は建物、それ以外は地面のまま
+function autoRole(it: Item & { type: 'line' | 'stroke' | 'shape' }, pts: P2[], closed: boolean): Role3 {
+  if (it.dash !== 'solid' || it.type === 'stroke') return 'ground';
+  const big = closed && polyArea(pts.slice(0, -1)) >= BUILDING_MIN_AREA;
+  if (it.type === 'shape') return it.shape === 'rect' && big ? 'building' : 'ground';
+  return big ? 'building' : 'wall';
+}
+
+function raiseSolids(it: Item & { type: 'line' | 'stroke' | 'shape' }, m: (p: Pt) => P2, o: SceneOpts): Solid[] {
+  if (it.type === 'stroke' ? it.pts.length < 2 : it.type === 'line' && it.pts.length < 2) return [];
+  const { pts, closed } = outline(it, m);
+  const role = !it.role3 || it.role3 === 'auto' ? autoRole(it, pts, closed) : it.role3;
+  const h = it.h3 ? it.h3 / 1000 : null, src = it.id;
+  if (role === 'ground') return [];
+  if (role === 'building') {
+    const poly = closed ? pts.slice(0, -1) : pts;
+    return poly.length >= 3 ? [{ kind: 'building', poly, h: h ?? o.buildingH, src }] : [];
+  }
+  if (role === 'gate') {
+    const a = pts[0], b = pts[pts.length - 1];
+    return Math.hypot(b.x - a.x, b.z - a.z) >= MIN_SEG ? [{ kind: 'gate', a, b, h: h ?? GATE_H, src }] : [];
   }
   const out: Solid[] = [];
   for (let i = 1; i < pts.length; i++) {
     const a = pts[i - 1], b = pts[i];
-    if (Math.hypot(b.x - a.x, b.z - a.z) >= MIN_SEG) out.push({ kind: 'wall', a, b, h: o.wallH, t: WALL_T, color: '#d9d6cf' });
+    if (Math.hypot(b.x - a.x, b.z - a.z) < MIN_SEG) continue;
+    out.push(role === 'fence' ? { kind: 'fence', a, b, h: h ?? o.wallH, base: FENCE_BASE, src } : { kind: 'wall', a, b, h: h ?? o.wallH, t: WALL_T, color: '#d9d6cf', src });
   }
   return out;
 }
@@ -94,14 +146,11 @@ export function buildScene(doc: Doc, lib: LibItem[], o: SceneOpts = DEFAULT_SCEN
   for (const layer of doc.layers) {
     if (!layer.visible) continue;
     for (const it of layer.items) {
-      if (it.type === 'line') solids.push(...lineSolids(it, m, o));
-      else if (it.type === 'shape' && it.shape === 'rect' && it.dash === 'solid') {
-        const poly = corners(it.x, it.y, it.w, it.h, it.rot).map(m);
-        if (polyArea(poly) >= BUILDING_MIN_AREA) solids.push({ kind: 'building', poly, h: o.buildingH });
-      } else if (it.type === 'obj' && !it.hidden) {
+      if (canRaise(it)) solids.push(...raiseSolids(it, m, o));
+      else if (it.type === 'obj' && !it.hidden) {
         const s = objSolid(it, libMap, doc.mmPerPx);
         // 立体にした部品は地面の絵から外す（二重に見えないように）
-        if (s) { solids.push(s); raised.add(it.id); }
+        if (s) { solids.push({ ...s, src: it.id }); raised.add(it.id); }
       }
     }
   }
@@ -111,4 +160,29 @@ export function buildScene(doc: Doc, lib: LibItem[], o: SceneOpts = DEFAULT_SCEN
 // 地面に貼る絵：立体にした部品を除いた図面
 export function groundDoc(doc: Doc, raised: Set<string>): Doc {
   return { ...doc, layers: doc.layers.map(l => ({ ...l, items: l.items.filter(i => !raised.has(i.id)) })) };
+}
+
+// 3D画面で地面をタップしたとき、その近くの線・図形を探す（tol は m）
+export function pickRaisable(doc: Doc, p: P2, tol = 0.4): string | null {
+  const k = doc.mmPerPx / 1000, q = { x: p.x / k, y: p.z / k }, t = tol / k;
+  let best: string | null = null, bestD = t;
+  for (const l of doc.layers) {
+    if (!l.visible) continue;
+    for (const it of l.items) {
+      if (!canRaise(it)) continue;
+      const { pts } = outline(it, pt => ({ x: pt.x, z: pt.y }));
+      for (let i = 1; i < pts.length; i++) {
+        const d = segDist(q, { x: pts[i - 1].x, y: pts[i - 1].z }, { x: pts[i].x, y: pts[i].z });
+        if (d < bestD) { bestD = d; best = it.id; }
+      }
+    }
+  }
+  return best;
+}
+
+// 選んだ線・図形の形（m）。3D画面で地面のままの線を光らせるのに使う
+export function itemOutline(doc: Doc, id: string): P2[] | null {
+  const k = doc.mmPerPx / 1000;
+  for (const l of doc.layers) for (const it of l.items) if (it.id === id && canRaise(it)) return outline(it, p => ({ x: p.x * k, z: p.y * k })).pts;
+  return null;
 }

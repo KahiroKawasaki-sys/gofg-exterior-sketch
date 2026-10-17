@@ -1,5 +1,5 @@
 import { it, expect } from 'vitest';
-import { buildScene, groundDoc, type Solid } from '../src/v3/scene3d';
+import { buildScene, groundDoc, pickRaisable, type Solid } from '../src/v3/scene3d';
 import { builtinLibrary } from '../src/v3/library';
 import { sampleDoc } from '../src/v3/useDoc';
 import { newDoc, uid, type Doc, type Item } from '../src/v3/types';
@@ -68,4 +68,40 @@ it('サンプル邸：建物1棟・塀・車と自転車が立ち上がる', () 
   expect(solids.filter(s => s.kind === 'building')).toHaveLength(1);
   expect(solids.some(s => s.kind === 'wall')).toBe(true);
   expect(solids.filter(s => s.kind === 'car')).toHaveLength(1);
+});
+
+it('線ごとに選んだ種類で立ち上がる：フェンス・門扉・建物・地面のまま', () => {
+  const pts: [number, number][] = [[0, 0], [400, 0], [400, 300]];
+  const fence = buildScene(withItems([line(pts, { role3: 'fence', h3: 1600 })]), lib).solids;
+  expect(fence).toHaveLength(2);
+  expect(fence[0]).toMatchObject({ kind: 'fence', h: 1.6, base: 0.2 });
+  const gate = buildScene(withItems([line(pts, { role3: 'gate' })]), lib).solids;
+  expect(gate).toEqual([expect.objectContaining({ kind: 'gate', h: 1.2 })]);
+  const building = buildScene(withItems([line(pts, { role3: 'building' })]), lib).solids;
+  expect(building).toEqual([expect.objectContaining({ kind: 'building' })]);
+  expect((building[0] as Extract<Solid, { kind: 'building' }>).poly).toHaveLength(3);
+  expect(buildScene(withItems([line(pts, { role3: 'ground' })]), lib).solids).toEqual([]);
+});
+
+it('点線でも種類を選べば立ち上がり、立体には元の線のIDが付く', () => {
+  const l = line([[0, 0], [500, 0]], { dash: 'dashed', role3: 'wall' });
+  expect(buildScene(withItems([l]), lib).solids).toEqual([expect.objectContaining({ kind: 'wall', src: l.id })]);
+});
+
+it('手描きの線は間引いてから塀にする。楕円の建物は多角形になる', () => {
+  const wobbly = Array.from({ length: 50 }, (_, i) => ({ x: i * 10, y: Math.sin(i) * 0.5 }));
+  const stroke: Item = { id: uid(), type: 'stroke', brush: 'pen', color: '#000', width: 3, dash: 'solid', pts: wobbly, role3: 'wall' };
+  expect(buildScene(withItems([stroke]), lib).solids).toHaveLength(1);
+  expect(buildScene(withItems([{ ...stroke, role3: undefined }]), lib).solids).toEqual([]);
+  const ellipse: Item = { id: uid(), type: 'shape', shape: 'ellipse', color: '#000', width: 3, dash: 'solid', x: 0, y: 0, w: 800, h: 600, rot: 0, role3: 'building' };
+  const s = buildScene(withItems([ellipse]), lib).solids[0] as Extract<Solid, { kind: 'building' }>;
+  expect(s.kind).toBe('building'); expect(s.poly.length).toBe(24);
+});
+
+it('3D画面で地面をタップした位置の近くの線を探す', () => {
+  const a = line([[0, 0], [500, 0]]), b = line([[0, 300], [500, 300]]);
+  const d = withItems([a, b]);
+  expect(pickRaisable(d, { x: 2.5, z: 0.2 })).toBe(a.id);
+  expect(pickRaisable(d, { x: 2.5, z: 2.9 })).toBe(b.id);
+  expect(pickRaisable(d, { x: 2.5, z: 1.5 })).toBeNull();
 });

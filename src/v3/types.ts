@@ -3,9 +3,12 @@ export type Pt = { x: number; y: number; p?: number };
 export type Brush = 'pen' | 'marker' | 'matte' | 'pencil';
 export type Dash = 'solid' | 'dashed' | 'dotted';
 
-export type StrokeItem = { id: string; type: 'stroke'; brush: Brush; color: string; width: number; dash: Dash; pts: Pt[] };
-export type LineItem = { id: string; type: 'line'; kind: 'line' | 'polyline' | 'arrow'; color: string; width: number; dash: Dash; pts: Pt[] };
-export type ShapeItem = { id: string; type: 'shape'; shape: 'rect' | 'ellipse' | 'circle'; color: string; width: number; dash: Dash; x: number; y: number; w: number; h: number; rot: number };
+// 3Dでの見せ方（未指定は自動判定）。h3 は高さ mm（未指定は種類ごとの既定値）
+export type Role3 = 'auto' | 'wall' | 'fence' | 'gate' | 'building' | 'ground';
+export type Raise3 = { role3?: Role3; h3?: number };
+export type StrokeItem = { id: string; type: 'stroke'; brush: Brush; color: string; width: number; dash: Dash; pts: Pt[] } & Raise3;
+export type LineItem = { id: string; type: 'line'; kind: 'line' | 'polyline' | 'arrow'; color: string; width: number; dash: Dash; pts: Pt[] } & Raise3;
+export type ShapeItem = { id: string; type: 'shape'; shape: 'rect' | 'ellipse' | 'circle'; color: string; width: number; dash: Dash; x: number; y: number; w: number; h: number; rot: number } & Raise3;
 export type DimItem = { id: string; type: 'dim'; color: string; width: number; a: Pt; b: Pt; size?: number };
 export type TextItem = { id: string; type: 'text'; x: number; y: number; text: string; size: number; color: string; bg: string | null; border: string | null; rot: number };
 export type ObjItem = { id: string; type: 'obj'; ref: string; name: string; x: number; y: number; w: number; h: number; rot: number; flip: boolean; color: string | null; hidden?: boolean; locked?: boolean };
