@@ -344,3 +344,15 @@ button.v3-mono:hover { color: var(--green); }
 .v3-est-sum .total { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px; font-size: 15px; }
 .v3-est-sum .total span { color: var(--ink); font-weight: 700; }
 .v3-link { border: 0; background: none; color: #2f6f5a; font-size: 11.5px; text-decoration: underline; padding: 0 4px; }
+.v3-est-co { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--sub); }
+.v3-est-co input { flex: 1; min-width: 0; height: 26px; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; font-size: 12px; background: #fff; color: var(--ink); }
+.v3-est-cmp { background: #fff; border-radius: 10px; padding: 8px 10px; margin: 6px 0; font-size: 12px; }
+.v3-est-cmp > div { display: grid; grid-template-columns: 1fr 88px 88px; gap: 6px; align-items: center; padding: 3px 0; }
+.v3-est-cmp > div > b, .v3-est-cmp > div > i { text-align: right; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v3-est-cmp .hd b { font-size: 11px; color: var(--sub); }
+.v3-est-cmp .tot { border-bottom: 1px solid var(--line); padding-bottom: 6px; font-size: 13px; }
+.v3-est-cmp .row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sub); }
+.v3-est-cmp .diff { margin: 6px 0 4px; font-weight: 700; }
+.v3-est-cmp .diff.up { color: #b03a2e; }
+.v3-est-cmp .diff.down { color: #2f6f5a; }
+.v3-est-group-btn { margin-top: 6px; }

@@ -91,3 +91,25 @@ it('Excel（.xlsx）の最初のシートを読む', () => {
   expect(t[2]).toEqual(['', '砂利 & 防草', '㎡', '1300']);
   expect(parsePriceTable(t)[0]).toMatchObject({ name: '砂利 & 防草', price: 1300, unit: '㎡' });
 });
+
+it('見積書：明細のページ分け、A案・B案の比較、宛名', async () => {
+  const { paginate, compareRows, honorific } = await import('../src/v3/estimatePdf');
+  const a = buildEstimate(rows, defaultBook()), b = buildEstimate(rows.slice(0, 2), defaultBook(), { extras: [{ id: 'z', name: '残土処分', unit: '㎥', qty: 2, price: 8000 }] });
+  const pages = paginate(a.lines, 3);
+  expect(pages.flat().filter(r => r.kind === 'line')).toHaveLength(a.lines.length);
+  for (const p of pages.slice(0, -1)) expect(p[p.length - 1].kind).toBe('line'); // 見出しだけがページ末に残らない
+  const cmp = compareRows(a, b);
+  expect(cmp.find(r => r.label.startsWith('高木'))).toMatchObject({ a: 60000, b: 0 });
+  expect(cmp.find(r => r.label === '残土処分')).toMatchObject({ a: 0, b: 16000 });
+  expect(honorific('サンプル邸')).toBe('サンプル邸 様');
+  expect(honorific('山田様')).toBe('山田様');
+});
+
+it('見積書では同じ品目・単価の行を1行にまとめる', async () => {
+  const { mergeLines } = await import('../src/v3/estimatePdf');
+  const e = buildEstimate([...rows, row('obj:シマトネリコ', '部品', 'シマトネリコ', 1, '本', { cat: '植栽' })], defaultBook());
+  const m = mergeLines(e.lines), tree = m.filter(l => l.name.startsWith('高木'));
+  expect(tree).toHaveLength(1);
+  expect(tree[0]).toMatchObject({ qty: 3, amount: 90000 });
+  expect(m.reduce((s, l) => s + l.amount, 0)).toBe(e.subtotal);
+});

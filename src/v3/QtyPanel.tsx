@@ -7,7 +7,10 @@ import { ROLE_LABELS } from './scene3d';
 import { buildEstimate, type Estimate, type PriceBook } from './estimate';
 import { EstView } from './EstView';
 
-export type EstProps = { book: PriceBook; onBook: (b: PriceBook) => void; onEst: (est: DocEstimate) => void; onEstCsv: (e: Estimate) => void; onImport: (f: File) => void; onExportBook: () => void };
+export type EstProps = {
+  book: PriceBook; onBook: (b: PriceBook) => void; onEst: (est: DocEstimate) => void; onEstCsv: (e: Estimate) => void; onImport: (f: File) => void; onExportBook: () => void;
+  others: { id: string; name: string }[]; onCompare: (id: string) => Promise<Estimate>; onPdf: (e: Estimate, cmp?: { name: string; e: Estimate }) => void; onDuplicate: () => void;
+};
 
 export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet, estp, tab: tab0 = 'qty' }: {
   doc: Doc; lib: LibItem[]; onPick: (ids: string[]) => void; onSetRole: (ids: string[], role: Role3) => void;
@@ -39,7 +42,8 @@ export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet, e
       {tab === 'est' && estp && (() => {
         const e = buildEstimate(rows, estp.book, doc.est);
         return <EstView e={e} book={estp.book} est={doc.est || {}} onBook={estp.onBook} onEst={estp.onEst} onPick={onPick}
-          onCsv={() => estp.onEstCsv(e)} onImport={estp.onImport} onExportBook={estp.onExportBook} />;
+          onCsv={() => estp.onEstCsv(e)} onImport={estp.onImport} onExportBook={estp.onExportBook}
+          others={estp.others} onCompare={estp.onCompare} onPdf={cmp => estp.onPdf(e, cmp)} onDuplicate={estp.onDuplicate} />;
       })()}
       {tab === 'qty' && <>
       {!rows.length && <p className="v3-note pad">まだ数えるものがありません。素材を塗る・部品を置く・実線を引くと、ここに数量が出ます。</p>}

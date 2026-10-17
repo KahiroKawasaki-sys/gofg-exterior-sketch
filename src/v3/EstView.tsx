@@ -1,9 +1,10 @@
 // 概算見積の表示：集計×単価表。数量・単価はこの図面だけ手直しでき、品目の選び直しは単価表に覚える
-import { useRef } from 'react';
-import { FileSpreadsheet, Upload, Download, Plus, Trash2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { FileSpreadsheet, Upload, Download, Plus, Trash2, FileText, Copy } from 'lucide-react';
 import { type DocEstimate, uid } from './types';
 import { type QtyRow } from './quantities';
 import { type PriceBook, type Estimate, type EstLine, isProvisional } from './estimate';
+import { compareRows } from './estimatePdf';
 
 const jpy = (n: number) => '¥' + Math.round(n).toLocaleString('ja-JP');
 
@@ -24,11 +25,20 @@ function ItemSelect({ book, value, onChange, label, placeholder }: { book: Price
   );
 }
 
-export function EstView({ e, book, est, onBook, onEst, onPick, onCsv, onImport, onExportBook }: {
+export function EstView({ e, book, est, onBook, onEst, onPick, onCsv, onImport, onExportBook, others, onCompare, onPdf, onDuplicate }: {
   e: Estimate; book: PriceBook; est: DocEstimate; onBook: (b: PriceBook) => void; onEst: (est: DocEstimate) => void;
   onPick: (ids: string[]) => void; onCsv: () => void; onImport: (f: File) => void; onExportBook: () => void;
+  others: { id: string; name: string }[]; onCompare: (id: string) => Promise<Estimate>; onPdf: (cmp?: { name: string; e: Estimate }) => void; onDuplicate: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  // 比べる案：選んだ図面を同じ単価表で計算する
+  const [cmp, setCmp] = useState<{ id: string; name: string; e: Estimate | null } | null>(null);
+  const pickCompare = (id: string) => {
+    if (!id) return setCmp(null);
+    const name = others.find(o => o.id === id)?.name || 'ほかの案';
+    setCmp({ id, name, e: null });
+    onCompare(id).then(x => setCmp(c => c?.id === id ? { id, name, e: x } : c)).catch(() => setCmp(null));
+  };
   const prov = isProvisional(book);
   const relink = (rowKey: string, id: string) => onBook({ ...book, links: { ...book.links, [rowKey]: id ? [id] : ['-'] } });
   const setLine = (l: EstLine, k: 'qty' | 'price', v: number) => onEst({ ...est, [k]: { ...est[k], [l.key]: v } });
@@ -49,6 +59,9 @@ export function EstView({ e, book, est, onBook, onEst, onPick, onCsv, onImport, 
       <div className={'v3-est-book' + (prov ? ' prov' : '')}>
         {prov ? <span><b>仮の単価で計算しています。</b>御社の単価表（Excel・CSV）を読み込むと、品目を自動で結び付けて計算し直します。</span>
           : <span>単価表：<b>{book.name}</b>（{book.items.filter(i => !i.prov).length}品目）</span>}
+        <label className="v3-est-co">見積書の会社名
+          <input key={book.company || ''} defaultValue={book.company || ''} placeholder="例：〇〇エクステリア" aria-label="見積書の会社名"
+            onBlur={ev => { const v = ev.target.value.trim(); if (v !== (book.company || '')) onBook({ ...book, company: v }); }} /></label>
         <div className="v3-row">
           <button className="v3-btn" onClick={() => fileRef.current?.click()}><Upload size={14} />単価表を読み込む</button>
           <button className="v3-btn" onClick={onExportBook} title="今の単価表をCSVで保存（Excelで直して読み込み直せます）"><Download size={14} />単価表を保存</button>
@@ -120,7 +133,31 @@ export function EstView({ e, book, est, onBook, onEst, onPick, onCsv, onImport, 
         <div><span>消費税（{e.taxPct}%）</span><b>{jpy(e.tax)}</b></div>
         <div className="total"><span>合計（税込）</span><b>{jpy(e.total)}</b></div>
       </div>
-      <div className="v3-row"><button className="v3-btn primary" onClick={onCsv} disabled={!e.lines.length}><FileSpreadsheet size={14} />見積をCSVで保存</button></div>
+      <section className="v3-qty-group">
+        <h4>ほかの案と比べる（A案・B案）</h4>
+        <div className="v3-est-add">
+          <select aria-label="比べる案" value={cmp?.id || ''} onChange={ev => pickCompare(ev.target.value)}>
+            <option value="">比べる図面を選ぶ…</option>
+            {others.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        </div>
+        {cmp && (cmp.e ? (() => {
+          const rows = compareRows(e, cmp.e).filter(r => r.a !== r.b).sort((x, y) => Math.abs(y.b - y.a) - Math.abs(x.b - x.a)).slice(0, 6), d = cmp.e.total - e.total;
+          return (
+            <div className="v3-est-cmp">
+              <div className="hd"><span /><b>この図面</b><b>比べる案</b></div>
+              <div className="tot"><span>合計（税込）</span><b>{jpy(e.total)}</b><b>{jpy(cmp.e.total)}</b></div>
+              <p className={'diff' + (d > 0 ? ' up' : d < 0 ? ' down' : '')}>{d === 0 ? '同じ金額です' : `${cmp.name}は ${jpy(Math.abs(d))} ${d > 0 ? '高い' : '安い'}`}</p>
+              {rows.map(r => <div key={r.label} className="row"><span>{r.label}</span><i>{r.a ? jpy(r.a) : '—'}</i><i>{r.b ? jpy(r.b) : '—'}</i></div>)}
+            </div>);
+        })() : <p className="v3-note pad">計算しています…</p>)}
+        <button className="v3-btn" onClick={onDuplicate}><Copy size={14} />この図面を複製してB案を作る</button>
+      </section>
+
+      <div className="v3-row wrap">
+        <button className="v3-btn primary" onClick={() => onPdf(cmp?.e ? { name: cmp.name, e: cmp.e } : undefined)} disabled={!e.lines.length}><FileText size={14} />見積書PDF{cmp?.e ? '（比較つき）' : ''}</button>
+        <button className="v3-btn" onClick={onCsv} disabled={!e.lines.length}><FileSpreadsheet size={14} />CSVで保存</button>
+      </div>
       <p className="v3-note pad">数量は図面からの概算です。数量・単価を直すとこの図面だけに効きます。品目を選び直すと単価表に覚えるので、ほかの図面にも同じ品目が使われます。単価表はこの端末に保存されます。</p>
     </div>
   );
