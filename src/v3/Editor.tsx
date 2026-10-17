@@ -1,9 +1,9 @@
 // v0.3 エディタ：上部2段の道具、左の縦ボタン、右のパネル、作図領域
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image as ImageIcon, Download, PenTool, ChevronDown, Eraser, Type, MoveHorizontal, Circle, Slash, SquareX, Grid3x3, Spline, RotateCcw,
   Copy, House, SaveAll, Layers, LayoutGrid, Ruler, History, Settings, Redo2, Undo2, SquareDashedMousePointer, Magnet, PaintBucket, Scan,
-  Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, CircleHelp, Play,
+  Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, CircleHelp, Play, Box,
 } from 'lucide-react';
 import { type Doc, type Item, type LibItem, type Pt, type ObjItem, type TextItem, type TextureItem, type GuideType, PALETTE, uid, itemBox, unionBox, boxOf, pointInPoly, transformItem, dist, rad, newLayer } from './types';
 import { useDoc, ensureLayer, findItem, removeItems, updateItem } from './useDoc';
@@ -25,7 +25,10 @@ import { schedulePush } from './cloudSync';
 import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, type TourStep, type HelpTab } from './Simple';
 import { GUIDE_FULL } from './guideFull';
 
-const VERSION = 'ver 2026.10.10-02 (simpler-full)';
+// three.js は大きいので、3Dを開いたときだけ読み込む
+const View3D = lazy(() => import('./View3D'));
+
+const VERSION = 'ver 2026.10.17-01 (3d-view)';
 type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | null;
 
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'gaikou';
@@ -56,6 +59,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const [aiSel, setAiSel] = useState<Selection | null>(null), [aiVer, setAiVer] = useState(0);
   const [activeTex, setActiveTex] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [show3d, setShow3d] = useState(false);
   const [menu, setMenu] = useState<{ id: string; rect: DOMRect } | null>(null);
   const [textDlg, setTextDlg] = useState<{ p: Pt; edit?: TextItem } | null>(null);
   const [prompt, setPrompt] = useState<{ title: string; fields: Field[]; note?: string; ok: string; run: (v: Record<string, string | number | boolean>) => void } | null>(null);
@@ -289,7 +293,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       <input ref={camRef} type="file" hidden accept="image/*" capture="environment" onChange={e => { onImageFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={jsonRef} type="file" hidden accept="application/json,.json" onChange={e => { importJson(e.target.files?.[0]); e.target.value = ''; }} />
 
-      {simple ? <SimpleTop name={doc.name} saved={saved} canUndo={D.canUndo} canRedo={D.canRedo} undo={D.undo} redo={D.redo} fit={fit} home={goHome} help={() => setHelp({ tab: 'simple' })} toFull={() => setUi('full')} /> : <header className="v3-top">
+      {simple ? <SimpleTop name={doc.name} saved={saved} canUndo={D.canUndo} canRedo={D.canRedo} undo={D.undo} redo={D.redo} fit={fit} home={goHome} help={() => setHelp({ tab: 'simple' })} toFull={() => setUi('full')} view3d={() => setShow3d(true)} /> : <header className="v3-top">
         {/* 1段目：描く道具と太さ・色 */}
         <div className="v3-bar r1">
           <button className="v3-tb" aria-label="案件一覧" title="案件一覧へ戻る" onClick={goHome}><House size={18} /></button>
@@ -322,6 +326,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <button className="v3-tl" aria-label="書き出し" title="PDF・画像・編集データ" onClick={openMenu('export')}><Download size={16} /><span className="lb">書き出し</span></button>
           <button className="v3-tl" aria-label="別名で保存" title="別案として保存" onClick={() => setPrompt({ title: '別名で保存', fields: [{ key: 'name', label: '名前', value: doc.name + ' 別案' }], ok: '保存', run: async v => { setPrompt(null); const nd = { ...doc, id: uid(), name: String(v.name || doc.name), updatedAt: new Date().toISOString() }; await saveDoc(nd, await thumbnail(nd, lib, ctx)); D.reset(nd); toast('別案として保存しました'); } })}><SaveAll size={16} /><span className="lb">別名で保存</span></button>
           <i className="sep" />
+          <button className="v3-tl" aria-label="3Dで見る" title="図面を3Dで見る（塀・建物・部品を立ち上げ）" onClick={() => setShow3d(true)}><Box size={16} /><span className="lb">3D</span></button>
           <button className="v3-tl" aria-label="表示を全体に合わせる" title="図面全体が入るように表示" onClick={fit}><Scan size={16} /><span className="lb">全体表示</span></button>
           <button className={'v3-tl' + (showGrid ? ' on' : '')} aria-label="グリッド" title="グリッド表示（間隔は設定で変更）" onClick={() => setShowGrid(v => !v)}><Grid3x3 size={16} /><span className="lb">グリッド</span></button>
           {rotLabel !== 0 && <button className="v3-tl" aria-label="回転を戻す" title="画面の回転を0°に戻す" onClick={() => zoomRot(-view.r)}><RotateCcw size={16} /><span className="lb">{rotLabel}°→0°</span></button>}
@@ -409,6 +414,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         onCancel={() => setTextDlg(null)}
         onDelete={textDlg.edit ? () => { D.set(d => removeItems(d, new Set([textDlg.edit!.id])), '文字を削除'); setTextDlg(null); } : undefined}
         onOk={(v: TextValue) => { const ed = textDlg.edit; if (ed) D.set(d => updateItem(d, ed.id, it => ({ ...it, ...v }) as Item), '文字を編集'); else addItem({ id: uid(), type: 'text', x: textDlg.p.x, y: textDlg.p.y, text: v.text, size: Math.round(24 / view.k), color: v.color, bg: v.bg, border: v.border, rot: -view.r }); setTextDlg(null); }} />}
+      {show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} /></Suspense>}
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
       {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}
       {prompt && <PromptDialog title={prompt.title} fields={prompt.fields} note={prompt.note} okLabel={prompt.ok} onOk={prompt.run} onCancel={() => { setPrompt(null); if (tool === 'calib') setTool('select'); }} />}
