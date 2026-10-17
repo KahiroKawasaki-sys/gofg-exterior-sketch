@@ -176,11 +176,18 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     } catch (err) { toast(err instanceof Error ? err.message : '下絵を読み込めませんでした'); }
   };
 
-  const exportAs = async (kind: 'png' | 'a4' | 'a3' | 'json') => {
+  const exportAs = async (kind: 'png' | 'a4' | 'a3' | 'json' | 'dxf') => {
     setMenu(null);
     try {
       if (kind === 'json') return await saveFile(new Blob([JSON.stringify({ ...doc, view })], { type: 'application/json' }), safeName(doc.name) + '.garden3.json');
       toast('書き出し中…');
+      if (kind === 'dxf') {
+        // DXFの処理は書き出すときだけ読み込む
+        const { buildDxf, textureContours, encodeSjis } = await import('./dxf');
+        const bytes = encodeSjis(buildDxf(doc, lib, await textureContours(doc)));
+        const result = await saveFile(new Blob([bytes as BlobPart], { type: 'application/dxf' }), `${safeName(doc.name)}.dxf`);
+        return toast(result === 'cancelled' ? '書き出しをキャンセルしました' : 'DXFを書き出しました（単位 mm）');
+      }
       const blob = kind === 'png' ? await exportImage(doc, lib, ctx) : await exportPDF(doc, lib, ctx, kind === 'a3' ? 'A3' : 'A4');
       const result = await saveFile(blob, `${safeName(doc.name)}.${kind === 'png' ? 'png' : 'pdf'}`); toast(result === 'cancelled' ? '書き出しをキャンセルしました' : '書き出しました');
     } catch (err) { toast(err instanceof Error ? err.message : '書き出しに失敗しました'); }
@@ -414,6 +421,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         <button className="mi" onClick={() => exportAs('png')}>PNG画像</button>
         <button className="mi" onClick={() => exportAs('a4')}>PDF（A4横）</button>
         <button className="mi" onClick={() => exportAs('a3')}>PDF（A3横）</button>
+        <button className="mi" onClick={() => exportAs('dxf')}>CAD用（DXF・RIKCAD向け）</button>
         <hr /><button className="mi" onClick={() => exportAs('json')}>編集データを書き出す（.json）</button>
         <button className="mi" onClick={() => { setMenu(null); jsonRef.current?.click(); }}>編集データを読み込む</button>
       </Menu>}
@@ -468,7 +476,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <p className="v3-note">2本指で移動・拡大縮小・回転。マウスはホイールで拡大縮小、右ドラッグかSpace＋ドラッグで移動。Shiftで15°単位。</p>
         </section>
         <section className="v3-card"><h4>書き出し</h4>
-          <div className="v3-row wrap"><button className="v3-btn" onClick={() => exportAs('png')}>PNG</button><button className="v3-btn" onClick={() => exportAs('a4')}>PDF A4</button><button className="v3-btn" onClick={() => exportAs('a3')}>PDF A3</button><button className="v3-btn" onClick={() => exportAs('json')}>編集データ</button><button className="v3-btn" onClick={() => jsonRef.current?.click()}>編集データを読み込む</button></div>
+          <div className="v3-row wrap"><button className="v3-btn" onClick={() => exportAs('png')}>PNG</button><button className="v3-btn" onClick={() => exportAs('a4')}>PDF A4</button><button className="v3-btn" onClick={() => exportAs('a3')}>PDF A3</button><button className="v3-btn" onClick={() => exportAs('dxf')}>DXF</button><button className="v3-btn" onClick={() => exportAs('json')}>編集データ</button><button className="v3-btn" onClick={() => jsonRef.current?.click()}>編集データを読み込む</button></div>
         </section>
         <section className="v3-card"><h4>このアプリ</h4><p className="v3-note">{VERSION}　保存先：この端末（クラウド同期は停止中。端末間は編集データで引き継ぎ）</p></section>
         {!isNativeApp() && <section className="v3-card"><h4>旧バージョン</h4><p className="v3-note">v0.2（下絵の原本保管・クラウド同期つき）は <a href="?v=2">こちら</a> から開けます。</p></section>}
