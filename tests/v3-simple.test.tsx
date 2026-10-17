@@ -61,7 +61,7 @@ it('手順を押すと、その手順の道具だけに切り替わる', async (
   expect(byText('.sx-badge.now', '塗る場所をタップ')).toBeTruthy();
   expect(q('.sx-texs.wait')).toBeTruthy();
   await click(byText('.sx-step', '出力'));
-  expect(qa('.sx-out').length).toBe(4);
+  expect(qa('.sx-out').length).toBe(5);
   await click(byText('.sx-step', '描く'));
   await click(byText('.sx-tool', '四角'));
   expect(byText('.sx-tool.on', '四角')).toBeTruthy();

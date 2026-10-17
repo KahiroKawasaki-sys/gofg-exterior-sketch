@@ -70,6 +70,13 @@ function autoRole(it: Item & { type: 'line' | 'stroke' | 'shape' }, pts: P2[], c
   return big ? 'building' : 'wall';
 }
 
+// 線・図形の「何であるか」（指定がなければ自動判定）。3DとDXF書き出しで同じ判定を使う
+export function resolveRole(it: Item & { type: 'line' | 'stroke' | 'shape' }, mmPerPx: number): Role3 {
+  if (it.role3 && it.role3 !== 'auto') return it.role3;
+  const k = mmPerPx / 1000, { pts, closed } = outline(it, p => ({ x: p.x * k, z: p.y * k }));
+  return autoRole(it, pts, closed);
+}
+
 function raiseSolids(it: Item & { type: 'line' | 'stroke' | 'shape' }, m: (p: Pt) => P2, o: SceneOpts): Solid[] {
   if (it.type === 'stroke' ? it.pts.length < 2 : it.type === 'line' && it.pts.length < 2) return [];
   const { pts, closed } = outline(it, m);

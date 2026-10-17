@@ -2,7 +2,7 @@
 // 使い方は文章ではなく、実際のボタンを光らせる案内（Tour）と動く見本（Demo）で見せる。
 import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import {
-  PenTool, Slash, Square, MoveHorizontal, Type, Eraser, Hand, Car, PaintBucket, FileDown, Undo2, Redo2, Scan, CircleHelp, Box,
+  PenTool, Slash, Square, MoveHorizontal, Type, Eraser, Hand, Car, PaintBucket, FileDown, Undo2, Redo2, Scan, CircleHelp, Box, DraftingCompass,
   SlidersHorizontal, ChevronLeft, X, Play, Printer, FileImage, Save, RotateCcw,
 } from 'lucide-react';
 import { type LibItem } from './types';
@@ -19,7 +19,7 @@ import outMp4 from './guide/out.mp4';
 import undoMp4 from './guide/undo.mp4';
 
 export type Step = 'draw' | 'parts' | 'paint' | 'out';
-export type ExportKind = 'png' | 'a4' | 'a3' | 'json';
+export type ExportKind = 'png' | 'a4' | 'a3' | 'json' | 'dxf';
 
 // ---------------- 上部バー ----------------
 export function SimpleTop({ name, saved, canUndo, canRedo, undo, redo, fit, home, help, toFull, view3d }: {
@@ -166,6 +166,7 @@ function OutSheet({ exportAs }: DockProps) {
       {B('a3', <Printer size={22} />, 'PDF（A3）', 'お客様に渡す・印刷')}
       {B('a4', <Printer size={22} />, 'PDF（A4）', '家庭のプリンタ用')}
       {B('png', <FileImage size={22} />, '画像（PNG）', 'LINE・メールに貼る')}
+      {B('dxf', <DraftingCompass size={22} />, 'CAD（DXF）', 'RIKCADで開いて清書')}
       {B('json', <Save size={22} />, '編集データ', '別の端末で続きを描く')}
     </div>
   );
