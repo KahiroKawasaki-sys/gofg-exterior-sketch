@@ -291,3 +291,10 @@ button.v3-mono:hover { color: var(--green); }
 .v3-3d-msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 10px 16px; border-radius: 12px; background: rgba(255,255,255,.95); font-size: 14px; box-shadow: 0 4px 18px rgba(0,0,0,.12); }
 .v3-3d-msg.err { color: var(--danger); }
 @media (max-width: 640px) { .v3-3d-btn span, .v3-3d-name em { display: none; } .v3-3d-seg button { padding: 0 8px; } }
+.v3-3d-ph { display: flex; align-items: center; justify-content: space-between; }
+.v3-3d-x { width: 28px; height: 28px; border: 0; border-radius: 8px; background: #ecece8; display: grid; place-items: center; color: var(--sub); }
+.v3-3d-roles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.v3-3d-roles button { height: 34px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.v3-3d-roles button.on { background: var(--green); border-color: var(--green); color: #fff; }
+.v3-sel3d { display: flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 12px; font-weight: 600; color: var(--green); }
+.v3-sel3d select { height: 28px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font-size: 12px; padding: 0 4px; }

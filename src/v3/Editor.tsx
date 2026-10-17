@@ -5,7 +5,7 @@ import {
   Copy, House, SaveAll, Layers, LayoutGrid, Ruler, History, Settings, Redo2, Undo2, SquareDashedMousePointer, Magnet, PaintBucket, Scan,
   Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, CircleHelp, Play, Box,
 } from 'lucide-react';
-import { type Doc, type Item, type LibItem, type Pt, type ObjItem, type TextItem, type TextureItem, type GuideType, PALETTE, uid, itemBox, unionBox, boxOf, pointInPoly, transformItem, dist, rad, newLayer } from './types';
+import { type Doc, type Item, type LibItem, type Pt, type ObjItem, type TextItem, type TextureItem, type GuideType, type Role3, PALETTE, uid, itemBox, unionBox, boxOf, pointInPoly, transformItem, dist, rad, newLayer } from './types';
 import { useDoc, ensureLayer, findItem, removeItems, updateItem } from './useDoc';
 import { Canvas, type Tool, type ToolOpts, type View, type CanvasApi, type FingerMode, toWorld } from './Canvas';
 
@@ -24,6 +24,7 @@ import { isNativeApp, saveFile } from './platform';
 import { schedulePush } from './cloudSync';
 import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, type TourStep, type HelpTab } from './Simple';
 import { GUIDE_FULL } from './guideFull';
+import { ROLE_LABELS, canRaise } from './scene3d';
 
 // three.js は大きいので、3Dを開いたときだけ読み込む
 const View3D = lazy(() => import('./View3D'));
@@ -199,6 +200,9 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     D.set(d => ({ ...d, layers: d.layers.map(l => { const src = l.items.filter(i => ids.has(i.id)); if (!src.length) return l; const add: Item[] = []; for (let n = 1; n <= count; n++) { const ox = dir ? dir.x * gap! * n : dx * n, oy = dir ? dir.y * gap! * n : dy * n; for (const i of src) { const c = transformItem(i, p => ({ x: p.x + ox, y: p.y + oy }), 0, 1); const id = uid(); fresh.push(id); add.push({ ...c, id }); } } return { ...l, items: [...l.items, ...add] }; }) }), count > 1 ? '連続コピー' : '複製');
     if (count === 1) setSel(fresh); else toast(`連続コピー ${count} 個複製しました`);
   };
+  // 選択中の線・図形の「3Dでの種類」（ばらばらなら空）
+  const raiseSel = () => selItems().filter(canRaise);
+  const setRaiseSel = (role3: Role3) => { const ids = new Set(raiseSel().map(i => i.id)); D.set(d => ({ ...d, layers: d.layers.map(l => ({ ...l, items: l.items.map(i => ids.has(i.id) ? { ...i, role3, h3: undefined } as Item : i) })) }), '3Dの種類を変更'); };
   const deleteSel = () => { if (!sel.length) return; D.set(d => removeItems(d, new Set(sel)), '削除'); setSel([]); };
   const flipSel = () => { const its = selItems(); if (!its.length) return; const b = unionBox(its.map(itemBox)), cx = b.x + b.w / 2; const ids = new Set(sel); D.set(d => ({ ...d, layers: d.layers.map(l => ({ ...l, items: l.items.map(i => ids.has(i.id) ? transformItem(i, p => ({ x: 2 * cx - p.x, y: p.y }), i.type === 'obj' || i.type === 'shape' || i.type === 'text' ? -2 * ((i as ObjItem).rot || 0) : 0, 1, true) : i) })) }), '左右反転'); };
   const orderSel = (up: boolean) => { const ids = new Set(sel); D.set(d => ({ ...d, layers: d.layers.map(l => { if (!l.items.some(i => ids.has(i.id))) return l; const a = l.items.filter(i => ids.has(i.id)), b = l.items.filter(i => !ids.has(i.id)); return { ...l, items: up ? [...b, ...a] : [...a, ...b] }; }) }), up ? '前面へ' : '背面へ'); };
@@ -361,6 +365,13 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
                 <button onClick={() => orderSel(false)} title="背面へ"><ArrowDown size={15} />後ろへ</button>
                 <button onClick={() => registerFrom(selItems())} title="部品として登録"><PackagePlus size={15} />部品に登録</button>
               </>}
+              {(() => { const rs = raiseSel(); if (!rs.length) return null; const roles = new Set(rs.map(i => i.role3 || 'auto')); return (
+                <label className="v3-sel3d" title="3Dで見たときの種類">3D
+                  <select aria-label="3Dでの種類" value={roles.size === 1 ? [...roles][0] : ''} onChange={e => setRaiseSel(e.target.value as Role3)}>
+                    {roles.size > 1 && <option value="">いろいろ</option>}
+                    {ROLE_LABELS.map(([r, l]) => <option key={r} value={r}>{l}</option>)}
+                  </select>
+                </label>); })()}
               <button onClick={deleteSel} className="danger" title="削除"><Trash2 size={15} />削除</button>
               <button onClick={() => setSel([])} title="選択解除"><X size={15} />解除</button>
             </div>
@@ -414,7 +425,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         onCancel={() => setTextDlg(null)}
         onDelete={textDlg.edit ? () => { D.set(d => removeItems(d, new Set([textDlg.edit!.id])), '文字を削除'); setTextDlg(null); } : undefined}
         onOk={(v: TextValue) => { const ed = textDlg.edit; if (ed) D.set(d => updateItem(d, ed.id, it => ({ ...it, ...v }) as Item), '文字を編集'); else addItem({ id: uid(), type: 'text', x: textDlg.p.x, y: textDlg.p.y, text: v.text, size: Math.round(24 / view.k), color: v.color, bg: v.bg, border: v.border, rot: -view.r }); setTextDlg(null); }} />}
-      {show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} /></Suspense>}
+      {show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} onRaise={(id, v) => D.set(d => updateItem(d, id, it => ({ ...it, ...v }) as Item), '3Dの種類を変更')} /></Suspense>}
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
       {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}
       {prompt && <PromptDialog title={prompt.title} fields={prompt.fields} note={prompt.note} okLabel={prompt.ok} onOk={prompt.run} onCancel={() => { setPrompt(null); if (tool === 'calib') setTool('select'); }} />}
