@@ -2,7 +2,7 @@
 // 使い方は文章ではなく、実際のボタンを光らせる案内（Tour）と動く見本（Demo）で見せる。
 import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import {
-  PenTool, Slash, Square, MoveHorizontal, Type, Eraser, Hand, Car, PaintBucket, FileDown, Undo2, Redo2, Scan, CircleHelp,
+  PenTool, Slash, Square, MoveHorizontal, Type, Eraser, Hand, Car, PaintBucket, FileDown, Undo2, Redo2, Scan, CircleHelp, Box,
   SlidersHorizontal, ChevronLeft, X, Play, Printer, FileImage, Save, RotateCcw,
 } from 'lucide-react';
 import { type LibItem } from './types';
@@ -22,9 +22,9 @@ export type Step = 'draw' | 'parts' | 'paint' | 'out';
 export type ExportKind = 'png' | 'a4' | 'a3' | 'json';
 
 // ---------------- 上部バー ----------------
-export function SimpleTop({ name, saved, canUndo, canRedo, undo, redo, fit, home, help, toFull }: {
+export function SimpleTop({ name, saved, canUndo, canRedo, undo, redo, fit, home, help, toFull, view3d }: {
   name: string; saved: 'saved' | 'saving' | 'error'; canUndo: boolean; canRedo: boolean;
-  undo: () => void; redo: () => void; fit: () => void; home: () => void; help: () => void; toFull: () => void;
+  undo: () => void; redo: () => void; fit: () => void; home: () => void; help: () => void; toFull: () => void; view3d?: () => void;
 }) {
   return (
     <header className="sx-top">
@@ -36,6 +36,7 @@ export function SimpleTop({ name, saved, canUndo, canRedo, undo, redo, fit, home
         <button className="sx-tb" onClick={redo} disabled={!canRedo} aria-label="やり直す"><Redo2 size={20} /><span>進む</span></button>
       </div>
       <button className="sx-tb" onClick={fit} aria-label="全体を表示"><Scan size={20} /><span>全体</span></button>
+      {view3d && <button className="sx-tb" onClick={view3d} aria-label="3Dで見る"><Box size={20} /><span>3D</span></button>}
       <button className="sx-tb help" onClick={help} data-tour="help" aria-label="使い方"><CircleHelp size={20} /><span>使い方</span></button>
       <button className="sx-tb" onClick={toFull} data-tour="mode" aria-label="詳細モードへ"><SlidersHorizontal size={19} /><span>詳細</span></button>
     </header>
