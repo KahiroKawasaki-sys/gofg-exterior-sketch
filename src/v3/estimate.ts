@@ -5,7 +5,8 @@ import { type QtyRow } from './quantities';
 
 export type PriceItem = { id: string; cat: string; name: string; unit: string; price: number; cost?: number; prov?: boolean };
 // links：集計の行（mat:芝 / line:fence / obj:オリーブ / cat:植栽）→ 単価表の品目id（複数可：下地＋仕上げなど）
-export type PriceBook = { name: string; items: PriceItem[]; links: Record<string, string[]>; overheadPct: number; taxPct: number; updatedAt?: string };
+// company：見積書に載せる会社名
+export type PriceBook = { name: string; items: PriceItem[]; links: Record<string, string[]>; overheadPct: number; taxPct: number; updatedAt?: string; company?: string };
 
 export type EstLine = {
   key: string; group: string; label: string; name: string; qty: number; unit: string; price: number; amount: number;
@@ -138,7 +139,7 @@ const AUTO: [string, string[], string[]][] = [
   ['mat:芝', ['高麗芝', '天然芝', '芝張'], AREA], ['mat:芝生（やわらか）', ['高麗芝', '天然芝', '芝張'], AREA],
   ['mat:乱形石', ['乱形'], AREA], ['mat:レンガ敷き', ['レンガ', 'ブリック'], AREA], ['mat:タイル', ['タイル貼'], AREA],
   ['mat:ウッドデッキ', ['ウッドデッキ'], AREA], ['mat:ウッドチップ・土', ['ウッドチップ'], AREA],
-  ['line:wall', ['化粧ブロック積み', 'CB120ブロック積み', 'ブロック積み', 'ブロック塀'], [...AREA, ...LEN]],
+  ['line:wall', ['CB120ブロック積み', 'ブロック積み（材・工）', 'ブロック積み', 'ブロック塀'], [...AREA, ...LEN]],
   ['line:fence', ['フェンス'], LEN], ['line:gate', ['門扉'], CNT],
   ['cat:植栽', ['シンボルツリー', '高木', '植栽'], CNT], ['cat:低木', ['低木'], CNT], ['cat:下草', ['下草', 'グランドカバー'], CNT],
   ['cat:景石', ['景石'], CNT], ['cat:カーポート', ['カーポート'], CNT], ['cat:照明', ['照明', 'ライト'], CNT],

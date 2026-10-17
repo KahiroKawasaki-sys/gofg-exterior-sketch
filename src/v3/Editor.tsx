@@ -16,7 +16,7 @@ import { builtinLibrary, CATEGORIES } from './library';
 import { itemMarkup } from './markup';
 import { texLabel } from './textures';
 import { Selection, contentBox, fillAt, exportImage, exportPDF, thumbnail } from './raster';
-import { saveDoc, listLibrary, saveLibItem, deleteLibItem, validDoc, getMeta, setMeta } from './store';
+import { saveDoc, listLibrary, saveLibItem, deleteLibItem, validDoc, getMeta, setMeta, listDocs, loadDoc } from './store';
 import { LayerPanel, ObjectPanel, GuidePanel, PaintPanel, HistoryPanel, guideDefaults, type EditorApi } from './Panels';
 import { TextDialog, PromptDialog, Menu, type Field, type TextValue } from './Dialogs';
 import { readSource } from '../io';
@@ -26,13 +26,13 @@ import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, ty
 import { GUIDE_FULL } from './guideFull';
 import { ROLE_LABELS, canRaise } from './scene3d';
 import { QtyPanel } from './QtyPanel';
-import { quantitiesCsv, type QtyRow } from './quantities';
-import { defaultBook, estimateCsv, importItems, parseCsv, parsePriceTable, priceBookCsv, type Estimate, type PriceBook } from './estimate';
+import { quantities, quantitiesCsv, textureAreas, type QtyRow } from './quantities';
+import { buildEstimate, defaultBook, estimateCsv, importItems, parseCsv, parsePriceTable, priceBookCsv, type Estimate, type PriceBook } from './estimate';
 
 // three.js は大きいので、3Dを開いたときだけ読み込む
 const View3D = lazy(() => import('./View3D'));
 
-const VERSION = 'ver 2026.10.17-01 (3d-view)';
+const VERSION = 'ver 2026.10.17-02 (estimate)';
 type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | 'qty' | null;
 
 // CSVは UTF-8 か Shift_JIS（Excelの既定）のどちらか
@@ -224,8 +224,31 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   useEffect(() => { getMeta<PriceBook>('priceBook').then(b => { if (b?.items) setBookRaw(b); }).catch(() => {}); }, []);
   const setBook = (b: PriceBook) => { setBookRaw(b); setMeta('priceBook', b).catch(() => toast('単価表を保存できませんでした')); };
   const csvOut = async (text: string, file: string, done: string) => { const r = await saveFile(new Blob([text], { type: 'text/csv' }), file); toast(r === 'cancelled' ? '保存をキャンセルしました' : done); };
+  const [others, setOthers] = useState<{ id: string; name: string }[]>([]);
+  const refreshOthers = useCallback(() => listDocs().then(ds => setOthers(ds.filter(d => d.id !== doc.id).map(d => ({ id: d.id, name: d.name })))).catch(() => {}), [doc.id]);
+  useEffect(() => { if (panel === 'qty' || qtyOpen) refreshOthers(); }, [panel, qtyOpen, refreshOthers]);
   const estp = {
-    book, onBook: setBook,
+    book, onBook: setBook, others,
+    onCompare: async (id: string) => {
+      const d = await loadDoc(id); if (!d) throw Error('図面が見つかりません');
+      return buildEstimate(quantities(d, lib, await textureAreas(d)), book, d.est);
+    },
+    onDuplicate: async () => {
+      const name = /（A案）$/.test(doc.name) ? doc.name.replace(/（A案）$/, '（B案）') : `${doc.name}（B案）`;
+      await saveDoc({ ...doc, view, id: uid(), name, updatedAt: new Date().toISOString() }, await thumbnail(doc, lib, ctx).catch(() => undefined));
+      schedulePush(); await refreshOthers();
+      toast(`「${name}」を作りました。一覧から開いて描き変えると、ここで金額を比べられます`);
+    },
+    onPdf: async (e: Estimate, cmp?: { name: string; e: Estimate }) => {
+      try {
+        toast('見積書を作っています…');
+        const P = await import('./estimatePdf');
+        const png = await exportImage(doc, lib, ctx, 2400), plan = await createImageBitmap(png);
+        const pages = P.drawEstimatePages(e, { client: doc.name, company: book.company || '', date: new Date() }, plan, cmp && { aName: doc.name, bName: cmp.name, a: e, b: cmp.e });
+        const r = await saveFile(await P.estimatePdf(pages), `${safeName(doc.name)}_御見積書.pdf`);
+        toast(r === 'cancelled' ? '保存をキャンセルしました' : '見積書PDFを保存しました');
+      } catch (err) { toast('見積書を作れませんでした：' + (err as Error).message); }
+    },
     onEst: (est: DocEstimate) => D.set(d => ({ ...d, est }), '見積を調整'),
     onEstCsv: (e: Estimate) => csvOut(estimateCsv(e, doc.name), `${safeName(doc.name)}_概算見積.csv`, '見積をCSVで保存しました'),
     onExportBook: () => csvOut(priceBookCsv(book), `単価表_${safeName(book.name)}.csv`, '単価表をCSVで保存しました'),
