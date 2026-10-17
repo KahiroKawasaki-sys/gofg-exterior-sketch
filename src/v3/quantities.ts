@@ -5,7 +5,11 @@ import { resolveRole, canRaise, simplify } from './scene3d';
 import { TEXTURES } from './textures';
 
 export type QtyGroup = '素材' | '部品' | '線';
-export type QtyRow = { key: string; group: QtyGroup; name: string; qty: number; unit: string; ids: string[]; auto?: boolean; role?: Role3; note?: string };
+// cat：部品の分類（植栽など）。area：塀・フェンスの立面の面積（長さ×高さ、㎡単価の品目に使う）
+export type QtyRow = { key: string; group: QtyGroup; name: string; qty: number; unit: string; ids: string[]; auto?: boolean; role?: Role3; note?: string; cat?: string; area?: number };
+
+// 高さを指定していない塀・フェンスは3Dの標準と同じ 1.2m とみなす
+export const DEFAULT_WALL_H = 1.2;
 
 // 施工の対象ではない部品（車・人）は数えない
 const SKIP_CATS = new Set(['乗り物', 'キャラクター']);
@@ -47,7 +51,7 @@ export function quantities(doc: Doc, lib: LibItem[], areas: Map<string, number> 
       } else if (it.type === 'obj' && !it.hidden) {
         const cat = libMap.get(it.ref)?.cat || '自作部品';
         if (SKIP_CATS.has(cat)) continue;
-        add('obj:' + it.name, { group: '部品', name: it.name, unit: UNIT_BY_CAT[cat] || '個' }, 1, it.id);
+        add('obj:' + it.name, { group: '部品', name: it.name, unit: UNIT_BY_CAT[cat] || '個', cat }, 1, it.id);
       } else if (canRaise(it)) {
         // 点線・破線・手描きで種類を付けていないものは、下書きや補助線とみなして数えない
         const explicit = !!it.role3 && it.role3 !== 'auto', role = resolveRole(it, doc.mmPerPx);
@@ -55,14 +59,18 @@ export function quantities(doc: Doc, lib: LibItem[], areas: Map<string, number> 
         const key = 'line:' + role, name = ROLE_NAME[role] || '線';
         if (role === 'building') add(key, { group: '線', name, unit: '棟', role }, 1, it.id);
         else if (role === 'gate') add(key, { group: '線', name, unit: '箇所', role }, 1, it.id);
-        else add(key, { group: '線', name, unit: 'm', role }, itemLength(it, doc.mmPerPx), it.id);
+        else {
+          const len = itemLength(it, doc.mmPerPx);
+          add(key, { group: '線', name, unit: 'm', role }, len, it.id);
+          if (role === 'wall' || role === 'fence') { const r = rows.get(key)!; r.area = (r.area || 0) + len * (it.h3 ? it.h3 / 1000 : DEFAULT_WALL_H); }
+        }
         if (!explicit) rows.get(key)!.auto = true;
       }
     }
   }
   const order: QtyGroup[] = ['素材', '線', '部品'];
   return [...rows.values()]
-    .map(r => ({ ...r, qty: r.unit === '㎡' || r.unit === 'm' ? Math.round(r.qty * 10) / 10 : r.qty }))
+    .map(r => ({ ...r, qty: r.unit === '㎡' || r.unit === 'm' ? Math.round(r.qty * 10) / 10 : r.qty, ...(r.area != null && { area: Math.round(r.area * 10) / 10 }) }))
     .sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group) || b.qty - a.qty);
 }
 

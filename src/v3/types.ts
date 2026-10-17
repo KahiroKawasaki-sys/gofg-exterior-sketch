@@ -30,7 +30,12 @@ export type Doc = {
   schema: 3; id: string; name: string; updatedAt: string; mmPerPx: number;
   underlay?: Underlay; layers: Layer[]; guides: Guide[]; activeLayer: string;
   view?: { x: number; y: number; k: number; r: number };
+  est?: DocEstimate;
 };
+
+// この図面だけの見積の調整（数量・単価の上書き、追加項目、値引き）。単価表そのものは端末ごとに持つ
+export type EstExtra = { id: string; name: string; unit: string; qty: number; price: number };
+export type DocEstimate = { qty?: Record<string, number>; price?: Record<string, number>; extras?: EstExtra[]; discount?: number; overheadPct?: number };
 
 export type LibItem = { id: string; name: string; cat: string; w: number; h: number; vw: number; vh: number; svg: string; builtin?: boolean; tint?: boolean };
 

@@ -5,7 +5,7 @@ import {
   Copy, House, SaveAll, Layers, LayoutGrid, Ruler, History, Settings, Redo2, Undo2, SquareDashedMousePointer, Magnet, PaintBucket, Scan,
   Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, CircleHelp, Play, Box, Calculator,
 } from 'lucide-react';
-import { type Doc, type Item, type LibItem, type Pt, type ObjItem, type TextItem, type TextureItem, type GuideType, type Role3, PALETTE, uid, itemBox, unionBox, boxOf, pointInPoly, transformItem, dist, rad, newLayer } from './types';
+import { type Doc, type Item, type LibItem, type Pt, type ObjItem, type TextItem, type TextureItem, type GuideType, type Role3, type DocEstimate, PALETTE, uid, itemBox, unionBox, boxOf, pointInPoly, transformItem, dist, rad, newLayer } from './types';
 import { useDoc, ensureLayer, findItem, removeItems, updateItem } from './useDoc';
 import { Canvas, type Tool, type ToolOpts, type View, type CanvasApi, type FingerMode, toWorld } from './Canvas';
 
@@ -16,7 +16,7 @@ import { builtinLibrary, CATEGORIES } from './library';
 import { itemMarkup } from './markup';
 import { texLabel } from './textures';
 import { Selection, contentBox, fillAt, exportImage, exportPDF, thumbnail } from './raster';
-import { saveDoc, listLibrary, saveLibItem, deleteLibItem, validDoc } from './store';
+import { saveDoc, listLibrary, saveLibItem, deleteLibItem, validDoc, getMeta, setMeta } from './store';
 import { LayerPanel, ObjectPanel, GuidePanel, PaintPanel, HistoryPanel, guideDefaults, type EditorApi } from './Panels';
 import { TextDialog, PromptDialog, Menu, type Field, type TextValue } from './Dialogs';
 import { readSource } from '../io';
@@ -27,6 +27,7 @@ import { GUIDE_FULL } from './guideFull';
 import { ROLE_LABELS, canRaise } from './scene3d';
 import { QtyPanel } from './QtyPanel';
 import { quantitiesCsv, type QtyRow } from './quantities';
+import { defaultBook, estimateCsv, importItems, parseCsv, parsePriceTable, priceBookCsv, type Estimate, type PriceBook } from './estimate';
 
 // three.js は大きいので、3Dを開いたときだけ読み込む
 const View3D = lazy(() => import('./View3D'));
@@ -34,6 +35,8 @@ const View3D = lazy(() => import('./View3D'));
 const VERSION = 'ver 2026.10.17-01 (3d-view)';
 type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | 'qty' | null;
 
+// CSVは UTF-8 か Shift_JIS（Excelの既定）のどちらか
+const decodeText = (b: Uint8Array) => { try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch { return new TextDecoder('shift_jis').decode(b); } };
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'gaikou';
 
 export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }) {
@@ -216,6 +219,26 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const pickIds = (ids: string[]) => { setTool('select'); setSel(ids); };
   const saveQtyCsv = async (rows: QtyRow[]) => { const r = await saveFile(new Blob([quantitiesCsv(rows, doc.name)], { type: 'text/csv' }), `${safeName(doc.name)}_集計.csv`); toast(r === 'cancelled' ? '保存をキャンセルしました' : '集計をCSVで保存しました'); };
   const [qtyOpen, setQtyOpen] = useState(false);
+  // 単価表は会社ごと。端末に保存して全部の図面で使う
+  const [book, setBookRaw] = useState<PriceBook>(defaultBook);
+  useEffect(() => { getMeta<PriceBook>('priceBook').then(b => { if (b?.items) setBookRaw(b); }).catch(() => {}); }, []);
+  const setBook = (b: PriceBook) => { setBookRaw(b); setMeta('priceBook', b).catch(() => toast('単価表を保存できませんでした')); };
+  const csvOut = async (text: string, file: string, done: string) => { const r = await saveFile(new Blob([text], { type: 'text/csv' }), file); toast(r === 'cancelled' ? '保存をキャンセルしました' : done); };
+  const estp = {
+    book, onBook: setBook,
+    onEst: (est: DocEstimate) => D.set(d => ({ ...d, est }), '見積を調整'),
+    onEstCsv: (e: Estimate) => csvOut(estimateCsv(e, doc.name), `${safeName(doc.name)}_概算見積.csv`, '見積をCSVで保存しました'),
+    onExportBook: () => csvOut(priceBookCsv(book), `単価表_${safeName(book.name)}.csv`, '単価表をCSVで保存しました'),
+    onImport: async (f: File) => {
+      try {
+        const buf = new Uint8Array(await f.arrayBuffer());
+        const table = /\.xlsx$/i.test(f.name) ? (await import('./xlsx')).readXlsx(buf) : parseCsv(decodeText(buf));
+        const r = importItems(book, parsePriceTable(table), f.name.replace(/\.[^.]+$/, ''));
+        setBook(r.book);
+        toast(`単価表を読み込みました（${r.book.items.filter(i => !i.prov).length}品目・${r.matched}項目を自動で結び付け${r.kept ? `・${r.kept}項目は仮単価のまま` : ''}）`);
+      } catch (err) { toast('単価表を読み込めませんでした：' + (err as Error).message); }
+    },
+  };
   const deleteSel = () => { if (!sel.length) return; D.set(d => removeItems(d, new Set(sel)), '削除'); setSel([]); };
   const flipSel = () => { const its = selItems(); if (!its.length) return; const b = unionBox(its.map(itemBox)), cx = b.x + b.w / 2; const ids = new Set(sel); D.set(d => ({ ...d, layers: d.layers.map(l => ({ ...l, items: l.items.map(i => ids.has(i.id) ? transformItem(i, p => ({ x: 2 * cx - p.x, y: p.y }), i.type === 'obj' || i.type === 'shape' || i.type === 'text' ? -2 * ((i as ObjItem).rot || 0) : 0, 1, true) : i) })) }), '左右反転'); };
   const orderSel = (up: boolean) => { const ids = new Set(sel); D.set(d => ({ ...d, layers: d.layers.map(l => { if (!l.items.some(i => ids.has(i.id))) return l; const a = l.items.filter(i => ids.has(i.id)), b = l.items.filter(i => !ids.has(i.id)); return { ...l, items: up ? [...b, ...a] : [...a, ...b] }; }) }), up ? '前面へ' : '背面へ'); };
@@ -350,7 +373,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <i className="sep" />
           <button className={'v3-tl' + P('objects')} aria-label="部品" title="部品（車・植栽など）" onClick={panelBtn('objects')}><LayoutGrid size={16} />部品</button>
           <button className={'v3-tl' + P('paint')} aria-label="塗る" title="塗る（砂利・芝・ウッドなど）" onClick={() => { if (panel === 'paint') return setPanel(null); setPanel('paint'); setTool('aiFill'); }}><PaintBucket size={16} />塗る</button>
-          <button className={'v3-tl' + P('qty')} aria-label="集計" title="集計（面積・長さ・数）" onClick={panelBtn('qty')}><Calculator size={16} />集計</button>
+          <button className={'v3-tl' + P('qty')} aria-label="集計" title="集計・概算見積（面積・長さ・数と金額）" onClick={panelBtn('qty')}><Calculator size={16} />集計・見積</button>
           <button className={'v3-tl' + P('layers')} aria-label="レイヤー" title="レイヤー" onClick={panelBtn('layers')}><Layers size={16} />レイヤー</button>
           <button className={'v3-tl' + P('guides')} aria-label="ガイド線" title="ガイド線" onClick={panelBtn('guides')}><Ruler size={16} />ガイド</button>
           <button className={'v3-tl' + P('history')} aria-label="履歴" title="履歴" onClick={panelBtn('history')}><History size={16} />履歴</button>
@@ -403,7 +426,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
             {panel === 'guides' && <GuidePanel e={editorApi} />}
             {panel === 'paint' && <PaintPanel e={editorApi} />}
             {panel === 'history' && <HistoryPanel e={editorApi} />}
-            {panel === 'qty' && <QtyPanel doc={doc} lib={lib} onPick={pickIds} onSetRole={setRoleOf} onCsv={saveQtyCsv} onClose={() => setPanel(null)} />}
+            {panel === 'qty' && <QtyPanel estp={estp} doc={doc} lib={lib} onPick={pickIds} onSetRole={setRoleOf} onCsv={saveQtyCsv} onClose={() => setPanel(null)} />}
             {panel === 'settings' && settingsPanel()}
           </aside>
         )}
@@ -441,7 +464,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         onCancel={() => setTextDlg(null)}
         onDelete={textDlg.edit ? () => { D.set(d => removeItems(d, new Set([textDlg.edit!.id])), '文字を削除'); setTextDlg(null); } : undefined}
         onOk={(v: TextValue) => { const ed = textDlg.edit; if (ed) D.set(d => updateItem(d, ed.id, it => ({ ...it, ...v }) as Item), '文字を編集'); else addItem({ id: uid(), type: 'text', x: textDlg.p.x, y: textDlg.p.y, text: v.text, size: Math.round(24 / view.k), color: v.color, bg: v.bg, border: v.border, rot: -view.r }); setTextDlg(null); }} />}
-      {simple && qtyOpen && <div className="v3-qty-wrap" onClick={e => { if (e.target === e.currentTarget) setQtyOpen(false); }}><QtyPanel sheet doc={doc} lib={lib} onPick={ids => { setQtyOpen(false); pickIds(ids); }} onSetRole={setRoleOf} onCsv={saveQtyCsv} onClose={() => setQtyOpen(false)} /></div>}
+      {simple && qtyOpen && <div className="v3-qty-wrap" onClick={e => { if (e.target === e.currentTarget) setQtyOpen(false); }}><QtyPanel sheet estp={estp} doc={doc} lib={lib} onPick={ids => { setQtyOpen(false); pickIds(ids); }} onSetRole={setRoleOf} onCsv={saveQtyCsv} onClose={() => setQtyOpen(false)} /></div>}
       {show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} onRaise={(id, v) => D.set(d => updateItem(d, id, it => ({ ...it, ...v }) as Item), '3Dの種類を変更')} /></Suspense>}
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
       {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}

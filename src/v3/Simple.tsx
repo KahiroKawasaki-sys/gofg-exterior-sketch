@@ -166,7 +166,7 @@ function OutSheet({ exportAs, openQty }: DockProps) {
       {B('a3', <Printer size={22} />, 'PDF（A3）', 'お客様に渡す・印刷')}
       {B('a4', <Printer size={22} />, 'PDF（A4）', '家庭のプリンタ用')}
       {B('png', <FileImage size={22} />, '画像（PNG）', 'LINE・メールに貼る')}
-      {openQty && <button className="sx-out" onClick={openQty}><Calculator size={22} /><b>集計</b><span>面積・長さ・数</span></button>}
+      {openQty && <button className="sx-out" onClick={openQty}><Calculator size={22} /><b>集計・見積</b><span>数量と概算金額</span></button>}
       {B('dxf', <DraftingCompass size={22} />, 'CAD（DXF）', 'RIKCADで開いて清書')}
       {B('json', <Save size={22} />, '編集データ', '別の端末で続きを描く')}
     </div>
