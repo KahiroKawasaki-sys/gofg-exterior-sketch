@@ -23,8 +23,9 @@ export default {
   const token=request.headers.get('Cf-Access-Jwt-Assertion');if(!token)return deny('ログインが必要です。',401);
   let app=false;
   try{const issuer='https://'+env.ACCESS_TEAM_DOMAIN;const jwks=keySets.get(issuer)||createRemoteJWKSet(new URL(issuer+'/cdn-cgi/access/certs'));keySets.set(issuer,jwks);const {payload}=await jwtVerify(token,jwks,{issuer,audience:env.ACCESS_AUD,algorithms:['RS256']});
-   // iPhone／iPadアプリ（Pro）はメールのログインではなく、Accessのサービストークンで通る。使えるのは打ち合わせAIだけ
-   app=typeof payload.email!=='string'&&!!env.APP_SERVICE_TOKEN_ID&&payload.common_name===env.APP_SERVICE_TOKEN_ID;
+   // iPhone／iPadアプリ（Pro）はメールのログインではなく、Accessのサービストークンで通る（Accessのポリシーに入れたトークンだけが届く）。
+   // APP_SERVICE_TOKEN_ID を設定すれば、そのトークンに限る。使えるのは打ち合わせAIだけ
+   app=typeof payload.email!=='string'&&typeof payload.common_name==='string'&&!!payload.common_name&&(!env.APP_SERVICE_TOKEN_ID||payload.common_name===env.APP_SERVICE_TOKEN_ID);
    if(!app&&(typeof payload.email!=='string'||payload.email.toLowerCase()!==env.ALLOWED_EMAIL.trim().toLowerCase()))return deny('このアカウントには利用権限がありません。',403);}
   catch{return deny('ログインを確認できません。再ログインしてください。',401);}
   if(url.pathname==='/api/ai/meeting')return meeting(request,env,app);

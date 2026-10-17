@@ -14,7 +14,10 @@ describe('打ち合わせAI',()=>{
   const appReq=(path)=>new Request('https://app.example.test'+path,{method:'POST',headers:{'Cf-Access-Jwt-Assertion':'test-only','X-Sketch-Client':'2','Content-Type':'application/json'},body:JSON.stringify({transcript:'駐車場2台'})});
   expect((await worker.fetch(appReq('/api/ai/meeting'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(200);
   expect((await worker.fetch(appReq('/api/docs'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(403);
+  expect((await worker.fetch(appReq('/api/ai/meeting'),env())).status).toBe(200);
+  jwtVerify.mockResolvedValue({payload:{}});
   expect((await worker.fetch(appReq('/api/ai/meeting'),env())).status).toBe(403);
+  jwtVerify.mockResolvedValue({payload:{common_name:'app-token.access'}});
   jwtVerify.mockResolvedValue({payload:{common_name:'other-token'}});
   expect((await worker.fetch(appReq('/api/ai/meeting'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(403);
  });

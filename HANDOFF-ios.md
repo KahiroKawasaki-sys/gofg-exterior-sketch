@@ -93,6 +93,6 @@
   - `pro`：外構スケッチ Pro（com.kawakahi.gofgsketch.pro）。全部入り。アイコンに「PRO」の帯（`scripts/make-pro-icon.mjs`）。
 - 画面側の切替は `VITE_EDITION`（`src/v3/edition.ts`）。Web版は指定なし＝全部入り。
 - Pro の打ち合わせAI：音声認識は端末本体（`ios/App/App/SpeechPlugin.swift`、JSからは `GofgSpeech`）。AIは端末の通信（CapacitorHttp）で本番Workerの `/api/ai/meeting` を呼ぶ。
-  - 通行証は当面 Cloudflare Access のサービストークン。GitHub Secrets `AI_ACCESS_CLIENT_ID`／`AI_ACCESS_CLIENT_SECRET` をProのビルドに埋め込み、Worker の変数 `APP_SERVICE_TOKEN_ID`（Client ID）と一致したときだけ打ち合わせAIを通す（クラウド図面には入れない）。Accessのポリシーにこのトークンの「Service Auth」ルールが必要。
+  - 通行証は当面 Cloudflare Access のサービストークン。GitHub Secrets `AI_ACCESS_CLIENT_ID`／`AI_ACCESS_CLIENT_SECRET` をProのビルドに埋め込み、Accessのポリシーで通したサービストークンには打ち合わせAIだけを通す（Worker の変数 `APP_SERVICE_TOKEN_ID` にClient IDを入れれば、そのトークンに限定できる）（クラウド図面には入れない）。Accessのポリシーにこのトークンの「Service Auth」ルールが必要。
   - 個別ライセンスキー方式へ切り替えるときは `src/v3/appAuth.ts` と Worker の判定だけを差し替える。
 - Pro の初回配信前に、App Store Connect で「外構スケッチ Pro」（バンドルID com.kawakahi.gofgsketch.pro）のアプリ枠を作る必要がある。内部テスターのグループ「本人テスト」は初回配信時に外構スケッチと同じテスターで自動作成する。
