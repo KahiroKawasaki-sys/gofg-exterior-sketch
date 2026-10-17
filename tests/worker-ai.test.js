@@ -1,0 +1,32 @@
+import {describe,it,expect,vi,beforeEach,afterEach} from 'vitest';
+vi.mock('jose',()=>({createRemoteJWKSet:vi.fn(()=>()=>{}),jwtVerify:vi.fn()}));
+import {jwtVerify} from 'jose';
+import worker from '../worker/index';
+const env=(extra={})=>({ACCESS_TEAM_DOMAIN:'test-team.cloudflareaccess.com',ACCESS_AUD:'test-audience',ALLOWED_EMAIL:'owner@example.test',ASSETS:{fetch:vi.fn()},ANTHROPIC_API_KEY:'test-key',...extra});
+const req=(body,headers={})=>new Request('https://app.example.test/api/ai/meeting',{method:'POST',headers:{'Cf-Access-Jwt-Assertion':'test-only',Origin:'https://app.example.test','X-Sketch-Client':'2','Content-Type':'application/json',...headers},body:JSON.stringify(body)});
+const realFetch=globalThis.fetch;
+beforeEach(()=>{vi.clearAllMocks();jwtVerify.mockResolvedValue({payload:{email:'owner@example.test'}});});
+afterEach(()=>{globalThis.fetch=realFetch;});
+describe('打ち合わせAI',()=>{
+ it('ログインしていなければ使えない',async()=>{const r=await worker.fetch(new Request('https://app.example.test/api/ai/meeting',{method:'POST'}),env());expect(r.status).toBe(401);});
+ it('開発モード（メール確認なし）では使えない',async()=>{const r=await worker.fetch(req({transcript:'a'}),env({PUBLIC_APP:'true'}));expect(r.status).toBe(403);});
+ it('キーが未登録なら503で知らせる',async()=>{const r=await worker.fetch(req({transcript:'a'}),env({ANTHROPIC_API_KEY:''}));expect(r.status).toBe(503);expect((await r.json()).error).toContain('キー');});
+ it('別の画面からの送信は断る',async()=>{const r=await worker.fetch(req({transcript:'a'},{'X-Sketch-Client':''}),env());expect(r.status).toBe(403);});
+ it('会話が空なら呼ばない',async()=>{globalThis.fetch=vi.fn();const r=await worker.fetch(req({transcript:'  '}),env());expect(r.status).toBe(400);expect(globalThis.fetch).not.toHaveBeenCalled();});
+ it('Claude に要望を読み取らせ、ツールの入力をそのまま返す',async()=>{
+  globalThis.fetch=vi.fn(async()=>new Response(JSON.stringify({content:[{type:'tool_use',name:'record_requests',input:{requests:[{id:'',kind:'駐車場',text:'車2台',status:'決定'}]}}],usage:{input_tokens:1200,output_tokens:300}}),{status:200}));
+  const r=await worker.fetch(req({transcript:'駐車場は2台ほしいです',previous:[{id:'r1',text:'芝生にしたい'}],items:['T100厚土間打ち 刷毛引き']}),env());
+  expect(r.status).toBe(200);expect(await r.json()).toEqual({requests:[{id:'',kind:'駐車場',text:'車2台',status:'決定'}],usage:{input:1200,output:300}});
+  const [url,init]=globalThis.fetch.mock.calls[0];expect(url).toBe('https://api.anthropic.com/v1/messages');
+  expect(init.headers['x-api-key']).toBe('test-key');
+  const sent=JSON.parse(init.body);expect(sent.model).toBe('claude-opus-5-5');expect(sent.tool_choice).toEqual({type:'tool',name:'record_requests'});
+  expect(sent.messages[0].content).toContain('[r1] 芝生にしたい');expect(sent.messages[0].content).toContain('駐車場は2台ほしいです');
+ });
+ it('モデルは設定で変えられる。キー間違い・混雑は分かる言葉で返す',async()=>{
+  globalThis.fetch=vi.fn(async()=>new Response('{}',{status:401}));
+  let r=await worker.fetch(req({transcript:'a'}),env({AI_MODEL:'claude-sonnet-5-5'}));expect(r.status).toBe(502);expect((await r.json()).error).toContain('キーが正しくありません');
+  expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body).model).toBe('claude-sonnet-5-5');
+  globalThis.fetch=vi.fn(async()=>new Response('{}',{status:529}));
+  r=await worker.fetch(req({transcript:'a'}),env());expect(r.status).toBe(503);expect((await r.json()).error).toContain('混み合って');
+ });
+});
