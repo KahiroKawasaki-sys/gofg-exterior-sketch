@@ -3,7 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import {
   Image as ImageIcon, Download, PenTool, ChevronDown, Eraser, Type, MoveHorizontal, Circle, Slash, SquareX, Grid3x3, Spline, RotateCcw,
   Copy, House, SaveAll, Layers, LayoutGrid, Ruler, History, Settings, Redo2, Undo2, SquareDashedMousePointer, Magnet, PaintBucket, Scan,
-  Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, CircleHelp, Play, Box,
+  Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, CircleHelp, Play, Box, Calculator,
 } from 'lucide-react';
 import { type Doc, type Item, type LibItem, type Pt, type ObjItem, type TextItem, type TextureItem, type GuideType, type Role3, PALETTE, uid, itemBox, unionBox, boxOf, pointInPoly, transformItem, dist, rad, newLayer } from './types';
 import { useDoc, ensureLayer, findItem, removeItems, updateItem } from './useDoc';
@@ -25,12 +25,14 @@ import { schedulePush } from './cloudSync';
 import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, type TourStep, type HelpTab } from './Simple';
 import { GUIDE_FULL } from './guideFull';
 import { ROLE_LABELS, canRaise } from './scene3d';
+import { QtyPanel } from './QtyPanel';
+import { quantitiesCsv, type QtyRow } from './quantities';
 
 // three.js は大きいので、3Dを開いたときだけ読み込む
 const View3D = lazy(() => import('./View3D'));
 
 const VERSION = 'ver 2026.10.17-01 (3d-view)';
-type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | null;
+type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | 'qty' | null;
 
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'gaikou';
 
@@ -210,6 +212,10 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   // 選択中の線・図形の「3Dでの種類」（ばらばらなら空）
   const raiseSel = () => selItems().filter(canRaise);
   const setRaiseSel = (role3: Role3) => { const ids = new Set(raiseSel().map(i => i.id)); D.set(d => ({ ...d, layers: d.layers.map(l => ({ ...l, items: l.items.map(i => ids.has(i.id) ? { ...i, role3, h3: undefined } as Item : i) })) }), '3Dの種類を変更'); };
+  const setRoleOf = (ids: string[], role3: Role3) => { const s = new Set(ids); D.set(d => ({ ...d, layers: d.layers.map(l => ({ ...l, items: l.items.map(i => s.has(i.id) && canRaise(i) ? { ...i, role3, h3: undefined } as Item : i) })) }), '線の種類を変更'); };
+  const pickIds = (ids: string[]) => { setTool('select'); setSel(ids); };
+  const saveQtyCsv = async (rows: QtyRow[]) => { const r = await saveFile(new Blob([quantitiesCsv(rows, doc.name)], { type: 'text/csv' }), `${safeName(doc.name)}_集計.csv`); toast(r === 'cancelled' ? '保存をキャンセルしました' : '集計をCSVで保存しました'); };
+  const [qtyOpen, setQtyOpen] = useState(false);
   const deleteSel = () => { if (!sel.length) return; D.set(d => removeItems(d, new Set(sel)), '削除'); setSel([]); };
   const flipSel = () => { const its = selItems(); if (!its.length) return; const b = unionBox(its.map(itemBox)), cx = b.x + b.w / 2; const ids = new Set(sel); D.set(d => ({ ...d, layers: d.layers.map(l => ({ ...l, items: l.items.map(i => ids.has(i.id) ? transformItem(i, p => ({ x: 2 * cx - p.x, y: p.y }), i.type === 'obj' || i.type === 'shape' || i.type === 'text' ? -2 * ((i as ObjItem).rot || 0) : 0, 1, true) : i) })) }), '左右反転'); };
   const orderSel = (up: boolean) => { const ids = new Set(sel); D.set(d => ({ ...d, layers: d.layers.map(l => { if (!l.items.some(i => ids.has(i.id))) return l; const a = l.items.filter(i => ids.has(i.id)), b = l.items.filter(i => !ids.has(i.id)); return { ...l, items: up ? [...b, ...a] : [...a, ...b] }; }) }), up ? '前面へ' : '背面へ'); };
@@ -344,6 +350,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <i className="sep" />
           <button className={'v3-tl' + P('objects')} aria-label="部品" title="部品（車・植栽など）" onClick={panelBtn('objects')}><LayoutGrid size={16} />部品</button>
           <button className={'v3-tl' + P('paint')} aria-label="塗る" title="塗る（砂利・芝・ウッドなど）" onClick={() => { if (panel === 'paint') return setPanel(null); setPanel('paint'); setTool('aiFill'); }}><PaintBucket size={16} />塗る</button>
+          <button className={'v3-tl' + P('qty')} aria-label="集計" title="集計（面積・長さ・数）" onClick={panelBtn('qty')}><Calculator size={16} />集計</button>
           <button className={'v3-tl' + P('layers')} aria-label="レイヤー" title="レイヤー" onClick={panelBtn('layers')}><Layers size={16} />レイヤー</button>
           <button className={'v3-tl' + P('guides')} aria-label="ガイド線" title="ガイド線" onClick={panelBtn('guides')}><Ruler size={16} />ガイド</button>
           <button className={'v3-tl' + P('history')} aria-label="履歴" title="履歴" onClick={panelBtn('history')}><History size={16} />履歴</button>
@@ -396,6 +403,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
             {panel === 'guides' && <GuidePanel e={editorApi} />}
             {panel === 'paint' && <PaintPanel e={editorApi} />}
             {panel === 'history' && <HistoryPanel e={editorApi} />}
+            {panel === 'qty' && <QtyPanel doc={doc} lib={lib} onPick={pickIds} onSetRole={setRoleOf} onCsv={saveQtyCsv} onClose={() => setPanel(null)} />}
             {panel === 'settings' && settingsPanel()}
           </aside>
         )}
@@ -403,7 +411,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       {simple && <SimpleDock step={step} setStep={setStep} tool={tool} setTool={setTool} opts={opts} setOpts={setOpts}
         lib={lib} libSel={libSel} setLibSel={setLibSel} cat={cat} setCat={setCat}
         aiCount={aiCount} clearAi={editorApi.clearAi} paint={(t, n) => aiCount ? applyTexture(t, n) : toast(NEED_AREA)} paintColor={() => aiCount ? paintColor() : toast(NEED_AREA)}
-        exportAs={exportAs} />}
+        exportAs={exportAs} openQty={() => setQtyOpen(true)} />}
 
       {menu?.id === 'pen' && <Menu anchor={menu.rect} onClose={() => setMenu(null)}>
         {([['pen', 'ペン', '●'], ['marker', 'マーカー', '▬'], ['matte', 'マット塗り', '■'], ['pencil', '鉛筆', '✎']] as const).map(([b, l, ic]) => <button key={b} className={'mi' + (opts.brush === b ? ' on' : '')} onClick={() => { setOpts({ ...opts, brush: b }); setTool('pen'); setMenu(null); }}><span className="ic">{ic}</span>{l}</button>)}
@@ -433,6 +441,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         onCancel={() => setTextDlg(null)}
         onDelete={textDlg.edit ? () => { D.set(d => removeItems(d, new Set([textDlg.edit!.id])), '文字を削除'); setTextDlg(null); } : undefined}
         onOk={(v: TextValue) => { const ed = textDlg.edit; if (ed) D.set(d => updateItem(d, ed.id, it => ({ ...it, ...v }) as Item), '文字を編集'); else addItem({ id: uid(), type: 'text', x: textDlg.p.x, y: textDlg.p.y, text: v.text, size: Math.round(24 / view.k), color: v.color, bg: v.bg, border: v.border, rot: -view.r }); setTextDlg(null); }} />}
+      {simple && qtyOpen && <div className="v3-qty-wrap" onClick={e => { if (e.target === e.currentTarget) setQtyOpen(false); }}><QtyPanel sheet doc={doc} lib={lib} onPick={ids => { setQtyOpen(false); pickIds(ids); }} onSetRole={setRoleOf} onCsv={saveQtyCsv} onClose={() => setQtyOpen(false)} /></div>}
       {show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} onRaise={(id, v) => D.set(d => updateItem(d, id, it => ({ ...it, ...v }) as Item), '3Dの種類を変更')} /></Suspense>}
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
       {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}
