@@ -298,3 +298,20 @@ button.v3-mono:hover { color: var(--green); }
 .v3-3d-roles button.on { background: var(--green); border-color: var(--green); color: #fff; }
 .v3-sel3d { display: flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 12px; font-weight: 600; color: var(--green); }
 .v3-sel3d select { height: 28px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font-size: 12px; padding: 0 4px; }
+
+/* 集計パネル */
+.v3-qty-head { display: flex; align-items: center; gap: 6px; padding: 10px 0 4px; font-size: 13px; }
+.v3-qty-head .sp { flex: 1; }
+.v3-qty-head .v3-btn { display: inline-flex; align-items: center; gap: 4px; }
+.v3-qty-group h4 { margin: 12px 0 4px; font-size: 11.5px; color: var(--sub); }
+.v3-qty-row { display: flex; align-items: center; gap: 4px; }
+.v3-qty-row select { height: 28px; max-width: 74px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font-size: 11px; }
+.v3-qty-main { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; border: 0; background: #fff; border-radius: 9px; padding: 8px 9px; text-align: left; font-size: 12px; color: var(--ink); }
+.v3-qty-main:hover { background: #eef3f0; }
+.v3-qty-main .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v3-qty-main .q { white-space: nowrap; color: var(--sub); }
+.v3-qty-main .q b { color: var(--ink); font-size: 13px; }
+.v3-qty-main .auto { margin-left: 5px; font-style: normal; font-size: 10px; padding: 1px 5px; border-radius: 5px; background: #fff3d6; color: #8a6200; }
+.v3-qty-row.warn .v3-qty-main { background: #fff7e8; }
+.v3-qty-wrap { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.25); display: flex; align-items: flex-end; justify-content: center; }
+.v3-qty.sheet { width: min(520px, 100%); max-height: 78vh; overflow-y: auto; background: #f6f6f4; border-radius: 16px 16px 0 0; padding: 4px 14px max(16px, env(safe-area-inset-bottom)); box-shadow: 0 -6px 24px rgba(0,0,0,.15); }

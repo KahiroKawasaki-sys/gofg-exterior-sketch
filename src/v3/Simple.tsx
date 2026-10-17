@@ -2,7 +2,7 @@
 // 使い方は文章ではなく、実際のボタンを光らせる案内（Tour）と動く見本（Demo）で見せる。
 import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import {
-  PenTool, Slash, Square, MoveHorizontal, Type, Eraser, Hand, Car, PaintBucket, FileDown, Undo2, Redo2, Scan, CircleHelp, Box, DraftingCompass,
+  PenTool, Slash, Square, MoveHorizontal, Type, Eraser, Hand, Car, PaintBucket, FileDown, Undo2, Redo2, Scan, CircleHelp, Box, DraftingCompass, Calculator,
   SlidersHorizontal, ChevronLeft, X, Play, Printer, FileImage, Save, RotateCcw,
 } from 'lucide-react';
 import { type LibItem } from './types';
@@ -69,7 +69,7 @@ export type DockProps = {
   tool: Tool; setTool: (t: Tool) => void; opts: ToolOpts; setOpts: (o: ToolOpts) => void;
   lib: LibItem[]; libSel: string | null; setLibSel: (id: string) => void; cat: string; setCat: (c: string) => void;
   aiCount: number; clearAi: () => void; paint: (tex: string, name: string) => void; paintColor: () => void;
-  exportAs: (k: ExportKind) => void;
+  exportAs: (k: ExportKind) => void; openQty?: () => void;
 };
 
 export function SimpleDock(p: DockProps) {
@@ -159,13 +159,14 @@ function PaintSheet({ aiCount, clearAi, paint, paintColor, opts }: DockProps) {
   );
 }
 
-function OutSheet({ exportAs }: DockProps) {
+function OutSheet({ exportAs, openQty }: DockProps) {
   const B = (k: ExportKind, icon: ReactNode, t: string, s: string) => <button className="sx-out" onClick={() => exportAs(k)}>{icon}<b>{t}</b><span>{s}</span></button>;
   return (
     <div className="sx-row center">
       {B('a3', <Printer size={22} />, 'PDF（A3）', 'お客様に渡す・印刷')}
       {B('a4', <Printer size={22} />, 'PDF（A4）', '家庭のプリンタ用')}
       {B('png', <FileImage size={22} />, '画像（PNG）', 'LINE・メールに貼る')}
+      {openQty && <button className="sx-out" onClick={openQty}><Calculator size={22} /><b>集計</b><span>面積・長さ・数</span></button>}
       {B('dxf', <DraftingCompass size={22} />, 'CAD（DXF）', 'RIKCADで開いて清書')}
       {B('json', <Save size={22} />, '編集データ', '別の端末で続きを描く')}
     </div>
