@@ -6,6 +6,12 @@ on:
         description: 内部テスターへ配信するビルド番号（例 1.5.1）
         type: string
         required: true
+      edition:
+        description: どちらのアプリか（sketch＝外構スケッチ 2Dだけ／pro＝外構スケッチ Pro）
+        type: choice
+        options: [sketch, pro]
+        required: true
+        default: sketch
 permissions:
   contents: read
 jobs:
@@ -23,4 +29,5 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           GOFG_BUILD: ${{ inputs.build }}
+          GOFG_EDITION: ${{ inputs.edition }}
         run: python3 scripts/testflight_assign.py

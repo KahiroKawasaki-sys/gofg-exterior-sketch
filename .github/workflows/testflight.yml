@@ -7,10 +7,16 @@ on:
         type: boolean
         required: true
         default: false
+      edition:
+        description: どちらのアプリか（sketch＝外構スケッチ 2Dだけ／pro＝外構スケッチ Pro）
+        type: choice
+        options: [sketch, pro]
+        required: true
+        default: sketch
 permissions:
   contents: read
 concurrency:
-  group: gofg-testflight
+  group: gofg-testflight-${{ inputs.edition }}
   cancel-in-progress: false
 jobs:
   distribution:
@@ -36,7 +42,13 @@ jobs:
         run: python3 scripts/distribute.py --check-setup
       - run: npm ci
       - run: npm test
-      - run: npm run build:app
+      - name: Build the app screens for this edition
+        env:
+          VITE_EDITION: ${{ inputs.edition }}
+          # Pro の打ち合わせAI用の通行証（Cloudflare Access サービストークン）。未登録ならAIは使えないまま配信する
+          VITE_AI_CLIENT_ID: ${{ inputs.edition == 'pro' && secrets.AI_ACCESS_CLIENT_ID || '' }}
+          VITE_AI_CLIENT_SECRET: ${{ inputs.edition == 'pro' && secrets.AI_ACCESS_CLIENT_SECRET || '' }}
+        run: npm run build:app
       - run: npx cap sync ios
       - name: Build, sign and verify; optionally upload
         env:
@@ -45,6 +57,7 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GOFG_UPLOAD: ${{ inputs.upload }}
+          GOFG_EDITION: ${{ inputs.edition }}
         run: python3 scripts/distribute.py
       - name: Add the uploaded build to internal TestFlight groups
         if: inputs.upload
@@ -53,4 +66,5 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           GOFG_BUILD: 1.${{ github.run_number }}.${{ github.run_attempt }}
+          GOFG_EDITION: ${{ inputs.edition }}
         run: python3 scripts/testflight_assign.py

@@ -11,7 +11,18 @@ import sys
 import tempfile
 import textwrap
 
-BUNDLE = 'com.kawakahi.gofgsketch'
+# 2本のアプリ：外構スケッチ（2Dだけ）と 外構スケッチ Pro（3D・見積・打ち合わせAIまで）。中身は同じソースから作り分ける。
+EDITIONS = {
+    'sketch': ('com.kawakahi.gofgsketch', '外構スケッチ'),
+    'pro': ('com.kawakahi.gofgsketch.pro', '外構スケッチ Pro'),
+}
+ICONS = {'sketch': 'AppIcon', 'pro': 'AppIconPro'}
+BUNDLE = EDITIONS['sketch'][0]
+
+def edition():
+    name = os.environ.get('GOFG_EDITION', 'sketch')
+    require(name in EDITIONS, 'Invalid edition')
+    return name
 REQUIRED = ('ASC_PRIVATE_KEY', 'ASC_KEY_ID', 'ASC_ISSUER_ID', 'APPLE_TEAM_ID')
 
 def require(condition, message):
@@ -37,20 +48,22 @@ def normalize_private_key(text):
 
 
 
-def check_distribution(info, signed, profile, team, build, now):
-    require(info.get('CFBundleIdentifier') == BUNDLE, 'Unexpected bundle ID')
+def check_distribution(info, signed, profile, team, build, now, bundle=BUNDLE, display=EDITIONS['sketch'][1]):
+    require(info.get('CFBundleIdentifier') == bundle, 'Unexpected bundle ID')
     require(info.get('CFBundleVersion') == build, 'Build number mismatch')
+    require(info.get('CFBundleDisplayName') == display, 'Unexpected app name')
     require(info.get('DTPlatformName') == 'iphoneos', 'Not an iPhone build')
     require(set(info.get('UIDeviceFamily', [])) == {1, 2}, 'Universal iPad/iPhone support missing')
     require(float(info.get('MinimumOSVersion', '0')) >= 17, 'iOS 17 deployment target missing')
     require(info.get('UIRequiresFullScreen') is not True, 'iPad multitasking must stay available')
-    for purpose in ('NSCameraUsageDescription', 'NSPhotoLibraryUsageDescription', 'NSPhotoLibraryAddUsageDescription'):
+    for purpose in ('NSCameraUsageDescription', 'NSPhotoLibraryUsageDescription', 'NSPhotoLibraryAddUsageDescription',
+                    'NSMicrophoneUsageDescription', 'NSSpeechRecognitionUsageDescription'):
         require(bool(info.get(purpose, '').strip()), 'Permission purpose string missing')
     require(profile.get('ExpirationDate', dt.datetime.min) > now, 'Expired profile')
     require(team in profile.get('TeamIdentifier', []), 'Profile team mismatch')
     require(not profile.get('ProvisionedDevices') and not profile.get('ProvisionsAllDevices'), 'Not an App Store profile')
     for ent in (signed, profile.get('Entitlements', {})):
-        require(ent.get('application-identifier') == f'{team}.{BUNDLE}', 'Application identifier mismatch')
+        require(ent.get('application-identifier') == f'{team}.{bundle}', 'Application identifier mismatch')
         require(ent.get('com.apple.developer.team-identifier') == team, 'Signing team mismatch')
         require(ent.get('get-task-allow') is not True, 'Debug entitlement present')
 
@@ -79,6 +92,8 @@ def main():
     sequence, attempt = os.environ['GITHUB_RUN_NUMBER'], os.environ['GITHUB_RUN_ATTEMPT']
     require(sequence.isdecimal() and attempt.isdecimal(), 'Invalid build sequence')
     build = f'1.{sequence}.{attempt}'
+    bundle, display = EDITIONS[edition()]
+    icon = ICONS[edition()]
     root = Path(__file__).resolve().parent.parent
     with tempfile.TemporaryDirectory(prefix='gofg-sign-', dir=os.environ['RUNNER_TEMP']) as folder:
         work = Path(folder)
@@ -93,15 +108,17 @@ def main():
         auth = ['-allowProvisioningUpdates', '-authenticationKeyPath', key,
                 '-authenticationKeyID', key_id, '-authenticationKeyIssuerID', issuer]
         archive, exported = work/'App.xcarchive', work/'export'
-        print('Building and signing 外構スケッチ.', flush=True)
+        print(f'Building and signing {display}.', flush=True)
         run(['xcodebuild', '-quiet', '-project', root/'ios/App/App.xcodeproj', '-scheme', 'App',
              '-configuration', 'Release', '-destination', 'generic/platform=iOS',
              '-archivePath', archive, '-derivedDataPath', work/'DerivedData',
              f'DEVELOPMENT_TEAM={team}', f'CURRENT_PROJECT_VERSION={build}',
+             f'PRODUCT_BUNDLE_IDENTIFIER={bundle}', f'GOFG_DISPLAY_NAME={display}',
+             f'ASSETCATALOG_COMPILER_APPICON_NAME={icon}',
              'CODE_SIGNING_ALLOWED=NO', 'archive'], cwd=root)
         app = archive/'Products/Applications/App.app'
         entitlements = work/'App.entitlements'
-        entitlements.write_bytes(plistlib.dumps({'application-identifier': f'{team}.{BUNDLE}',
+        entitlements.write_bytes(plistlib.dumps({'application-identifier': f'{team}.{bundle}',
                                                 'com.apple.developer.team-identifier': team, 'get-task-allow': False}))
         # Sign bundled SPM frameworks before the containing app, if any.
         for framework in sorted((app/'Frameworks').glob('*.framework')):
@@ -126,7 +143,7 @@ def main():
         info = plistlib.loads((app/'Info.plist').read_bytes())
         signed = plistlib.loads(run(['codesign', '-d', '--entitlements', ':-', app], capture=True).stdout)
         profile = plistlib.loads(run(['security', 'cms', '-D', '-i', app/'embedded.mobileprovision'], capture=True).stdout)
-        check_distribution(info, signed, profile, team, build, dt.datetime.now(dt.UTC).replace(tzinfo=None))
+        check_distribution(info, signed, profile, team, build, dt.datetime.now(dt.UTC).replace(tzinfo=None), bundle, display)
         require((app/'PrivacyInfo.xcprivacy').is_file(), 'Privacy manifest missing')
         require((app/'public/index.html').is_file(), 'Bundled app entry missing')
         print('Signature, App Store profile, permissions and Universal support verified.', flush=True)
@@ -140,7 +157,7 @@ def main():
             print('Verified only; no upload. IPA and signing credentials are not retained as artifacts.')
     if summary := os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(summary, 'a', encoding='utf-8') as f:
-            f.write(f'外構スケッチ build {build}: distribution checks passed. Upload requested: {upload}.\n')
+            f.write(f'{display} build {build}: distribution checks passed. Upload requested: {upload}.\n')
 
 if __name__ == '__main__':
     try:

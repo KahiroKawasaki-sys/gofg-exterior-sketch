@@ -21,6 +21,7 @@ import { LayerPanel, ObjectPanel, GuidePanel, PaintPanel, HistoryPanel, guideDef
 import { TextDialog, PromptDialog, Menu, type Field, type TextValue } from './Dialogs';
 import { readSource } from '../io';
 import { isNativeApp, saveFile } from './platform';
+import { PRO } from './edition';
 import { schedulePush } from './cloudSync';
 import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, type TourStep, type HelpTab } from './Simple';
 import { GUIDE_FULL } from './guideFull';
@@ -359,7 +360,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       <input ref={camRef} type="file" hidden accept="image/*" capture="environment" onChange={e => { onImageFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={jsonRef} type="file" hidden accept="application/json,.json" onChange={e => { importJson(e.target.files?.[0]); e.target.value = ''; }} />
 
-      {simple ? <SimpleTop name={doc.name} saved={saved} canUndo={D.canUndo} canRedo={D.canRedo} undo={D.undo} redo={D.redo} fit={fit} home={goHome} help={() => setHelp({ tab: 'simple' })} toFull={() => setUi('full')} meet={() => setMeet('open')} view3d={() => setShow3d(true)} /> : <header className="v3-top">
+      {simple ? <SimpleTop name={doc.name} saved={saved} canUndo={D.canUndo} canRedo={D.canRedo} undo={D.undo} redo={D.redo} fit={fit} home={goHome} help={() => setHelp({ tab: 'simple' })} toFull={() => setUi('full')} meet={PRO ? () => setMeet('open') : undefined} view3d={PRO ? () => setShow3d(true) : undefined} /> : <header className="v3-top">
         {/* 1段目：描く道具と太さ・色 */}
         <div className="v3-bar r1">
           <button className="v3-tb" aria-label="案件一覧" title="案件一覧へ戻る" onClick={goHome}><House size={18} /></button>
@@ -392,15 +393,15 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <button className="v3-tl" aria-label="書き出し" title="PDF・画像・編集データ" onClick={openMenu('export')}><Download size={16} /><span className="lb">書き出し</span></button>
           <button className="v3-tl" aria-label="別名で保存" title="別案として保存" onClick={() => setPrompt({ title: '別名で保存', fields: [{ key: 'name', label: '名前', value: doc.name + ' 別案' }], ok: '保存', run: async v => { setPrompt(null); const nd = { ...doc, id: uid(), name: String(v.name || doc.name), updatedAt: new Date().toISOString() }; await saveDoc(nd, await thumbnail(nd, lib, ctx)); D.reset(nd); toast('別案として保存しました'); } })}><SaveAll size={16} /><span className="lb">別名で保存</span></button>
           <i className="sep" />
-          <button className="v3-tl" aria-label="3Dで見る" title="図面を3Dで見る（塀・建物・部品を立ち上げ）" onClick={() => setShow3d(true)}><Box size={16} /><span className="lb">3D</span></button>
+          {PRO && <button className="v3-tl" aria-label="3Dで見る" title="図面を3Dで見る（塀・建物・部品を立ち上げ）" onClick={() => setShow3d(true)}><Box size={16} /><span className="lb">3D</span></button>}
           <button className="v3-tl" aria-label="表示を全体に合わせる" title="図面全体が入るように表示" onClick={fit}><Scan size={16} /><span className="lb">全体表示</span></button>
           <button className={'v3-tl' + (showGrid ? ' on' : '')} aria-label="グリッド" title="グリッド表示（間隔は設定で変更）" onClick={() => setShowGrid(v => !v)}><Grid3x3 size={16} /><span className="lb">グリッド</span></button>
           {rotLabel !== 0 && <button className="v3-tl" aria-label="回転を戻す" title="画面の回転を0°に戻す" onClick={() => zoomRot(-view.r)}><RotateCcw size={16} /><span className="lb">{rotLabel}°→0°</span></button>}
           <i className="sep" />
           <button className={'v3-tl' + P('objects')} aria-label="部品" title="部品（車・植栽など）" onClick={panelBtn('objects')}><LayoutGrid size={16} />部品</button>
           <button className={'v3-tl' + P('paint')} aria-label="塗る" title="塗る（砂利・芝・ウッドなど）" onClick={() => { if (panel === 'paint') return setPanel(null); setPanel('paint'); setTool('aiFill'); }}><PaintBucket size={16} />塗る</button>
-          <button className={'v3-tl' + (meet === 'open' ? ' on' : '')} aria-label="打ち合わせ" title="打ち合わせ（会話を聞いてAIが要望をまとめる）" onClick={() => setMeet(v => v === 'open' ? 'min' : 'open')}><Mic size={16} />打ち合わせ</button>
-          <button className={'v3-tl' + P('qty')} aria-label="集計" title="集計・概算見積（面積・長さ・数と金額）" onClick={panelBtn('qty')}><Calculator size={16} />集計・見積</button>
+          {PRO && <><button className={'v3-tl' + (meet === 'open' ? ' on' : '')} aria-label="打ち合わせ" title="打ち合わせ（会話を聞いてAIが要望をまとめる）" onClick={() => setMeet(v => v === 'open' ? 'min' : 'open')}><Mic size={16} />打ち合わせ</button>
+          <button className={'v3-tl' + P('qty')} aria-label="集計" title="集計・概算見積（面積・長さ・数と金額）" onClick={panelBtn('qty')}><Calculator size={16} />集計・見積</button></>}
           <button className={'v3-tl' + P('layers')} aria-label="レイヤー" title="レイヤー" onClick={panelBtn('layers')}><Layers size={16} />レイヤー</button>
           <button className={'v3-tl' + P('guides')} aria-label="ガイド線" title="ガイド線" onClick={panelBtn('guides')}><Ruler size={16} />ガイド</button>
           <button className={'v3-tl' + P('history')} aria-label="履歴" title="履歴" onClick={panelBtn('history')}><History size={16} />履歴</button>
@@ -429,7 +430,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
                 <button onClick={() => orderSel(false)} title="背面へ"><ArrowDown size={15} />後ろへ</button>
                 <button onClick={() => registerFrom(selItems())} title="部品として登録"><PackagePlus size={15} />部品に登録</button>
               </>}
-              {(() => { const rs = raiseSel(); if (!rs.length) return null; const roles = new Set(rs.map(i => i.role3 || 'auto')); return (
+              {PRO && (() => { const rs = raiseSel(); if (!rs.length) return null; const roles = new Set(rs.map(i => i.role3 || 'auto')); return (
                 <label className="v3-sel3d" title="3Dで見たときの種類">3D
                   <select aria-label="3Dでの種類" value={roles.size === 1 ? [...roles][0] : ''} onChange={e => setRaiseSel(e.target.value as Role3)}>
                     {roles.size > 1 && <option value="">いろいろ</option>}
@@ -461,7 +462,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       {simple && <SimpleDock step={step} setStep={setStep} tool={tool} setTool={setTool} opts={opts} setOpts={setOpts}
         lib={lib} libSel={libSel} setLibSel={setLibSel} cat={cat} setCat={setCat}
         aiCount={aiCount} clearAi={editorApi.clearAi} paint={(t, n) => aiCount ? applyTexture(t, n) : toast(NEED_AREA)} paintColor={() => aiCount ? paintColor() : toast(NEED_AREA)}
-        exportAs={exportAs} openQty={() => setQtyOpen(true)} />}
+        exportAs={exportAs} openQty={PRO ? () => setQtyOpen(true) : undefined} />}
 
       {menu?.id === 'pen' && <Menu anchor={menu.rect} onClose={() => setMenu(null)}>
         {([['pen', 'ペン', '●'], ['marker', 'マーカー', '▬'], ['matte', 'マット塗り', '■'], ['pencil', '鉛筆', '✎']] as const).map(([b, l, ic]) => <button key={b} className={'mi' + (opts.brush === b ? ' on' : '')} onClick={() => { setOpts({ ...opts, brush: b }); setTool('pen'); setMenu(null); }}><span className="ic">{ic}</span>{l}</button>)}
@@ -479,7 +480,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         <button className="mi" onClick={() => exportAs('png')}>PNG画像</button>
         <button className="mi" onClick={() => exportAs('a4')}>PDF（A4横）</button>
         <button className="mi" onClick={() => exportAs('a3')}>PDF（A3横）</button>
-        <button className="mi" onClick={() => exportAs('dxf')}>CAD用（DXF・RIKCAD向け）</button>
+        {PRO && <button className="mi" onClick={() => exportAs('dxf')}>CAD用（DXF・RIKCAD向け）</button>}
         <hr /><button className="mi" onClick={() => exportAs('json')}>編集データを書き出す（.json）</button>
         <button className="mi" onClick={() => { setMenu(null); jsonRef.current?.click(); }}>編集データを読み込む</button>
       </Menu>}
@@ -492,10 +493,10 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         onDelete={textDlg.edit ? () => { D.set(d => removeItems(d, new Set([textDlg.edit!.id])), '文字を削除'); setTextDlg(null); } : undefined}
         onOk={(v: TextValue) => { const ed = textDlg.edit; if (ed) D.set(d => updateItem(d, ed.id, it => ({ ...it, ...v }) as Item), '文字を編集'); else addItem({ id: uid(), type: 'text', x: textDlg.p.x, y: textDlg.p.y, text: v.text, size: Math.round(24 / view.k), color: v.color, bg: v.bg, border: v.border, rot: -view.r }); setTextDlg(null); }} />}
       {simple && qtyOpen && <div className="v3-qty-wrap" onClick={e => { if (e.target === e.currentTarget) setQtyOpen(false); }}><QtyPanel sheet estp={estp} doc={doc} lib={lib} onPick={ids => { setQtyOpen(false); pickIds(ids); }} onSetRole={setRoleOf} onCsv={saveQtyCsv} onClose={() => setQtyOpen(false)} /></div>}
-      {meet !== 'closed' && <div className={'v3-qty-wrap v3-meet-wrap' + (meet === 'min' ? ' min' : '')} onClick={e => { if (e.target === e.currentTarget) setMeet('min'); }}>
+      {PRO && meet !== 'closed' && <div className={'v3-qty-wrap v3-meet-wrap' + (meet === 'min' ? ' min' : '')} onClick={e => { if (e.target === e.currentTarget) setMeet('min'); }}>
         <MeetingPanel doc={doc} lib={lib} book={book} hidden={meet === 'min'} toast={toast} onDoc={D.set} onMeeting={f => D.setMeeting(m => f(m || { lines: [], requests: [] }))}
           onHide={h => setMeet(h ? 'min' : 'open')} onClose={() => setMeet('closed')} /></div>}
-      {show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} onRaise={(id, v) => D.set(d => updateItem(d, id, it => ({ ...it, ...v }) as Item), '3Dの種類を変更')} /></Suspense>}
+      {PRO && show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} onRaise={(id, v) => D.set(d => updateItem(d, id, it => ({ ...it, ...v }) as Item), '3Dの種類を変更')} /></Suspense>}
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
       {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}
       {prompt && <PromptDialog title={prompt.title} fields={prompt.fields} note={prompt.note} okLabel={prompt.ok} onOk={prompt.run} onCancel={() => { setPrompt(null); if (tool === 'calib') setTool('select'); }} />}
@@ -538,7 +539,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <p className="v3-note">2本指で移動・拡大縮小・回転。マウスはホイールで拡大縮小、右ドラッグかSpace＋ドラッグで移動。Shiftで15°単位。</p>
         </section>
         <section className="v3-card"><h4>書き出し</h4>
-          <div className="v3-row wrap"><button className="v3-btn" onClick={() => exportAs('png')}>PNG</button><button className="v3-btn" onClick={() => exportAs('a4')}>PDF A4</button><button className="v3-btn" onClick={() => exportAs('a3')}>PDF A3</button><button className="v3-btn" onClick={() => exportAs('dxf')}>DXF</button><button className="v3-btn" onClick={() => exportAs('json')}>編集データ</button><button className="v3-btn" onClick={() => jsonRef.current?.click()}>編集データを読み込む</button></div>
+          <div className="v3-row wrap"><button className="v3-btn" onClick={() => exportAs('png')}>PNG</button><button className="v3-btn" onClick={() => exportAs('a4')}>PDF A4</button><button className="v3-btn" onClick={() => exportAs('a3')}>PDF A3</button>{PRO && <button className="v3-btn" onClick={() => exportAs('dxf')}>DXF</button>}<button className="v3-btn" onClick={() => exportAs('json')}>編集データ</button><button className="v3-btn" onClick={() => jsonRef.current?.click()}>編集データを読み込む</button></div>
         </section>
         <section className="v3-card"><h4>このアプリ</h4><p className="v3-note">{VERSION}　保存先：この端末（クラウド同期は停止中。端末間は編集データで引き継ぎ）</p></section>
         {!isNativeApp() && <section className="v3-card"><h4>旧バージョン</h4><p className="v3-note">v0.2（下絵の原本保管・クラウド同期つき）は <a href="?v=2">こちら</a> から開けます。</p></section>}

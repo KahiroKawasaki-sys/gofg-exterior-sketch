@@ -8,6 +8,19 @@ const realFetch=globalThis.fetch;
 beforeEach(()=>{vi.clearAllMocks();jwtVerify.mockResolvedValue({payload:{email:'owner@example.test'}});});
 afterEach(()=>{globalThis.fetch=realFetch;});
 describe('打ち合わせAI',()=>{
+ it('アプリ（サービストークン）は打ち合わせAIだけ使える',async()=>{
+  globalThis.fetch=vi.fn(async()=>new Response(JSON.stringify({content:[{type:'tool_use',name:'record_requests',input:{requests:[]}}]}),{status:200}));
+  jwtVerify.mockResolvedValue({payload:{common_name:'app-token.access'}});
+  const appReq=(path)=>new Request('https://app.example.test'+path,{method:'POST',headers:{'Cf-Access-Jwt-Assertion':'test-only','X-Sketch-Client':'2','Content-Type':'application/json'},body:JSON.stringify({transcript:'駐車場2台'})});
+  expect((await worker.fetch(appReq('/api/ai/meeting'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(200);
+  expect((await worker.fetch(appReq('/api/docs'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(403);
+  expect((await worker.fetch(appReq('/api/ai/meeting'),env())).status).toBe(200);
+  jwtVerify.mockResolvedValue({payload:{}});
+  expect((await worker.fetch(appReq('/api/ai/meeting'),env())).status).toBe(403);
+  jwtVerify.mockResolvedValue({payload:{common_name:'app-token.access'}});
+  jwtVerify.mockResolvedValue({payload:{common_name:'other-token'}});
+  expect((await worker.fetch(appReq('/api/ai/meeting'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(403);
+ });
  it('ログインしていなければ使えない',async()=>{const r=await worker.fetch(new Request('https://app.example.test/api/ai/meeting',{method:'POST'}),env());expect(r.status).toBe(401);});
  it('開発モード（メール確認なし）では使えない',async()=>{const r=await worker.fetch(req({transcript:'a'}),env({PUBLIC_APP:'true'}));expect(r.status).toBe(403);});
  it('キーが未登録なら503で知らせる',async()=>{const r=await worker.fetch(req({transcript:'a'}),env({ANTHROPIC_API_KEY:''}));expect(r.status).toBe(503);expect((await r.json()).error).toContain('キー');});

@@ -47,10 +47,11 @@ export function buildPrompt(b:Body){
  ].filter(Boolean).join('\n\n');
 }
 
-export async function meeting(req:Request,env:AiEnv):Promise<Response>{
+// app：アプリからの呼び出し（ブラウザではないので Origin が付かない。通行証は index.ts で確認済み）
+export async function meeting(req:Request,env:AiEnv,app=false):Promise<Response>{
  const url=new URL(req.url);
  if(req.method!=='POST')return error('この操作には対応していません',405);
- if(req.headers.get('Origin')!==url.origin||req.headers.get('X-Sketch-Client')!=='2')return error('この画面から操作をやり直してください',403);
+ if((!app&&req.headers.get('Origin')!==url.origin)||req.headers.get('X-Sketch-Client')!=='2')return error('この画面から操作をやり直してください',403);
  if(!env.ANTHROPIC_API_KEY)return error('AIのキーがまだ登録されていません',503);
  let b:Body;try{b=await readJSON(req,200000);}catch{return error('送られた内容を読めません');}
  if(!str(b.transcript,60000).trim())return error('会話がまだありません');

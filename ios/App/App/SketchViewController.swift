@@ -5,6 +5,7 @@ import WebKit
 final class SketchViewController: CAPBridgeViewController, UIScribbleInteractionDelegate {
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
+        bridge?.registerPluginInstance(SpeechPlugin())
         configureDrawingSurface()
     }
 

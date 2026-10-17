@@ -1,6 +1,7 @@
 // かんたんモード：「描く・部品・塗る・出力」の4手順だけを大きなボタンで出す。
 // 使い方は文章ではなく、実際のボタンを光らせる案内（Tour）と動く見本（Demo）で見せる。
 import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import { PRO } from './edition';
 import {
   PenTool, Slash, Square, MoveHorizontal, Type, Eraser, Hand, Car, PaintBucket, FileDown, Undo2, Redo2, Scan, CircleHelp, Box, DraftingCompass, Calculator, Mic,
   SlidersHorizontal, ChevronLeft, X, Play, Printer, FileImage, Save, RotateCcw,
@@ -168,7 +169,7 @@ function OutSheet({ exportAs, openQty }: DockProps) {
       {B('a4', <Printer size={22} />, 'PDF（A4）', '家庭のプリンタ用')}
       {B('png', <FileImage size={22} />, '画像（PNG）', 'LINE・メールに貼る')}
       {openQty && <button className="sx-out" onClick={openQty}><Calculator size={22} /><b>集計・見積</b><span>数量と概算金額</span></button>}
-      {B('dxf', <DraftingCompass size={22} />, 'CAD（DXF）', 'RIKCADで開いて清書')}
+      {PRO && B('dxf', <DraftingCompass size={22} />, 'CAD（DXF）', 'RIKCADで開いて清書')}
       {B('json', <Save size={22} />, '編集データ', '別の端末で続きを描く')}
     </div>
   );
