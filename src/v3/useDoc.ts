@@ -20,12 +20,20 @@ export function useDoc(initial: Doc) {
   }, []);
   const live = useCallback((f: (d: Doc) => Doc) => { if (!base.current) base.current = docRef.current; docRef.current = f(docRef.current); rerender(); }, []);
   const end = useCallback((label = '編集') => { if (!base.current) return; const b = base.current; base.current = null; if (b === docRef.current) return; past.current.push({ doc: b, label, at: Date.now() }); future.current = []; docRef.current = { ...docRef.current, updatedAt: new Date().toISOString() }; rerender(); }, []);
+  // 打ち合わせの記録（会話・要望）は取り消しの対象にしない。履歴の各時点にも同じ記録を入れておく
+  const setMeeting = useCallback((f: (m: Doc['meeting']) => Doc['meeting']) => {
+    const meeting = f(docRef.current.meeting), put = (d: Doc) => ({ ...d, meeting });
+    docRef.current = { ...put(docRef.current), updatedAt: new Date().toISOString() };
+    if (base.current) base.current = put(base.current);
+    past.current = past.current.map(e => ({ ...e, doc: put(e.doc) })); future.current = future.current.map(e => ({ ...e, doc: put(e.doc) }));
+    rerender();
+  }, []);
   const cancel = useCallback(() => { if (base.current) { docRef.current = base.current; base.current = null; rerender(); } }, []);
   const undo = useCallback(() => { const e = past.current.pop(); if (!e) return; future.current.push({ doc: docRef.current, label: e.label, at: Date.now() }); docRef.current = e.doc; rerender(); }, []);
   const redo = useCallback(() => { const e = future.current.pop(); if (!e) return; past.current.push({ doc: docRef.current, label: e.label, at: Date.now() }); docRef.current = e.doc; rerender(); }, []);
   const restore = useCallback((i: number) => { const e = past.current[i]; if (!e) return; set(e.doc, '履歴から復元'); }, [set]);
   const reset = useCallback((d: Doc) => { docRef.current = d; past.current = []; future.current = []; base.current = null; rerender(); }, []);
-  return { doc: docRef.current, set, live, end, cancel, undo, redo, restore, reset, canUndo: past.current.length > 0, canRedo: future.current.length > 0, history: past.current };
+  return { doc: docRef.current, set, live, end, setMeeting, cancel, undo, redo, restore, reset, canUndo: past.current.length > 0, canRedo: future.current.length > 0, history: past.current };
 }
 
 // レイヤー操作の小さなヘルパー

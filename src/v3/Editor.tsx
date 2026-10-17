@@ -3,7 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import {
   Image as ImageIcon, Download, PenTool, ChevronDown, Eraser, Type, MoveHorizontal, Circle, Slash, SquareX, Grid3x3, Spline, RotateCcw,
   Copy, House, SaveAll, Layers, LayoutGrid, Ruler, History, Settings, Redo2, Undo2, SquareDashedMousePointer, Magnet, PaintBucket, Scan,
-  Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, CircleHelp, Play, Box, Calculator,
+  Trash2, FlipHorizontal2, ArrowUp, ArrowDown, PackagePlus, X, Camera, Images, CircleHelp, Play, Box, Calculator, Mic,
 } from 'lucide-react';
 import { type Doc, type Item, type LibItem, type Pt, type ObjItem, type TextItem, type TextureItem, type GuideType, type Role3, type DocEstimate, PALETTE, uid, itemBox, unionBox, boxOf, pointInPoly, transformItem, dist, rad, newLayer } from './types';
 import { useDoc, ensureLayer, findItem, removeItems, updateItem } from './useDoc';
@@ -26,13 +26,14 @@ import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, ty
 import { GUIDE_FULL } from './guideFull';
 import { ROLE_LABELS, canRaise } from './scene3d';
 import { QtyPanel } from './QtyPanel';
+import { MeetingPanel } from './MeetingPanel';
 import { quantities, quantitiesCsv, textureAreas, type QtyRow } from './quantities';
 import { buildEstimate, defaultBook, estimateCsv, importItems, parseCsv, parsePriceTable, priceBookCsv, type Estimate, type PriceBook } from './estimate';
 
 // three.js は大きいので、3Dを開いたときだけ読み込む
 const View3D = lazy(() => import('./View3D'));
 
-const VERSION = 'ver 2026.10.17-02 (estimate)';
+const VERSION = 'ver 2026.10.17-03 (meeting-ai)';
 type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | 'qty' | null;
 
 // CSVは UTF-8 か Shift_JIS（Excelの既定）のどちらか
@@ -219,6 +220,8 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const pickIds = (ids: string[]) => { setTool('select'); setSel(ids); };
   const saveQtyCsv = async (rows: QtyRow[]) => { const r = await saveFile(new Blob([quantitiesCsv(rows, doc.name)], { type: 'text/csv' }), `${safeName(doc.name)}_集計.csv`); toast(r === 'cancelled' ? '保存をキャンセルしました' : '集計をCSVで保存しました'); };
   const [qtyOpen, setQtyOpen] = useState(false);
+  // 打ち合わせ：閉じる／開く／たたむ（たたんでも聞き取りは続く）
+  const [meet, setMeet] = useState<'closed' | 'open' | 'min'>('closed');
   // 単価表は会社ごと。端末に保存して全部の図面で使う
   const [book, setBookRaw] = useState<PriceBook>(defaultBook);
   useEffect(() => { getMeta<PriceBook>('priceBook').then(b => { if (b?.items) setBookRaw(b); }).catch(() => {}); }, []);
@@ -356,7 +359,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       <input ref={camRef} type="file" hidden accept="image/*" capture="environment" onChange={e => { onImageFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={jsonRef} type="file" hidden accept="application/json,.json" onChange={e => { importJson(e.target.files?.[0]); e.target.value = ''; }} />
 
-      {simple ? <SimpleTop name={doc.name} saved={saved} canUndo={D.canUndo} canRedo={D.canRedo} undo={D.undo} redo={D.redo} fit={fit} home={goHome} help={() => setHelp({ tab: 'simple' })} toFull={() => setUi('full')} view3d={() => setShow3d(true)} /> : <header className="v3-top">
+      {simple ? <SimpleTop name={doc.name} saved={saved} canUndo={D.canUndo} canRedo={D.canRedo} undo={D.undo} redo={D.redo} fit={fit} home={goHome} help={() => setHelp({ tab: 'simple' })} toFull={() => setUi('full')} meet={() => setMeet('open')} view3d={() => setShow3d(true)} /> : <header className="v3-top">
         {/* 1段目：描く道具と太さ・色 */}
         <div className="v3-bar r1">
           <button className="v3-tb" aria-label="案件一覧" title="案件一覧へ戻る" onClick={goHome}><House size={18} /></button>
@@ -396,6 +399,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <i className="sep" />
           <button className={'v3-tl' + P('objects')} aria-label="部品" title="部品（車・植栽など）" onClick={panelBtn('objects')}><LayoutGrid size={16} />部品</button>
           <button className={'v3-tl' + P('paint')} aria-label="塗る" title="塗る（砂利・芝・ウッドなど）" onClick={() => { if (panel === 'paint') return setPanel(null); setPanel('paint'); setTool('aiFill'); }}><PaintBucket size={16} />塗る</button>
+          <button className={'v3-tl' + (meet === 'open' ? ' on' : '')} aria-label="打ち合わせ" title="打ち合わせ（会話を聞いてAIが要望をまとめる）" onClick={() => setMeet(v => v === 'open' ? 'min' : 'open')}><Mic size={16} />打ち合わせ</button>
           <button className={'v3-tl' + P('qty')} aria-label="集計" title="集計・概算見積（面積・長さ・数と金額）" onClick={panelBtn('qty')}><Calculator size={16} />集計・見積</button>
           <button className={'v3-tl' + P('layers')} aria-label="レイヤー" title="レイヤー" onClick={panelBtn('layers')}><Layers size={16} />レイヤー</button>
           <button className={'v3-tl' + P('guides')} aria-label="ガイド線" title="ガイド線" onClick={panelBtn('guides')}><Ruler size={16} />ガイド</button>
@@ -488,6 +492,9 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         onDelete={textDlg.edit ? () => { D.set(d => removeItems(d, new Set([textDlg.edit!.id])), '文字を削除'); setTextDlg(null); } : undefined}
         onOk={(v: TextValue) => { const ed = textDlg.edit; if (ed) D.set(d => updateItem(d, ed.id, it => ({ ...it, ...v }) as Item), '文字を編集'); else addItem({ id: uid(), type: 'text', x: textDlg.p.x, y: textDlg.p.y, text: v.text, size: Math.round(24 / view.k), color: v.color, bg: v.bg, border: v.border, rot: -view.r }); setTextDlg(null); }} />}
       {simple && qtyOpen && <div className="v3-qty-wrap" onClick={e => { if (e.target === e.currentTarget) setQtyOpen(false); }}><QtyPanel sheet estp={estp} doc={doc} lib={lib} onPick={ids => { setQtyOpen(false); pickIds(ids); }} onSetRole={setRoleOf} onCsv={saveQtyCsv} onClose={() => setQtyOpen(false)} /></div>}
+      {meet !== 'closed' && <div className={'v3-qty-wrap v3-meet-wrap' + (meet === 'min' ? ' min' : '')} onClick={e => { if (e.target === e.currentTarget) setMeet('min'); }}>
+        <MeetingPanel doc={doc} lib={lib} book={book} hidden={meet === 'min'} toast={toast} onDoc={D.set} onMeeting={f => D.setMeeting(m => f(m || { lines: [], requests: [] }))}
+          onHide={h => setMeet(h ? 'min' : 'open')} onClose={() => setMeet('closed')} /></div>}
       {show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} onRaise={(id, v) => D.set(d => updateItem(d, id, it => ({ ...it, ...v }) as Item), '3Dの種類を変更')} /></Suspense>}
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
       {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}
