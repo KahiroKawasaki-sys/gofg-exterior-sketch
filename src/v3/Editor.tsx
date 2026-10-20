@@ -29,7 +29,8 @@ import { ROLE_LABELS, canRaise } from './scene3d';
 import { QtyPanel } from './QtyPanel';
 import { MeetingPanel } from './MeetingPanel';
 import { quantities, quantitiesCsv, textureAreas, type QtyRow } from './quantities';
-import { buildEstimate, defaultBook, estimateCsv, importItems, parseCsv, parsePriceTable, priceBookCsv, type Estimate, type PriceBook } from './estimate';
+import { buildEstimate, defaultBook, estimateCsv, importItems, parseCsv, parsePriceTable, priceBookCsv, tableCsv, type Estimate, type PriceBook, type PriceItem } from './estimate';
+import { boardTemplate, mergeProducts, productObj, useFor } from './products';
 
 // three.js は大きいので、3Dを開いたときだけ読み込む
 const View3D = lazy(() => import('./View3D'));
@@ -227,6 +228,10 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const [book, setBookRaw] = useState<PriceBook>(defaultBook);
   useEffect(() => { getMeta<PriceBook>('priceBook').then(b => { if (b?.items) setBookRaw(b); }).catch(() => {}); }, []);
   const setBook = (b: PriceBook) => { setBookRaw(b); setMeta('priceBook', b).catch(() => toast('単価表を保存できませんでした')); };
+  const readTable = async (f: File) => {
+    const buf = new Uint8Array(await f.arrayBuffer());
+    return parsePriceTable(/\.xlsx$/i.test(f.name) ? (await import('./xlsx')).readXlsx(buf) : parseCsv(decodeText(buf)));
+  };
   const csvOut = async (text: string, file: string, done: string) => { const r = await saveFile(new Blob([text], { type: 'text/csv' }), file); toast(r === 'cancelled' ? '保存をキャンセルしました' : done); };
   const [others, setOthers] = useState<{ id: string; name: string }[]>([]);
   const refreshOthers = useCallback(() => listDocs().then(ds => setOthers(ds.filter(d => d.id !== doc.id).map(d => ({ id: d.id, name: d.name })))).catch(() => {}), [doc.id]);
@@ -258,12 +263,30 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     onExportBook: () => csvOut(priceBookCsv(book), `単価表_${safeName(book.name)}.csv`, '単価表をCSVで保存しました'),
     onImport: async (f: File) => {
       try {
-        const buf = new Uint8Array(await f.arrayBuffer());
-        const table = /\.xlsx$/i.test(f.name) ? (await import('./xlsx')).readXlsx(buf) : parseCsv(decodeText(buf));
-        const r = importItems(book, parsePriceTable(table), f.name.replace(/\.[^.]+$/, ''));
+        const r = importItems(book, await readTable(f), f.name.replace(/\.[^.]+$/, ''));
         setBook(r.book);
         toast(`単価表を読み込みました（${r.book.items.filter(i => !i.prov).length}品目・${r.matched}項目を自動で結び付け${r.kept ? `・${r.kept}項目は仮単価のまま` : ''}）`);
       } catch (err) { toast('単価表を読み込めませんでした：' + (err as Error).message); }
+    },
+    // 商品ボード：まとめて読み込んだ商品は、今の単価表に足す（入れ替えない）
+    onImportBoard: async (f: File) => {
+      try {
+        const r = mergeProducts(book, await readTable(f));
+        setBook(r.book);
+        toast(`商品ボードに読み込みました（${r.added}点を追加${r.updated ? `・${r.updated}点を更新` : ''}）`);
+      } catch (err) { toast('商品を読み込めませんでした：' + (err as Error).message); }
+    },
+    onTemplate: () => csvOut(tableCsv(boardTemplate()), '商品ボード_ひな形.csv', 'ひな形を保存しました。Excelで開いて商品を入れてください'),
+    // 図面の真ん中に置き、その部品をこの商品で見積もる
+    onPlace: (p: PriceItem) => {
+      const r = productObj(p, lib, doc.mmPerPx, viewCenter()); if (!r) return toast('この分類は図面に置けません');
+      addItem(r.obj, 'object'); setBook(useFor(book, r.key, p.id));
+      setQtyOpen(false); setToolRaw('select'); setSel([r.obj.id]);
+      toast(`「${p.name}」を図面に置きました。動かして位置を合わせてください`);
+    },
+    onAddToEst: (p: PriceItem) => {
+      D.set(d => ({ ...d, est: { ...d.est, extras: [...(d.est?.extras || []), { id: uid(), name: p.name, unit: p.unit || '式', qty: 1, price: p.price }] } }), '見積に追加');
+      toast(`「${p.name}」を見積の「追加の項目」に入れました`);
     },
   };
   const deleteSel = () => { if (!sel.length) return; D.set(d => removeItems(d, new Set(sel)), '削除'); setSel([]); };

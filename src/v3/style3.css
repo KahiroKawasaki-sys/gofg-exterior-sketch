@@ -390,3 +390,29 @@ button.v3-mono:hover { color: var(--green); }
 .v3-meet-log { max-height: 220px; overflow-y: auto; background: #fff; border-radius: 9px; padding: 6px 9px; font-size: 12px; }
 .v3-meet-log p { margin: 3px 0; line-height: 1.45; }
 .v3-meet-log time { color: var(--sub); margin-right: 6px; font-size: 11px; }
+/* 商品ボード */
+.v3-qty-head .v3-seg button { padding: 5px 9px; }
+.v3-pb-form { background: #fff; border-radius: 10px; padding: 9px 10px; margin: 6px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; font-size: 11.5px; }
+.v3-pb-f { display: flex; flex-direction: column; gap: 2px; color: var(--sub); min-width: 0; }
+.v3-pb-f.wide, .v3-pb-form .wide, .v3-pb-err { grid-column: 1 / -1; }
+.v3-pb-f input, .v3-pb-f select { height: 28px; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; font-size: 12.5px; background: #fff; color: var(--ink); min-width: 0; width: 100%; }
+.v3-pb-form .v3-row { display: flex; gap: 6px; }
+.v3-pb-err { color: var(--danger); margin: 0; }
+.v3-pb-search { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; margin: 8px 0 6px; color: var(--sub); }
+.v3-pb-search input { flex: 1; min-width: 0; height: 30px; border: 0; outline: 0; font-size: 12.5px; background: transparent; color: var(--ink); }
+.v3-pb-cats { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.v3-pb-cats button { border: 1px solid #d6e2e7; background: #fff; color: var(--sub); border-radius: 999px; font-size: 11px; padding: 3px 9px; font-weight: 600; }
+.v3-pb-cats button.on { background: var(--green); border-color: var(--green); color: #fff; }
+.v3-pb-card { background: #fff; border-radius: 9px; padding: 8px 9px; margin-bottom: 5px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.v3-pb-card .top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.v3-pb-card .nm { font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.v3-pb-card .sp { flex: 1; }
+.v3-pb-card .amt { white-space: nowrap; font-size: 13.5px; }
+.v3-pb-card .amt small { font-weight: 400; color: var(--sub); font-size: 11px; }
+.v3-pb-card .meta { color: var(--sub); line-height: 1.45; overflow-wrap: anywhere; }
+.v3-pb-card .meta.sub { font-size: 11px; }
+.v3-pb-card .meta.use { color: #2f6f5a; font-size: 11px; }
+.v3-pb-card .cat { display: inline-block; font-size: 10px; padding: 0 5px; margin-right: 5px; border-radius: 5px; background: var(--soft); color: var(--green); }
+.v3-pb-card .acts { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.v3-pb-card .acts .v3-btn { display: inline-flex; align-items: center; gap: 4px; }
+.v3-pb-card .acts .v3-est-sel { width: auto; flex: 1 1 140px; }

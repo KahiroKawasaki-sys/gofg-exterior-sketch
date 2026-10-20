@@ -3,7 +3,9 @@
 import { type DocEstimate, type EstExtra } from './types';
 import { type QtyRow } from './quantities';
 
-export type PriceItem = { id: string; cat: string; name: string; unit: string; price: number; cost?: number; prov?: boolean };
+// 商品ボードの商品（メーカー品）：maker 型番 寸法（w幅・d奥行・h高さ mm）色 list定価 url公式ページ。board の付いた品目が商品ボードに並ぶ
+export type ProductInfo = { maker?: string; model?: string; w?: number; d?: number; h?: number; color?: string; list?: number; url?: string; note?: string; board?: boolean };
+export type PriceItem = { id: string; cat: string; name: string; unit: string; price: number; cost?: number; prov?: boolean } & ProductInfo;
 // links：集計の行（mat:芝 / line:fence / obj:オリーブ / cat:植栽）→ 単価表の品目id（複数可：下地＋仕上げなど）
 // company：見積書に載せる会社名
 export type PriceBook = { name: string; items: PriceItem[]; links: Record<string, string[]>; overheadPct: number; taxPct: number; updatedAt?: string; company?: string };
@@ -103,32 +105,56 @@ const PROV_LINKS: Record<string, string[]> = {
   'obj:機能門柱': ['p-pole'], 'obj:立水栓': ['p-faucet'], 'obj:物置 2000×900': ['p-shed'], 'obj:サイクルポート': ['p-cycle'],
 };
 export const defaultBook = (): PriceBook => ({ name: '仮の単価', items: PROV_ITEMS.map(i => ({ ...i })), links: structuredClone(PROV_LINKS), overheadPct: 10, taxPct: 10 });
-export const isProvisional = (b: PriceBook) => b.items.every(i => i.prov);
+// 会社の単価表をまだ読み込んでいない（商品ボードの商品だけ足した状態も含む）
+export const isProvisional = (b: PriceBook) => b.items.filter(i => !i.board).every(i => i.prov);
 
 // ---- 単価表の読み込み ----
 // 表（1行目付近に見出し）から品目を取り出す。見出しは「分類・品目・単位・単価・原価」か item_master.csv の英字
 export function parsePriceTable(table: string[][]): PriceItem[] {
-  const find = (row: string[], re: RegExp) => row.findIndex(c => re.test((c || '').trim()));
-  let h = -1, col = { cat: -1, name: -1, unit: -1, price: -1, cost: -1 };
+  const find = (row: string[], re: RegExp) => row.findIndex(c => re.test((c || '').trim().normalize('NFKC')));
+  let h = -1, col: Record<string, number> = {};
   for (let r = 0; r < Math.min(table.length, 15); r++) {
-    const row = table[r], name = find(row, /^(item|品目|品名|名称|項目|商品名)$/i), price = find(row, /^(unit_price|単価|price|販売単価|金額単価)$/i);
-    if (name >= 0 && price >= 0) { h = r; col = { name, price, cat: find(row, /^(category|分類|区分|工事|工種|カテゴリ)$/i), unit: find(row, /^(unit|単位)$/i), cost: find(row, /^(cost|原価|仕入)$/i) }; break; }
+    const row = table[r], name = find(row, /^(item|品目|品名|名称|項目|商品名)$/i), price = find(row, /^(unit_price|単価|price|販売単価|金額単価|売値)$/i);
+    if (name >= 0 && price >= 0) {
+      h = r;
+      col = {
+        name, price, cat: find(row, /^(category|分類|区分|工事|工種|カテゴリ)$/i), unit: find(row, /^(unit|単位)$/i), cost: find(row, /^(cost|原価|仕入)$/i),
+        maker: find(row, /^(maker|メーカー)$/i), model: find(row, /^(model|型番|品番)$/i), w: find(row, /^(幅|W)(\(?mm\)?)?$/i), d: find(row, /^(奥行|D)(\(?mm\)?)?$/i),
+        hh: find(row, /^(高さ|H)(\(?mm\)?)?$/i), color: find(row, /^(色|カラー|color)$/i), list: find(row, /^(定価|list_price|メーカー価格)$/i),
+        url: find(row, /^(url|公式ページ(url)?|リンク)$/i), note: find(row, /^(メモ|備考|note)$/i), board: find(row, /^(商品ボード|board)$/i),
+      };
+      break;
+    }
   }
   if (h < 0) throw Error('見出し（品目・単価）が見つかりません');
   const num = (s: string | undefined) => { const v = parseFloat((s || '').normalize('NFKC').replace(/[,¥円\s]/g, '')); return isFinite(v) ? v : NaN; };
+  const cell = (row: string[], k: string) => col[k] >= 0 ? (row[col[k]] || '').trim() : '';
   const out: PriceItem[] = [], seen = new Set<string>();
   for (const row of table.slice(h + 1)) {
-    const name = (row[col.name] || '').trim(), price = num(row[col.price]);
+    const name = cell(row, 'name'), price = num(row[col.price]);
     if (!name || name.startsWith('＊') || name.startsWith('*') || !(price > 0)) continue;
-    const cat = col.cat >= 0 ? (row[col.cat] || '').trim().replace(/^-$/, '共通') : '', unit = col.unit >= 0 ? normUnit(row[col.unit] || '') : '';
-    const id = 'i-' + cat + '/' + name + '/' + unit;
+    const cat = cell(row, 'cat').replace(/^-$/, '共通'), unit = normUnit(cell(row, 'unit')), model = cell(row, 'model');
+    const id = 'i-' + cat + '/' + name + '/' + unit + (model ? '/' + model : '');
     if (seen.has(id)) continue; // 同じ品目が別の分類にも載っていることがある
     seen.add(id);
-    const cost = num(row[col.cost]);
-    out.push({ id, cat, name, unit, price, ...(cost > 0 && { cost }) });
+    const cost = num(row[col.cost]), maker = cell(row, 'maker'), url = safeUrl(cell(row, 'url'));
+    const size = (k: string) => { const v = num(cell(row, k)); return v > 0 ? { [k === 'hh' ? 'h' : k]: v } : {}; };
+    const list = num(cell(row, 'list')), color = cell(row, 'color'), note = cell(row, 'note');
+    const board = /^(○|◯|〇|1|yes|true|y)$/i.test(cell(row, 'board')) || !!(maker || model || url);
+    out.push({
+      id, cat, name, unit, price, ...(cost > 0 && { cost }),
+      ...(maker && { maker }), ...(model && { model }), ...size('w'), ...size('d'), ...size('hh'), ...(color && { color }),
+      ...(list > 0 && { list }), ...(url && { url }), ...(note && { note }), ...(board && { board }),
+    });
   }
   if (!out.length) throw Error('単価の入った品目がありません');
   return out;
+}
+
+// 公式ページのリンクは http(s) だけ受け付ける
+export function safeUrl(s: string | undefined): string {
+  const v = (s || '').trim();
+  try { const u = new URL(v); return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : ''; } catch { return ''; }
 }
 
 // 集計の行ごとに、品目名にこの言葉を含み、単位が合うものを探す（先に書いた言葉ほど優先）
@@ -154,22 +180,24 @@ export function autoMatch(items: PriceItem[], key: string): string | undefined {
 }
 
 // 読み込んだ品目で単価表を作り直す。前に選んであった品目は名前が同じなら引き継ぎ、
-// 見つからない行は自動で探し、それでもなければ仮の単価を残す
+// 見つからない行は自動で探し、それでもなければ仮の単価を残す。商品ボードの商品は、読み込んだ表に無くても残す
+const itemKey = (i: PriceItem) => i.cat + '/' + i.name + (i.model ? '/' + i.model : '');
 export function importItems(old: PriceBook, imported: PriceItem[], name: string): { book: PriceBook; matched: number; kept: number } {
-  const oldItems = new Map(old.items.map(i => [i.id, i])), byName = new Map(imported.map(i => [i.cat + '/' + i.name, i.id]));
+  const oldItems = new Map(old.items.map(i => [i.id, i])), byName = new Map(imported.map(i => [itemKey(i), i.id]));
+  const board = old.items.filter(i => i.board && !i.prov && !byName.has(itemKey(i))), boardIds = new Set(board.map(i => i.id));
   const keep = new Map<string, PriceItem>(), links: Record<string, string[]> = {};
   let matched = 0, kept = 0;
   const keys = new Set([...Object.keys(old.links), ...AUTO.map(([k]) => k)]);
   for (const key of keys) {
     const prev = (old.links[key] || []).map(id => oldItems.get(id)).filter((i): i is PriceItem => !!i);
-    const carried = prev.filter(i => !i.prov).map(i => byName.get(i.cat + '/' + i.name)).filter((id): id is string => !!id);
+    const carried = prev.filter(i => !i.prov).map(i => boardIds.has(i.id) ? i.id : byName.get(itemKey(i))).filter((id): id is string => !!id);
     if (carried.length) { links[key] = carried; matched++; continue; }
     const auto = autoMatch(imported, key);
     if (auto) { links[key] = [auto]; matched++; continue; }
     const provs = prev.filter(i => i.prov);
     if (provs.length) { provs.forEach(i => keep.set(i.id, i)); links[key] = provs.map(i => i.id); kept++; }
   }
-  return { book: { ...old, name, items: [...imported, ...keep.values()], links, updatedAt: new Date().toISOString() }, matched, kept };
+  return { book: { ...old, name, items: [...imported, ...board, ...keep.values()], links, updatedAt: new Date().toISOString() }, matched, kept };
 }
 
 // ---- CSV ----
@@ -188,12 +216,15 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 const csvCell = (s: string) => /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-const csv = (rows: (string | number)[][]) => '﻿' + rows.map(r => r.map(v => csvCell(String(v))).join(',')).join('\r\n') + '\r\n';
+export const tableCsv = (rows: (string | number)[][]) => '﻿' + rows.map(r => r.map(v => csvCell(String(v))).join(',')).join('\r\n') + '\r\n';
 
-export const priceBookCsv = (b: PriceBook) => csv([['分類', '品目', '単位', '単価', '原価'], ...b.items.map(i => [i.cat, i.name, i.unit, i.price, i.cost ?? ''])]);
+// 単価表のCSV。商品ボードの列（メーカー・型番・寸法・定価・公式ページ）も一緒に出し、Excelで直して読み込み直せる
+export const BOOK_HEADER = ['分類', '品目', '単位', '単価', '原価', 'メーカー', '型番', '幅mm', '奥行mm', '高さmm', '色', '定価', '公式ページURL', 'メモ', '商品ボード'];
+const bookRow = (i: PriceItem) => [i.cat, i.name, i.unit, i.price, i.cost ?? '', i.maker ?? '', i.model ?? '', i.w ?? '', i.d ?? '', i.h ?? '', i.color ?? '', i.list ?? '', i.url ?? '', i.note ?? '', i.board ? '○' : ''];
+export const priceBookCsv = (b: PriceBook) => tableCsv([BOOK_HEADER, ...b.items.map(bookRow)]);
 
 export function estimateCsv(e: Estimate, title: string): string {
-  return csv([
+  return tableCsv([
     [`# 概算見積 ${title}`], ['区分', '図面の項目', '品目', '数量', '単位', '単価', '金額', '備考'],
     ...e.lines.map(l => [l.group, l.label, l.name, l.qty, l.unit, l.price, l.amount, [l.prov && '仮単価', l.auto && '自動判定を含む', l.byArea && '長さ×高さ', l.edited && '手直し'].filter(Boolean).join(' ')]),
     [], ['', '', '小計', '', '', '', e.subtotal], ['', '', `諸経費（${e.overheadPct}%）`, '', '', '', e.overhead],
