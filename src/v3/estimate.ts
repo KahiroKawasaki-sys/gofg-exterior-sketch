@@ -3,7 +3,8 @@
 import { type DocEstimate, type EstExtra } from './types';
 import { type QtyRow } from './quantities';
 
-export type PriceItem = { id: string; cat: string; name: string; unit: string; price: number; cost?: number; prov?: boolean };
+// maker・model・color・img は仕様書（マテリアルボード）に載せる情報。img は端末で縮めた写真の data URL
+export type PriceItem = { id: string; cat: string; name: string; unit: string; price: number; cost?: number; prov?: boolean; maker?: string; model?: string; color?: string; img?: string };
 // links：集計の行（mat:芝 / line:fence / obj:オリーブ / cat:植栽）→ 単価表の品目id（複数可：下地＋仕上げなど）
 // company：見積書に載せる会社名
 export type PriceBook = { name: string; items: PriceItem[]; links: Record<string, string[]>; overheadPct: number; taxPct: number; updatedAt?: string; company?: string };
@@ -109,10 +110,15 @@ export const isProvisional = (b: PriceBook) => b.items.every(i => i.prov);
 // 表（1行目付近に見出し）から品目を取り出す。見出しは「分類・品目・単位・単価・原価」か item_master.csv の英字
 export function parsePriceTable(table: string[][]): PriceItem[] {
   const find = (row: string[], re: RegExp) => row.findIndex(c => re.test((c || '').trim()));
-  let h = -1, col = { cat: -1, name: -1, unit: -1, price: -1, cost: -1 };
+  let h = -1, col = { cat: -1, name: -1, unit: -1, price: -1, cost: -1, maker: -1, model: -1, color: -1 };
   for (let r = 0; r < Math.min(table.length, 15); r++) {
     const row = table[r], name = find(row, /^(item|品目|品名|名称|項目|商品名)$/i), price = find(row, /^(unit_price|単価|price|販売単価|金額単価)$/i);
-    if (name >= 0 && price >= 0) { h = r; col = { name, price, cat: find(row, /^(category|分類|区分|工事|工種|カテゴリ)$/i), unit: find(row, /^(unit|単位)$/i), cost: find(row, /^(cost|原価|仕入)$/i) }; break; }
+    if (name >= 0 && price >= 0) {
+      h = r;
+      col = { name, price, cat: find(row, /^(category|分類|区分|工事|工種|カテゴリ)$/i), unit: find(row, /^(unit|単位)$/i), cost: find(row, /^(cost|原価|仕入)$/i),
+        maker: find(row, /^(maker|メーカー|メーカー名)$/i), model: find(row, /^(model|品番|型番)$/i), color: find(row, /^(color|色|カラー|色・柄)$/i) };
+      break;
+    }
   }
   if (h < 0) throw Error('見出し（品目・単価）が見つかりません');
   const num = (s: string | undefined) => { const v = parseFloat((s || '').normalize('NFKC').replace(/[,¥円\s]/g, '')); return isFinite(v) ? v : NaN; };
@@ -124,8 +130,9 @@ export function parsePriceTable(table: string[][]): PriceItem[] {
     const id = 'i-' + cat + '/' + name + '/' + unit;
     if (seen.has(id)) continue; // 同じ品目が別の分類にも載っていることがある
     seen.add(id);
-    const cost = num(row[col.cost]);
-    out.push({ id, cat, name, unit, price, ...(cost > 0 && { cost }) });
+    const cost = num(row[col.cost]), opt = (c: number) => (c >= 0 && (row[c] || '').trim()) || undefined;
+    const maker = opt(col.maker), model = opt(col.model), color = opt(col.color);
+    out.push({ id, cat, name, unit, price, ...(cost > 0 && { cost }), ...(maker && { maker }), ...(model && { model }), ...(color && { color }) });
   }
   if (!out.length) throw Error('単価の入った品目がありません');
   return out;
@@ -169,7 +176,13 @@ export function importItems(old: PriceBook, imported: PriceItem[], name: string)
     const provs = prev.filter(i => i.prov);
     if (provs.length) { provs.forEach(i => keep.set(i.id, i)); links[key] = provs.map(i => i.id); kept++; }
   }
-  return { book: { ...old, name, items: [...imported, ...keep.values()], links, updatedAt: new Date().toISOString() }, matched, kept };
+  // 前の単価表で登録した写真・メーカー・品番・色は、同じ品目なら引き継ぐ（表に書いてあれば表を優先）
+  const prevByName = new Map(old.items.filter(i => !i.prov).map(i => [i.cat + '/' + i.name, i]));
+  const items = imported.map(i => {
+    const p = prevByName.get(i.cat + '/' + i.name); if (!p) return i;
+    return { ...i, maker: i.maker ?? p.maker, model: i.model ?? p.model, color: i.color ?? p.color, img: i.img ?? p.img };
+  }).map(i => Object.fromEntries(Object.entries(i).filter(([, v]) => v !== undefined)) as PriceItem);
+  return { book: { ...old, name, items: [...items, ...keep.values()], links, updatedAt: new Date().toISOString() }, matched, kept };
 }
 
 // ---- CSV ----
@@ -190,7 +203,7 @@ export function parseCsv(text: string): string[][] {
 const csvCell = (s: string) => /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 const csv = (rows: (string | number)[][]) => '﻿' + rows.map(r => r.map(v => csvCell(String(v))).join(',')).join('\r\n') + '\r\n';
 
-export const priceBookCsv = (b: PriceBook) => csv([['分類', '品目', '単位', '単価', '原価'], ...b.items.map(i => [i.cat, i.name, i.unit, i.price, i.cost ?? ''])]);
+export const priceBookCsv = (b: PriceBook) => csv([['分類', '品目', '単位', '単価', '原価', 'メーカー', '品番', '色'], ...b.items.map(i => [i.cat, i.name, i.unit, i.price, i.cost ?? '', i.maker ?? '', i.model ?? '', i.color ?? ''])]);
 
 export function estimateCsv(e: Estimate, title: string): string {
   return csv([

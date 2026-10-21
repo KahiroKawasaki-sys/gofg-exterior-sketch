@@ -27,6 +27,7 @@ import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, ty
 import { GUIDE_FULL } from './guideFull';
 import { ROLE_LABELS, canRaise } from './scene3d';
 import { QtyPanel } from './QtyPanel';
+import { type BoardCard } from './materialBoard';
 import { MeetingPanel } from './MeetingPanel';
 import { quantities, quantitiesCsv, textureAreas, type QtyRow } from './quantities';
 import { buildEstimate, defaultBook, estimateCsv, importItems, parseCsv, parsePriceTable, priceBookCsv, type Estimate, type PriceBook } from './estimate';
@@ -253,6 +254,16 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         toast(r === 'cancelled' ? '保存をキャンセルしました' : '見積書PDFを保存しました');
       } catch (err) { toast('見積書を作れませんでした：' + (err as Error).message); }
     },
+    onBoardPdf: async (cards: BoardCard[]) => {
+      try {
+        toast('仕様書を作っています…');
+        const [B, P] = await Promise.all([import('./boardPdf'), import('./estimatePdf')]);
+        const pages = B.drawBoardPages(cards, { client: doc.name, company: book.company || '', date: new Date() }, await B.loadBoardPics(cards, lib));
+        const r = await saveFile(await P.estimatePdf(pages), `${safeName(doc.name)}_仕様書.pdf`);
+        toast(r === 'cancelled' ? '保存をキャンセルしました' : '仕様書PDFを保存しました');
+      } catch (err) { toast('仕様書を作れませんでした：' + (err as Error).message); }
+    },
+    onToast: toast,
     onEst: (est: DocEstimate) => D.set(d => ({ ...d, est }), '見積を調整'),
     onEstCsv: (e: Estimate) => csvOut(estimateCsv(e, doc.name), `${safeName(doc.name)}_概算見積.csv`, '見積をCSVで保存しました'),
     onExportBook: () => csvOut(priceBookCsv(book), `単価表_${safeName(book.name)}.csv`, '単価表をCSVで保存しました'),

@@ -40,27 +40,27 @@ export function paginate(lines: EstLine[], perPage: number): Row[][] {
   return pages.length ? pages : [[]];
 }
 
-const W = 1240, H = 1754, MM = W / 210; // A4縦、1mm ≒ 5.9px
+export const W = 1240, H = 1754, MM = W / 210; // A4縦、1mm ≒ 5.9px
 const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo","Noto Sans JP","Noto Sans CJK JP","IPAGothic",sans-serif';
 const yen = (n: number) => '¥' + Math.round(n).toLocaleString('ja-JP');
 const num = (n: number) => n.toLocaleString('ja-JP', { maximumFractionDigits: 1 });
 export const honorific = (name: string) => /(様|御中|殿)$/.test(name.trim()) ? name.trim() : name.trim() + ' 様';
 export const jpDate = (d: Date) => `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
 
-function page(): [HTMLCanvasElement, CanvasRenderingContext2D] {
+export function page(): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d')!; g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.fillStyle = '#222'; g.textBaseline = 'alphabetic';
   return [c, g];
 }
-const font = (g: CanvasRenderingContext2D, px: number, bold = false) => { g.font = `${bold ? 700 : 400} ${px}px ${FONT}`; };
-function fit(g: CanvasRenderingContext2D, s: string, w: number) {
+export const font = (g: CanvasRenderingContext2D, px: number, bold = false) => { g.font = `${bold ? 700 : 400} ${px}px ${FONT}`; };
+export function fit(g: CanvasRenderingContext2D, s: string, w: number) {
   if (g.measureText(s).width <= w) return s;
   let t = s; while (t.length > 1 && g.measureText(t + '…').width > w) t = t.slice(0, -1);
   return t + '…';
 }
-const text = (g: CanvasRenderingContext2D, s: string, x: number, y: number, align: CanvasTextAlign = 'left', w?: number) => { g.textAlign = align; g.fillText(w ? fit(g, s, w) : s, x, y); };
-const hline = (g: CanvasRenderingContext2D, x1: number, x2: number, y: number, lw = 1, color = '#bbb') => { g.strokeStyle = color; g.lineWidth = lw; g.beginPath(); g.moveTo(x1, y); g.lineTo(x2, y); g.stroke(); };
-function footer(g: CanvasRenderingContext2D, n: number, total: number) { font(g, 11 * MM / 4); g.fillStyle = '#888'; text(g, `${n} / ${total}`, W / 2, H - 10 * MM, 'center'); g.fillStyle = '#222'; }
+export const text = (g: CanvasRenderingContext2D, s: string, x: number, y: number, align: CanvasTextAlign = 'left', w?: number) => { g.textAlign = align; g.fillText(w ? fit(g, s, w) : s, x, y); };
+export const hline = (g: CanvasRenderingContext2D, x1: number, x2: number, y: number, lw = 1, color = '#bbb') => { g.strokeStyle = color; g.lineWidth = lw; g.beginPath(); g.moveTo(x1, y); g.lineTo(x2, y); g.stroke(); };
+export function footer(g: CanvasRenderingContext2D, n: number, total: number) { font(g, 11 * MM / 4); g.fillStyle = '#888'; text(g, `${n} / ${total}`, W / 2, H - 10 * MM, 'center'); g.fillStyle = '#222'; }
 
 export type PdfInfo = { client: string; company: string; date: Date; subject?: string; note?: string };
 

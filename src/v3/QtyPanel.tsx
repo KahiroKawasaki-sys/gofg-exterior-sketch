@@ -6,17 +6,20 @@ import { quantities, textureAreas, type QtyRow, type QtyGroup } from './quantiti
 import { ROLE_LABELS } from './scene3d';
 import { buildEstimate, type Estimate, type PriceBook } from './estimate';
 import { EstView } from './EstView';
+import { BoardView } from './BoardView';
+import { boardCards, type BoardCard } from './materialBoard';
 
 export type EstProps = {
   book: PriceBook; onBook: (b: PriceBook) => void; onEst: (est: DocEstimate) => void; onEstCsv: (e: Estimate) => void; onImport: (f: File) => void; onExportBook: () => void;
   others: { id: string; name: string }[]; onCompare: (id: string) => Promise<Estimate>; onPdf: (e: Estimate, cmp?: { name: string; e: Estimate }) => void; onDuplicate: () => void;
+  onBoardPdf: (cards: BoardCard[]) => void; onToast?: (m: string) => void;
 };
 
 export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet, estp, tab: tab0 = 'qty' }: {
   doc: Doc; lib: LibItem[]; onPick: (ids: string[]) => void; onSetRole: (ids: string[], role: Role3) => void;
-  onCsv: (rows: QtyRow[]) => void; onClose: () => void; sheet?: boolean; estp?: EstProps; tab?: 'qty' | 'est';
+  onCsv: (rows: QtyRow[]) => void; onClose: () => void; sheet?: boolean; estp?: EstProps; tab?: 'qty' | 'est' | 'board';
 }) {
-  const [tab, setTab] = useState<'qty' | 'est'>(tab0);
+  const [tab, setTab] = useState<'qty' | 'est' | 'board'>(tab0);
   const [areas, setAreas] = useState<Map<string, number> | null>(null);
   // 塗りの面積は画像を読むので、描き終わって少ししてから数え直す
   useEffect(() => {
@@ -34,6 +37,7 @@ export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet, e
         {estp ? <div className="v3-seg" role="tablist">
           <button role="tab" aria-selected={tab === 'qty'} className={tab === 'qty' ? 'on' : ''} onClick={() => setTab('qty')}>数量</button>
           <button role="tab" aria-selected={tab === 'est'} className={tab === 'est' ? 'on' : ''} onClick={() => setTab('est')}>概算見積</button>
+          <button role="tab" aria-selected={tab === 'board'} className={tab === 'board' ? 'on' : ''} onClick={() => setTab('board')}>仕様書</button>
         </div> : <b>集計</b>}
         <span className="sp" />
         {tab === 'qty' && <button className="v3-btn" onClick={() => onCsv(rows)} disabled={!rows.length}><FileSpreadsheet size={14} />CSV</button>}
@@ -44,6 +48,10 @@ export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet, e
         return <EstView e={e} book={estp.book} est={doc.est || {}} onBook={estp.onBook} onEst={estp.onEst} onPick={onPick}
           onCsv={() => estp.onEstCsv(e)} onImport={estp.onImport} onExportBook={estp.onExportBook}
           others={estp.others} onCompare={estp.onCompare} onPdf={cmp => estp.onPdf(e, cmp)} onDuplicate={estp.onDuplicate} />;
+      })()}
+      {tab === 'board' && estp && (() => {
+        const cards = boardCards(rows, estp.book, doc, lib);
+        return <BoardView cards={cards} book={estp.book} lib={lib} onBook={estp.onBook} onPick={onPick} onPdf={() => estp.onBoardPdf(cards)} onToast={estp.onToast} />;
       })()}
       {tab === 'qty' && <>
       {!rows.length && <p className="v3-note pad">まだ数えるものがありません。素材を塗る・部品を置く・実線を引くと、ここに数量が出ます。</p>}
