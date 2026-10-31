@@ -109,6 +109,10 @@ export function buildDxf(doc: Doc, lib: LibItem[], contours: Map<string, Loop[]>
   w.g(0, 'LTYPE'); w.g(2, 'CONTINUOUS'); w.g(70, '0'); w.g(3, 'Solid line'); w.g(72, '65'); w.g(73, '0'); w.g(40, 0);
   w.g(0, 'LTYPE'); w.g(2, 'DASHED'); w.g(70, '0'); w.g(3, '__ __ __'); w.g(72, '65'); w.g(73, '2'); w.g(40, 300); w.g(49, 200); w.g(49, -100);
   w.g(0, 'ENDTAB');
+  // 文字スタイル：フォントファイルを書いておかないと、RIKCAD（Archicad）が txt.shx を探すダイアログを出す
+  w.g(0, 'TABLE'); w.g(2, 'STYLE'); w.g(70, '1');
+  w.g(0, 'STYLE'); w.g(2, 'STANDARD'); w.g(70, '0'); w.g(40, 0); w.g(41, 1); w.g(50, 0); w.g(71, '0'); w.g(42, 2.5); w.g(3, 'meiryo.ttc'); w.g(4, '');
+  w.g(0, 'ENDTAB');
   const layers = [...DXF_LAYERS, ...mats.map(name => ({ name, color: 2, ltype: undefined }))];
   w.g(0, 'TABLE'); w.g(2, 'LAYER'); w.g(70, String(layers.length + 1));
   w.g(0, 'LAYER'); w.g(2, '0'); w.g(70, '0'); w.g(62, '7'); w.g(6, 'CONTINUOUS');

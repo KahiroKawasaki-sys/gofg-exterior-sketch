@@ -15,6 +15,7 @@ const entities = (s: string, type: string) => pairs(s).filter(([c, v]) => c === 
 it('R12形式で、区切り・終わりがそろっている', () => {
   const s = buildDxf(sampleDoc(), lib);
   expect(s).toContain('AC1009'); expect(s).toContain('ANSI_932');
+  expect(s).toContain('meiryo.ttc'); // 文字スタイルのフォント（RIKCADで txt.shx の問い合わせが出ないように）
   const p = pairs(s);
   expect(p.filter(([c, v]) => c === '0' && v === 'SECTION').length).toBe(p.filter(([c, v]) => c === '0' && v === 'ENDSEC').length);
   expect(p[p.length - 1]).toEqual(['0', 'EOF']);
