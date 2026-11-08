@@ -1,6 +1,6 @@
 // 平面図 → 3Dの立体リスト。描画ライブラリに依存しない純粋な変換（テストしやすくするため）。
 // 座標は m。図面の x → x、図面の y（下向き）→ z。高さは y（上向き）。
-import { type Doc, type Item, type LibItem, type Pt, type Role3, type Mat3, type ElevFace, type Elevation, corners, segDist } from './types';
+import { type Doc, type Item, type LibItem, type Pt, type Role3, type Mat3, type ElevFace, type Elevation, type ShapeItem, corners, segDist, uid } from './types';
 import { buildingHeight } from './elevation';
 
 export type P2 = { x: number; z: number };
@@ -197,4 +197,35 @@ export function itemOutline(doc: Doc, id: string): P2[] | null {
   const k = doc.mmPerPx / 1000;
   for (const l of doc.layers) for (const it of l.items) if (it.id === id && canRaise(it)) return outline(it, p => ({ x: p.x * k, z: p.y * k })).pts;
   return null;
+}
+
+// 図面に「建物」があるか（種類を建物にした線・囲み、または自動で建物になる大きな囲み）
+export function hasBuilding(doc: Doc): boolean {
+  return doc.layers.some(l => l.items.some(it => canRaise(it) && resolveRole(it, doc.mmPerPx) === 'building'));
+}
+
+// 立面図から建物の幅（東西）と奥行き（南北）を出す（m）。南北面の壁の幅＝東西の長さ、東西面の壁の幅＝南北の長さ
+export function footprintFromElevations(elev: Partial<Record<ElevFace, Elevation>>): { w: number; d: number } | null {
+  const wallM = (e?: Elevation) => e ? ((e.wallU ? e.wallU[1] - e.wallU[0] : 1) * e.w * e.mmPerPx) / 1000 : undefined;
+  const w = wallM(elev.S) ?? wallM(elev.N), d = wallM(elev.E) ?? wallM(elev.W);
+  if (!w && !d) return null;
+  return { w: w ?? d!, d: d ?? w! };
+}
+
+// 立面図を図面に入れる。建物の囲みがまだ無ければ、立面図から読んだ大きさの四角を中央（下絵の中心）に置いて建物にする
+export function withElevations(doc: Doc, elev: Partial<Record<ElevFace, Elevation>>, center: Pt, rectId = uid()): Doc {
+  const next: Doc = { ...doc, elevations: elev, elevScale: doc.elevScale ?? 1 };
+  if (hasBuilding(doc)) return next;
+  const fp = footprintFromElevations(elev);
+  if (!fp) return next;
+  const k = 1000 / doc.mmPerPx, w = fp.w * k, h = fp.d * k;
+  const c = doc.underlay ? { x: doc.underlay.x + doc.underlay.w / 2, y: doc.underlay.y + doc.underlay.h / 2 } : center;
+  const rect: ShapeItem = { id: rectId, type: 'shape', shape: 'rect', color: '#2f3b38', width: 3, dash: 'solid', x: c.x - w / 2, y: c.y - h / 2, w, h, rot: 0, role3: 'building' };
+  const target = doc.layers.find(l => l.id === doc.activeLayer && l.kind === 'draw') || doc.layers.find(l => l.kind === 'draw') || doc.layers[0];
+  return { ...next, layers: next.layers.map(l => l.id === target.id ? { ...l, items: [...l.items, rect] } : l) };
+}
+
+// 自動で置いた建物の四角を、配置図で見つけた位置・向きに動かす
+export function placeBuilding(doc: Doc, rectId: string, at: { x: number; y: number; w: number; h: number }): Doc {
+  return { ...doc, layers: doc.layers.map(l => ({ ...l, items: l.items.map(it => it.id === rectId && it.type === 'shape' ? { ...it, x: at.x, y: at.y, w: at.w, h: at.h } : it) })) };
 }

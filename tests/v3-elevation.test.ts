@@ -1,5 +1,5 @@
 import { it, expect } from 'vitest';
-import { edgeFace, isClockwise, faceU, polyBBox, buildingHeight, quadrants, darkBounds, wallTopRatio, whiteToAlpha, guessPaper, mmPerPxFromPaper } from '../src/v3/elevation';
+import { edgeFace, isClockwise, faceU, faceAxis, polyBBox, buildingHeight, roofFace, quadrants, darkBounds, wallTopRatio, whiteToAlpha, guessPaper, mmPerPxFromPaper, findBody, simplifyRoof, eraseLevelLines, largestComponent } from '../src/v3/elevation';
 
 const img = (w: number, h: number, paint: (x: number, y: number) => number | null): ImageData => {
   const data = new Uint8ClampedArray(w * h * 4);
@@ -17,12 +17,13 @@ it('建物の辺を外向きの法線で東西南北に振り分ける（時計�
   expect(ccw.map((a, i) => edgeFace(a, ccw[(i + 1) % 4], false))).toEqual(['S', 'E', 'N', 'W']);
 });
 
-it('立面図の横位置：北面は左が東、南面は左が西、東面は左が北、西面は左が南', () => {
+it('立面図の横位置：北から見ると左が東、南からは左が西、東からは左が南、西からは左が北', () => {
   const bb = polyBBox([{ x: 0, z: 0 }, { x: 10, z: 8 }]);
   expect(faceU('N', { x: 10, z: 0 }, bb)).toBe(0); expect(faceU('N', { x: 0, z: 0 }, bb)).toBe(1);
   expect(faceU('S', { x: 0, z: 8 }, bb)).toBe(0); expect(faceU('S', { x: 10, z: 8 }, bb)).toBe(1);
-  expect(faceU('E', { x: 10, z: 0 }, bb)).toBe(0); expect(faceU('E', { x: 10, z: 8 }, bb)).toBe(1);
-  expect(faceU('W', { x: 0, z: 8 }, bb)).toBe(0); expect(faceU('W', { x: 0, z: 0 }, bb)).toBe(1);
+  expect(faceU('E', { x: 10, z: 8 }, bb)).toBe(0); expect(faceU('E', { x: 10, z: 0 }, bb)).toBe(1);
+  expect(faceU('W', { x: 0, z: 0 }, bb)).toBe(0); expect(faceU('W', { x: 0, z: 8 }, bb)).toBe(1);
+  for (const f of ['N', 'S', 'E', 'W'] as const) for (const u of [0, 0.3, 1]) { const v = faceAxis(f, u, bb); const p = f === 'N' || f === 'S' ? { x: v, z: 0 } : { x: 0, z: v }; expect(faceU(f, p, bb)).toBeCloseTo(u); }
 });
 
 it('建物の高さは一番高い立面図から。壁の上端は屋根の下', () => {
@@ -58,4 +59,47 @@ it('用紙の見当と 1px あたりの実寸', () => {
   expect(guessPaper(842, 1191).name).toBe('A3縦');
   // A3横 420mm を 3072px に描いた 1/100 → 1px = 13.67mm
   expect(mmPerPxFromPaper(420, 3072, 100)).toBeCloseTo(13.67, 2);
+});
+
+it('建物の本体を見つける：地面の線で幅、上端の輪郭で屋根。左の寸法線と下の表題は外れる', () => {
+  const W = 400, H = 300;
+  // 家：壁 x 100..300、地面 y=220、軒 y=140、棟 y=80（三角屋根は 90..310 に軒の出）
+  // 寸法線：x=30 に縦線（y 60..230）と y=80 の引き出し線（x 30..100）、表題：y=260 の短い線
+  const d = img(W, H, (x, y) => {
+    const wall = (x === 100 || x === 300) && y >= 128 && y <= 220; // 壁は屋根の線につながる
+    const groundLine = y === 220 && x >= 95 && x <= 305;
+    const roofL = x >= 90 && x <= 200 && Math.abs(y - (140 - (x - 90) * 60 / 110)) < 1.2;
+    const roofR = x > 200 && x <= 310 && Math.abs(y - (80 + (x - 200) * 60 / 110)) < 1.2;
+    const dimV = x === 30 && y >= 60 && y <= 230, dimH = y === 80 && x >= 30 && x <= 100;
+    const level = y === 140 && x >= 20 && x <= 380; // ▽軒高のレベル線（全幅）
+    const title = y === 260 && x >= 150 && x <= 250, box = y === 262 && x >= 150 && x <= 250;
+    return wall || groundLine || roofL || roofR || dimV || dimH || title || box || level ? 30 : null;
+  });
+  whiteToAlpha(d);
+  const b = findBody(d)!;
+  expect(b).not.toBeNull();
+  expect(b.ground).toBe(220);
+  expect(b.rect.x).toBeGreaterThanOrEqual(85); expect(b.rect.x).toBeLessThanOrEqual(101); // 軒の出〜壁まで。寸法線 x=30 は入らない
+  expect(b.rect.x + b.rect.w).toBeLessThanOrEqual(316);
+  expect(b.rect.y).toBeLessThanOrEqual(80); expect(b.rect.y + b.rect.h).toBeLessThan(255); // 表題は入らない
+  // 壁の横範囲（基礎 95..305）
+  expect(b.wallU[0]).toBeCloseTo((95 - b.rect.x) / b.rect.w, 1); expect(b.wallU[1]).toBeCloseTo((305 - b.rect.x) / b.rect.w, 1);
+  // 軒は上から約 (140-y0)/h、棟は頂点
+  expect(b.eaves).toBeGreaterThan(0.3); expect(b.eaves).toBeLessThan(0.5);
+  const ys = b.roof.map(p => p.y); expect(Math.max(...ys)).toBeGreaterThan(0.9); expect(b.roof.length).toBeLessThanOrEqual(12);
+  expect(roofFace({ E: { src: '', w: 1, h: 1, mmPerPx: 1, roof: b.roof }, S: { src: '', w: 1, h: 1, mmPerPx: 1, roof: [{ x: 0, y: 0.6 }, { x: 1, y: 0.6 }] } })).toBe('E');
+  expect(simplifyRoof([{ x: 0, y: 0 }, { x: 0.5, y: 0.001 }, { x: 1, y: 0 }], 0.01)).toHaveLength(2);
+  // 何も描かれていない絵は null
+  const blank = img(100, 100, () => null); whiteToAlpha(blank); expect(findBody(blank)).toBeNull();
+});
+
+it('レベル線（細くて長い横線）は消え、壁と交わる所は残る。いちばん大きな塊が選ばれる', () => {
+  const W = 200, H = 100;
+  const d = img(W, H, (x, y) => (y === 50 && x >= 5 && x <= 195) || (x === 100 && y >= 30 && y <= 70) || (x >= 20 && x <= 24 && y >= 20 && y <= 24) ? 30 : null);
+  whiteToAlpha(d);
+  const mask = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) if (d.data[i * 4 + 3] > 40) mask[i] = 1;
+  eraseLevelLines(mask, W, H);
+  expect(mask[50 * W + 10]).toBe(0); expect(mask[50 * W + 100]).toBe(1); expect(mask[40 * W + 100]).toBe(1);
+  const c = largestComponent(mask, W, H)!;
+  expect(c.count).toBe(41); expect(c.pick[40 * W + 100]).toBe(1); expect(c.pick[22 * W + 22]).toBe(0);
 });

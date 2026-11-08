@@ -5,7 +5,8 @@ import { listDocs, loadDoc, saveDoc, deleteDoc, validDoc, type DocMeta } from '.
 import { sampleDoc } from './useDoc';
 import { syncNow, onCloudState, markDeleted, schedulePush, clearForkNotice, type CloudState } from './cloudSync';
 import { Editor } from './Editor';
-import { readSource } from '../io';
+import { readSource } from './source';
+import { underlayWidthPx } from './elevLabels';
 
 export default function App3() {
   const [docs, setDocs] = useState<DocMeta[]>([]);
@@ -30,8 +31,10 @@ export default function App3() {
   const fromFile = async (f?: File) => {
     if (!f) return;
     try {
-      const src = await readSource(f), im = await src.render(1); await src.close();
-      const d = newDoc(f.name.replace(/\.[^.]+$/, '')), w = 1200, h = 1200 * im.height / im.width;
+      const src = await readSource(f), im = await src.render(1), text = await src.text?.(1).catch(() => undefined); await src.close();
+      const d = newDoc(f.name.replace(/\.[^.]+$/, ''));
+      // PDF に「S=1/150」などの縮尺があれば、用紙サイズから実寸に合わせる（無ければ 1200px。あとで2点で合わせる）
+      const { w } = underlayWidthPx(im.width, im.height, text, d.mmPerPx), h = w * im.height / im.width;
       await start({ ...d, underlay: { src: im.src, name: f.name, x: 0, y: 0, w, h, opacity: 0.6, visible: true, locked: true } });
     } catch (e) { setErr(e instanceof Error ? e.message : '読み込めませんでした'); }
   };

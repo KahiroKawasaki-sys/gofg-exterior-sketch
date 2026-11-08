@@ -19,7 +19,7 @@ import { Selection, contentBox, fillAt, exportImage, exportPDF, thumbnail } from
 import { saveDoc, listLibrary, saveLibItem, deleteLibItem, validDoc, getMeta, setMeta, listDocs, loadDoc } from './store';
 import { LayerPanel, ObjectPanel, GuidePanel, PaintPanel, HistoryPanel, guideDefaults, type EditorApi } from './Panels';
 import { TextDialog, PromptDialog, Menu, type Field, type TextValue } from './Dialogs';
-import { readSource } from '../io';
+import { readSource } from './source';
 import { isNativeApp, saveFile } from './platform';
 import { PRO } from './edition';
 import { schedulePush } from './cloudSync';
@@ -29,6 +29,10 @@ import { ROLE_LABELS, canRaise } from './scene3d';
 import { QtyPanel } from './QtyPanel';
 import { type BoardCard } from './materialBoard';
 import { MeetingPanel } from './MeetingPanel';
+import { ElevationDialog } from './ElevationDialog';
+import { withElevations, hasBuilding, footprintFromElevations, placeBuilding } from './scene3d';
+import { findFootprintOnUnderlay } from './footprint';
+import { type TextItem as ElevText, underlayWidthPx } from './elevLabels';
 import { quantities, quantitiesCsv, textureAreas, type QtyRow } from './quantities';
 import { buildEstimate, defaultBook, estimateCsv, importItems, parseCsv, parsePriceTable, priceBookCsv, type Estimate, type PriceBook } from './estimate';
 
@@ -73,7 +77,14 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const [textDlg, setTextDlg] = useState<{ p: Pt; edit?: TextItem } | null>(null);
   const [prompt, setPrompt] = useState<{ title: string; fields: Field[]; note?: string; ok: string; run: (v: Record<string, string | number | boolean>) => void } | null>(null);
   const [saved, setSaved] = useState<'saved' | 'saving' | 'error'>('saved');
-  const stageRef = useRef<HTMLDivElement>(null), fileRef = useRef<HTMLInputElement>(null), imgRef = useRef<HTMLInputElement>(null), camRef = useRef<HTMLInputElement>(null), jsonRef = useRef<HTMLInputElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null), fileRef = useRef<HTMLInputElement>(null), imgRef = useRef<HTMLInputElement>(null), camRef = useRef<HTMLInputElement>(null), jsonRef = useRef<HTMLInputElement>(null), elevRef = useRef<HTMLInputElement>(null);
+  // 立面図（Pro）：読み込んだ用紙の絵。枠を合わせて3Dの建物に貼る
+  const [elevSheet, setElevSheet] = useState<{ src: string; width: number; height: number; text?: ElevText[] } | null>(null);
+  const onElevFile = async (f: File | undefined) => {
+    if (!f) return;
+    try { const src = await readSource(f); try { const im = await src.render(1); const text = await src.text?.(1).catch(() => undefined); setElevSheet({ ...im, text }); } finally { await src.close(); } }
+    catch (e) { toast((e as Error).message || '立面図を読めませんでした'); }
+  };
   const ctx = useMemo(() => ({ mmPerPx: doc.mmPerPx, unit: opts.unit }), [doc.mmPerPx, opts.unit]);
   const toastTimer = useRef<number>(0);
   const toast = useCallback((m: string) => { setToastMsg(m); clearTimeout(toastTimer.current); toastTimer.current = window.setTimeout(() => setToastMsg(null), 2600); }, []);
@@ -86,6 +97,14 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   useEffect(() => { setHintOn(true); if (tool === 'place' || tool === 'aiFill' || (step === 'parts' && tool === 'select')) return; const t = setTimeout(() => setHintOn(false), 4000); return () => clearTimeout(t); }, [tool, step]);
   // 初回は図面全体が入るように表示
   useEffect(() => { if (!initial.view) requestAnimationFrame(() => fit()); }, []);
+  // 下絵から始めた直後（線がまだ無い）は、立面図も読み込むか一度だけ聞く（Pro）。読み込むと家が3Dで立つ
+  useEffect(() => {
+    if (!PRO || !initial.underlay || initial.elevations || initial.layers.some(l => l.items.length) || tour) return;
+    const key = 'gofg-elev-asked-' + initial.id;
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch { /* 保存できなくても聞く */ }
+    const t = setTimeout(() => setPrompt({ title: '立面図はありますか？', fields: [], note: '東・西・南・北の立面図（PDF）を読み込むと、家が3Dで立ち上がります。あとから「設定」や3D画面の「立面図を読み込む」でもできます。', ok: '立面図を読み込む', run: () => { setPrompt(null); elevRef.current?.click(); } }), 600);
+    return () => clearTimeout(t);
+  }, [tour]);
 
   // 自動保存（端末）
   const docRef = useRef(doc); docRef.current = doc;
@@ -174,10 +193,12 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     try {
       const src = await readSource(f);
       const run = async (page: number) => {
-        const im = await src.render(page); await src.close();
-        const c = viewCenter(), w = 1200, h = 1200 * im.height / im.width;
+        const im = await src.render(page), text = await src.text?.(page).catch(() => undefined); await src.close();
+        const c = viewCenter(), size = underlayWidthPx(im.width, im.height, text, doc.mmPerPx), w = size.w, h = w * im.height / im.width;
         D.set(d => ({ ...d, underlay: { src: im.src, name: f.name, x: c.x - w / 2, y: c.y - h / 2, w, h, opacity: 0.6, visible: true, locked: true } }), '下絵を読み込み');
-        toast('下絵を読み込みました。設定の「縮尺合わせ」で実寸に合わせられます');
+        toast(size.denom ? `下絵を読み込み、図面の縮尺 1/${size.denom}（${size.paper}）で実寸に合わせました` : '下絵を読み込みました。設定の「縮尺合わせ」で実寸に合わせられます');
+        // Pro：立面図もあれば続けて読み込むと、3Dで家が立つ
+        if (PRO && !doc.elevations) setPrompt({ title: '立面図はありますか？', fields: [], note: '東・西・南・北の立面図（PDF）を読み込むと、家が3Dで立ち上がります。あとから3D画面の「立面図を読み込む」でもできます。', ok: '立面図を読み込む', run: () => { setPrompt(null); elevRef.current?.click(); } });
       };
       if (src.pages > 1) setPrompt({ title: 'ページを選ぶ', fields: [{ key: 'page', label: `ページ（1〜${src.pages}）`, type: 'number', value: 1 }], ok: '読み込む', run: v => { setPrompt(null); run(Math.min(src.pages, Math.max(1, Math.round(+v.page || 1)))); } });
       else await run(1);
@@ -370,6 +391,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       <input ref={imgRef} type="file" hidden accept="image/*" onChange={e => { onImageFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={camRef} type="file" hidden accept="image/*" capture="environment" onChange={e => { onImageFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={jsonRef} type="file" hidden accept="application/json,.json" onChange={e => { importJson(e.target.files?.[0]); e.target.value = ''; }} />
+      <input ref={elevRef} type="file" hidden accept="application/pdf,image/png,image/jpeg,image/webp" onChange={e => { onElevFile(e.target.files?.[0]); e.target.value = ''; }} />
 
       {simple ? <SimpleTop name={doc.name} saved={saved} canUndo={D.canUndo} canRedo={D.canRedo} undo={D.undo} redo={D.redo} fit={fit} home={goHome} help={() => setHelp({ tab: 'simple' })} toFull={() => setUi('full')} meet={PRO ? () => setMeet('open') : undefined} view3d={PRO ? () => setShow3d(true) : undefined} /> : <header className="v3-top">
         {/* 1段目：描く道具と太さ・色 */}
@@ -511,6 +533,20 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
       {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}
       {prompt && <PromptDialog title={prompt.title} fields={prompt.fields} note={prompt.note} okLabel={prompt.ok} onOk={prompt.run} onCancel={() => { setPrompt(null); if (tool === 'calib') setTool('select'); }} />}
+      {PRO && elevSheet && <ElevationDialog sheet={elevSheet} onCancel={() => setElevSheet(null)}
+        onSave={e => {
+          setElevSheet(null);
+          const rectId = uid(), auto = !hasBuilding(doc), fp = footprintFromElevations(e), u = doc.underlay;
+          D.set(d => withElevations(d, e, viewCenter(), rectId), '立面図を取り込み');
+          setShow3d(true);
+          if (auto && fp && u) {
+            // 配置図の中で建物の四角が線に重なる場所を探して、そこへ動かす（見つからなければ中央のまま）
+            findFootprintOnUnderlay(u, fp.w, fp.d, doc.mmPerPx).then(at => {
+              if (at) { D.set(d => placeBuilding(d, rectId, at), '建物の位置合わせ'); toast(`立面図から ${fp.w.toFixed(1)}×${fp.d.toFixed(1)}m の建物を配置図の位置に置きました`); }
+              else toast(`立面図から ${fp.w.toFixed(1)}×${fp.d.toFixed(1)}m の建物を置きました。「動かす」で配置図の建物に重ねてください`);
+            }).catch(() => toast('立面図を3Dの建物に貼りました'));
+          } else toast(auto && fp ? `立面図から ${fp.w.toFixed(1)}×${fp.d.toFixed(1)}m の建物を置きました` : '立面図を3Dの建物に貼りました');
+        }} />}
     </div>
   );
 
@@ -529,7 +565,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
             <label className="v3-chk"><input type="checkbox" checked={u.visible} onChange={e => D.set(d => ({ ...d, underlay: { ...d.underlay!, visible: e.target.checked } }), '下絵の表示')} />表示</label>
             <label className="v3-chk"><input type="checkbox" checked={u.locked} onChange={e => D.set(d => ({ ...d, underlay: { ...d.underlay!, locked: e.target.checked } }), '下絵ロック')} />ロック（外すと選択ツールでドラッグ移動）</label>
             <div className="v3-slider"><span>濃さ</span><input type="range" min={5} max={100} value={Math.round(u.opacity * 100)} onChange={e => D.live(d => ({ ...d, underlay: { ...d.underlay!, opacity: +e.target.value / 100 } }))} onPointerUp={() => D.end('下絵の濃さ')} /><em>{Math.round(u.opacity * 100)}%</em></div>
-            <div className="v3-row wrap"><button className="v3-btn" onClick={() => { setTool('calib'); toast('長さが分かる2点を順に押してください'); }}>縮尺合わせ（2点）</button><button className="v3-btn danger" onClick={() => D.set(d => ({ ...d, underlay: undefined }), '下絵を削除')}>下絵を外す</button></div>
+            <div className="v3-row wrap"><button className="v3-btn" onClick={() => { setTool('calib'); toast('長さが分かる2点を順に押してください'); }}>縮尺合わせ（2点）</button>{PRO && <button className="v3-btn" onClick={() => elevRef.current?.click()}>{doc.elevations ? '立面図を読み込み直す' : '立面図を読み込む（3D）'}</button>}<button className="v3-btn danger" onClick={() => D.set(d => ({ ...d, underlay: undefined }), '下絵を削除')}>下絵を外す</button></div>
           </>}
         </section>
         <section className="v3-card"><h4>表示</h4>

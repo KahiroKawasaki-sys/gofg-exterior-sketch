@@ -7,12 +7,14 @@ import { X, Camera, RotateCcw, ImagePlus } from 'lucide-react';
 import { type Role3, type Mat3, type ElevFace, type Elevation } from './types';
 import { type Doc, type LibItem, rad } from './types';
 import { readSource } from './source';
-import { edgeFace, isClockwise, faceU, polyBBox } from './elevation';
+import { edgeFace, isClockwise, faceU, faceAxis, polyBBox, roofFace } from './elevation';
 import { wallMaterial, meshFenceMaterial, grassMaterial, skyTexture, elevationTexture, WALL_MATS, FENCE_MATS } from './materials3d';
 import { ElevationDialog } from './ElevationDialog';
 import { type RenderCtx } from './markup';
 import { contentBox, docSVG, rasterize } from './raster';
-import { buildScene, groundDoc, pickRaisable, canRaise, itemOutline, ROLE_LABELS, DEFAULT_SCENE_OPTS, type Solid, type SceneOpts, type P2 } from './scene3d';
+import { buildScene, groundDoc, pickRaisable, canRaise, itemOutline, withElevations, hasBuilding, footprintFromElevations, placeBuilding, ROLE_LABELS, DEFAULT_SCENE_OPTS, type Solid, type SceneOpts, type P2 } from './scene3d';
+import { findFootprintOnUnderlay } from './footprint';
+import { uid } from './types';
 import { saveFile } from './platform';
 
 type ViewKind = 'bird' | 'top' | 'eye';
@@ -187,8 +189,8 @@ function shade(hex: string, k: number): string {
   const c = new THREE.Color(hex); c.multiplyScalar(k); return '#' + c.getHexString();
 }
 
-// 立面図を建物の各辺に貼る。辺の向きで東西南北を決め、その面の絵を建物の全幅に合わせて貼る（L字でも破綻しにくい）
-// 屋根の部分は絵が透明なので、壁の上端の高さにフタをして中が見えないようにする
+// 立面図を建物に貼る：各辺を向きで東西南北に振り分け、その面の絵の「壁の範囲」を軒の高さまで貼る。
+// 屋根は妻側（軒と棟の差が大きい面）の輪郭を断面にして、建物の奥行きぶん押し出した立体にする（絵の屋根は使わない）
 function buildingWithElevations(g: THREE.Group, poly: P2[], h: number, faces: Partial<Record<ElevFace, Elevation>>, wallTop: number) {
   const cw = isClockwise(poly), bb = polyBBox(poly);
   const plain = mat('#f1efe9');
@@ -199,33 +201,64 @@ function buildingWithElevations(g: THREE.Group, poly: P2[], h: number, faces: Pa
     const face = edgeFace(a, b, cw), elev = faces[face];
     // 外向きの法線（画面座標で時計回りなら進行方向の右手側）
     const nx = (cw ? dz : -dz) / len, nz = (cw ? -dx : dx) / len;
-    const geo = new THREE.PlaneGeometry(len, h);
-    let material: THREE.Material;
-    if (elev) {
-      // 面の左右：外から見た絵の横位置 0..1 を辺の両端に合わせる
-      let u0 = faceU(face, a, bb), u1 = faceU(face, b, bb);
-      // 平面の local x は (nz, -nx)。辺の向きと逆なら左右を入れ替える
-      if (nz * dx - nx * dz < 0) [u0, u1] = [u1, u0];
-      const uv = geo.attributes.uv as THREE.BufferAttribute;
-      // PlaneGeometry の頂点順：左上・右上・左下・右下
-      uv.setXY(0, u0, 1); uv.setXY(1, u1, 1); uv.setXY(2, u0, 0); uv.setXY(3, u1, 0); uv.needsUpdate = true;
-      material = new THREE.MeshStandardMaterial({ map: elevationTexture(elev.src), transparent: true, alphaTest: 0.08, roughness: 0.9, side: THREE.DoubleSide });
-    } else material = plain;
-    const m = new THREE.Mesh(geo, material);
-    m.position.set((a.x + b.x) / 2 + nx * 0.005, h / 2, (a.z + b.z) / 2 + nz * 0.005);
-    m.rotation.y = Math.atan2(nx, nz);
-    g.add(m);
-    // 絵の無い所（屋根の上・窓）から中が見えないように、内側に白い壁
-    const inner = new THREE.Mesh(new THREE.PlaneGeometry(len, elev ? wallTop : h), plain);
-    inner.position.set((a.x + b.x) / 2 - nx * 0.02, (elev ? wallTop : h) / 2, (a.z + b.z) / 2 - nz * 0.02); inner.rotation.y = Math.atan2(nx, nz); g.add(inner);
+    const rot = Math.atan2(nx, nz), cx = (a.x + b.x) / 2, cz = (a.z + b.z) / 2;
+    // 壁の下地（白）
+    const base = new THREE.Mesh(new THREE.PlaneGeometry(len, wallTop), plain);
+    base.position.set(cx, wallTop / 2, cz); base.rotation.y = rot; g.add(base);
+    if (!elev) continue;
+    // 絵：壁の範囲（wallU）を辺の両端に、縦は地面から軒まで
+    const [ua, ub] = elev.wallU ?? [0, 1];
+    const vTop = 1 - (elev.wallTop ?? 0.3);
+    let u0 = ua + faceU(face, a, bb) * (ub - ua), u1 = ua + faceU(face, b, bb) * (ub - ua);
+    // 平面の local x は (nz, -nx)。辺の向きと逆なら左右を入れ替える
+    if (nz * dx - nx * dz < 0) [u0, u1] = [u1, u0];
+    const geo = new THREE.PlaneGeometry(len, wallTop);
+    const uv = geo.attributes.uv as THREE.BufferAttribute;
+    uv.setXY(0, u0, vTop); uv.setXY(1, u1, vTop); uv.setXY(2, u0, 0); uv.setXY(3, u1, 0); uv.needsUpdate = true;
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: elevationTexture(elev.src), transparent: true, alphaTest: 0.08, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -1 }));
+    m.position.set(cx + nx * 0.006, wallTop / 2, cz + nz * 0.006); m.rotation.y = rot; g.add(m);
   }
-  // 屋根の下のフタ（壁の上端）と床
+  // 天井（軒の高さ）と床
   const shape = new THREE.Shape(poly.map(p => new THREE.Vector2(p.x, -p.z)));
   const capGeo = new THREE.ShapeGeometry(shape);
-  const cap = new THREE.Mesh(capGeo, mat('#8d8780', { side: THREE.DoubleSide }));
-  cap.rotation.x = -Math.PI / 2; cap.position.y = wallTop; g.add(cap);
+  const cap = new THREE.Mesh(capGeo, mat('#dcd8cf', { side: THREE.DoubleSide }));
+  cap.rotation.x = -Math.PI / 2; cap.position.y = wallTop - 0.01; g.add(cap);
   const floor = new THREE.Mesh(capGeo.clone(), mat('#e7e4dd', { side: THREE.DoubleSide }));
   floor.rotation.x = -Math.PI / 2; floor.position.y = 0.02; g.add(floor);
+  roofSolid(g, bb, faces, h, wallTop);
+}
+
+// 屋根：妻側の輪郭（0..1）を実寸の断面にして、直交する方向に建物の幅＋軒の出ぶん押し出す
+function roofSolid(g: THREE.Group, bb: ReturnType<typeof polyBBox>, faces: Partial<Record<ElevFace, Elevation>>, h: number, wallTop: number) {
+  const face = roofFace(faces), e = face ? faces[face] : undefined;
+  const roofM = mat('#5e6165', { roughness: 0.8 }), eaveM = mat('#f1efe9');
+  const W = bb.maxX - bb.minX, D = bb.maxZ - bb.minZ, over = 0.45;
+  if (!face || !e?.roof?.length) {
+    // 輪郭が無ければ薄い陸屋根
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(W + over, 0.18, D + over), roofM);
+    slab.position.set((bb.minX + bb.maxX) / 2, wallTop + 0.09, (bb.minZ + bb.maxZ) / 2); g.add(slab); return;
+  }
+  const [ua, ub] = e.wallU ?? [0, 1];
+  // 絵の横位置 u → 面の軸の座標（壁の範囲 ua..ub を建物の幅に合わせ、外は軒の出として外挿）
+  const axis = (u: number) => faceAxis(face, (u - ua) / Math.max(1e-6, ub - ua), bb);
+  const pts = e.roof.map(p => ({ s: axis(p.x), y: Math.max(wallTop - 0.05, Math.min(h, p.y * h)) }));
+  const eave = Math.min(...pts.map(p => p.y), wallTop);
+  // 断面の形：輪郭 → 軒の下端で閉じる（厚み 0.2m）
+  const shape = new THREE.Shape();
+  shape.moveTo(pts[0].s, eave - 0.2);
+  for (const p of pts) shape.lineTo(p.s, p.y);
+  shape.lineTo(pts[pts.length - 1].s, eave - 0.2);
+  shape.closePath();
+  const alongX = face === 'N' || face === 'S'; // 断面が x 方向に広がる＝z 方向へ押し出す
+  const depth = (alongX ? D : W) + over * 2;
+  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+  // ExtrudeGeometry の材質：[0]=断面（妻の三角＝壁の色）、[1]=押し出した面（屋根面＝屋根の色）
+  const mesh = new THREE.Mesh(geo, [eaveM, roofM]);
+  // ExtrudeGeometry は XY 平面の形を +Z に押し出す。南北面の断面は x 方向なのでそのまま z へ押し出す。
+  // 東西面の断面は z 方向：y 軸まわりに -90° 回すと local x → world z、押し出し（local z）→ world -x になる
+  if (alongX) mesh.position.set(0, 0, bb.minZ - over);
+  else { mesh.rotation.y = -Math.PI / 2; mesh.position.set(bb.maxX + over, 0, 0); }
+  g.add(shadowed(mesh));
 }
 
 async function groundTexture(doc: Doc, lib: LibItem[], ctx: RenderCtx) {
@@ -263,12 +296,12 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
   // 高さスライダーは動かしている間は表示だけ変え、離したときに図面へ反映する（毎回作り直すと重いため）
   const [dragH, setDragH] = useState<number | null>(null);
   // 立面図の取り込み（用紙の絵→4面に切り出して貼る）
-  const [sheet, setSheet] = useState<{ src: string; width: number; height: number } | null>(null);
+  const [sheet, setSheet] = useState<{ src: string; width: number; height: number; text?: import('./elevLabels').TextItem[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragScale, setDragScale] = useState<number | null>(null);
   const pickSheet = async (f: File) => {
     setBusy(true); setErr('');
-    try { const src = await readSource(f); try { setSheet(await src.render(1)); } finally { await src.close(); } }
+    try { const src = await readSource(f); try { const im = await src.render(1); const text = await src.text?.(1).catch(() => undefined); setSheet({ ...im, text }); } finally { await src.close(); } }
     catch (e) { setErr((e as Error).message || '立面図を読めませんでした'); }
     finally { setBusy(false); }
   };
@@ -343,8 +376,11 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
       highlight(lit);
       if (framed) return;
       framed = true;
-      center = new THREE.Vector3((box.x + box.w / 2) * k, 0, (box.y + box.h / 2) * k);
-      span = Math.max(gw, gd, 8); eyeZ = (box.y + box.h) * k;
+      // カメラは線・部品のある範囲（建物や外構）に寄せる。下絵しか無ければ下絵全体
+      const hasItems = d.layers.some(l => l.visible && l.items.some(i => !(i.type === 'obj' && i.hidden)));
+      const fb = hasItems ? contentBox({ ...d, underlay: undefined }, 300) : box;
+      center = new THREE.Vector3((fb.x + fb.w / 2) * k, 0, (fb.y + fb.h / 2) * k);
+      span = Math.max(fb.w * k, fb.h * k, 8); eyeZ = (fb.y + fb.h) * k;
       // 手前（図面の下側）斜め左から照らし、見る側の面が明るくなるようにする
       sun.position.set(center.x - span * 0.5, span * 1.1, center.z + span * 0.8); sun.target.position.copy(center);
       const sc = sun.shadow.camera; sc.left = sc.bottom = -span * 0.8; sc.right = sc.top = span * 0.8; sc.near = 0.5; sc.far = span * 4; sc.updateProjectionMatrix();
@@ -463,7 +499,12 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
       {busy && <div className="v3-3d-msg">3Dを準備しています…</div>}
       {err && <div className="v3-3d-msg err">{err}</div>}
       {sheet && onDoc && <ElevationDialog sheet={sheet} onCancel={() => setSheet(null)}
-        onSave={e => { setSheet(null); onDoc(d => ({ ...d, elevations: e, elevScale: d.elevScale ?? 1 }), '立面図を取り込み'); }} />}
+        onSave={e => {
+          setSheet(null);
+          const rectId = uid(), d0 = docRef.current, auto = !hasBuilding(d0), fp = footprintFromElevations(e), u = d0.underlay;
+          onDoc(d => { const b = contentBox(d, 0); return withElevations(d, e, { x: b.x + b.w / 2, y: b.y + b.h / 2 }, rectId); }, '立面図を取り込み');
+          if (auto && fp && u) findFootprintOnUnderlay(u, fp.w, fp.d, d0.mmPerPx).then(at => { if (at) onDoc(d => placeBuilding(d, rectId, at), '建物の位置合わせ'); }).catch(() => {});
+        }} />}
     </div>
   );
 }

@@ -41,7 +41,9 @@ export type Doc = {
 
 // 立面図の1面：白を透明にしたPNG、px寸法、1pxの実寸(mm)、壁の上端の位置（上から 0..1。屋根の下）
 export type ElevFace = 'N' | 'E' | 'S' | 'W';
-export type Elevation = { src: string; w: number; h: number; mmPerPx: number; wallTop?: number };
+export type RoofPt = { x: number; y: number }; // 切り出した絵の中の位置（0..1。y は下からの高さ）
+// wallU：絵の中で建物の壁（基礎）がある横範囲、roof：屋根の輪郭（妻側なら三角、平側なら軒の帯）
+export type Elevation = { src: string; w: number; h: number; mmPerPx: number; wallTop?: number; wallU?: [number, number]; roof?: RoofPt[] };
 
 // 打ち合わせの記録（会話の文字・AIが読み取った要望・予算）
 export type AiAction = { type: 'height'; role: 'wall' | 'fence'; mm: number } | { type: 'extra'; name: string; qty?: number; unit?: string } | { type: 'budget'; yen: number };
