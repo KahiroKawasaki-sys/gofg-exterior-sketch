@@ -35,7 +35,7 @@ import { buildEstimate, defaultBook, estimateCsv, importItems, parseCsv, parsePr
 // three.js は大きいので、3Dを開いたときだけ読み込む
 const View3D = lazy(() => import('./View3D'));
 
-const VERSION = 'ver 2026.10.17-03 (meeting-ai)';
+const VERSION = 'ver 2026.11.08-01 (meeting-rec)';
 type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | 'qty' | null;
 
 // CSVは UTF-8 か Shift_JIS（Excelの既定）のどちらか
@@ -506,7 +506,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       {simple && qtyOpen && <div className="v3-qty-wrap" onClick={e => { if (e.target === e.currentTarget) setQtyOpen(false); }}><QtyPanel sheet estp={estp} doc={doc} lib={lib} onPick={ids => { setQtyOpen(false); pickIds(ids); }} onSetRole={setRoleOf} onCsv={saveQtyCsv} onClose={() => setQtyOpen(false)} /></div>}
       {PRO && meet !== 'closed' && <div className={'v3-qty-wrap v3-meet-wrap' + (meet === 'min' ? ' min' : '')} onClick={e => { if (e.target === e.currentTarget) setMeet('min'); }}>
         <MeetingPanel doc={doc} lib={lib} book={book} hidden={meet === 'min'} toast={toast} onDoc={D.set} onMeeting={f => D.setMeeting(m => f(m || { lines: [], requests: [] }))}
-          onHide={h => setMeet(h ? 'min' : 'open')} onClose={() => setMeet('closed')} /></div>}
+          onHide={h => setMeet(h ? 'min' : 'open')} onClose={() => setMeet('closed')} onVideo={() => setHelp({ tab: 'full', open: 'f-meeting' })} /></div>}
       {PRO && show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} onRaise={(id, v) => D.set(d => updateItem(d, id, it => ({ ...it, ...v }) as Item), '3Dの種類を変更')} /></Suspense>}
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
       {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}

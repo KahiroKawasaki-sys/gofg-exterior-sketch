@@ -87,3 +87,17 @@ export type NativeRecorder = {
 };
 let recorder: NativeRecorder | undefined;
 export const nativeRecorder = () => recorder ??= registerPlugin<NativeRecorder>('GofgRecorder');
+
+// 文章を共有する。アプリは共有シート、Webは共有（対応ブラウザ）かクリップボード
+export async function shareText(text: string, title: string): Promise<'shared' | 'copied' | 'cancelled'> {
+  if (isNativeApp()) {
+    const { Share } = await import('@capacitor/share');
+    try { await Share.share({ title, text, dialogTitle: title }); return 'shared'; }
+    catch (error) { if (/cancel|キャンセル|取消/i.test(error instanceof Error ? error.message : String(error))) return 'cancelled'; throw error; }
+  }
+  if (typeof navigator !== 'undefined' && navigator.share && /iPhone|iPad|Android/.test(navigator.userAgent)) {
+    try { await navigator.share({ title, text }); return 'shared'; } catch (error) { if ((error as Error).name === 'AbortError') return 'cancelled'; }
+  }
+  await navigator.clipboard.writeText(text);
+  return 'copied';
+}

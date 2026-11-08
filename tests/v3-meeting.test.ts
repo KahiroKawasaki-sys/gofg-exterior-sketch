@@ -1,5 +1,5 @@
 import { it, expect } from 'vitest';
-import { mergeRequests, applyAction, actionLabel } from '../src/v3/meeting';
+import { mergeRequests, applyAction, actionLabel, summaryText, unreadCount } from '../src/v3/meeting';
 import { defaultBook } from '../src/v3/estimate';
 import { newDoc, uid, type Doc, type Item } from '../src/v3/types';
 
@@ -36,4 +36,24 @@ it('反映：フェンスの高さ・見積の追加項目・予算', () => {
   expect(y.doc.est?.extras?.[0]).toMatchObject({ name: '宅配ボックス', price: 0, unit: '台' });
   expect(y.message).toContain('単価が未定');
   expect(applyAction(d, { type: 'budget', yen: 3000000 }, book).doc.meeting?.budget).toBe(3000000);
+});
+
+it('まとめ：決定→要望→検討中の順に箇条書き。予算と見積、反映済みの印。不要は出さない', () => {
+  const m = { lines: [], requests: [
+    { id: 'a', kind: '塀・フェンス', text: '目隠しフェンスは1.8m', status: '決定' as const, action: { type: 'height' as const, role: 'fence' as const, mm: 1800 }, applied: true },
+    { id: 'b', kind: '植栽', text: 'シンボルツリーがほしい', status: '要望' as const },
+    { id: 'c', kind: '駐車場', text: '3台目はやめる', status: '不要' as const },
+    { id: 'd', kind: '設備', text: '宅配ボックスを検討', status: '検討中' as const },
+  ], budget: 3000000 };
+  const t = summaryText(m, { total: 3250000, name: '山田様邸', now: new Date(2026, 10, 8) });
+  expect(t.split('\n')).toEqual([
+    '【打ち合わせまとめ】 山田様邸', '2026/11/8', '',
+    '■決まったこと', '・目隠しフェンスは1.8m（フェンスの高さを 1.8m にする：反映済み）',
+    '■ご要望', '・シンボルツリーがほしい',
+    '■検討中', '・宅配ボックスを検討', '',
+    '■ご予算 3,000,000円', '　概算見積 3,250,000円（250,000円 超過）',
+  ]);
+  expect(summaryText({ lines: [], requests: [] }, { now: new Date(2026, 10, 8) })).toContain('要望はまだありません');
+  expect(unreadCount({ lines: [{ t: '', text: 'a' }, { t: '', text: 'b' }], requests: [] }, 1)).toBe(1);
+  expect(unreadCount({ lines: [{ t: '', text: 'a' }], requests: [] }, 5)).toBe(0);
 });

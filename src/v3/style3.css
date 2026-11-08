@@ -412,3 +412,29 @@ button.v3-mono:hover { color: var(--green); }
 .v3-board .edit label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #555; }
 .v3-board .edit input { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid #d5d8d2; border-radius: 7px; min-width: 0; }
 .v3-board > .v3-row { margin-top: 12px; }
+
+/* 打ち合わせ：録音→文字→AI の流れ */
+.v3-meet-steps { display: flex; gap: 4px; margin: 6px 0 2px; padding: 0; list-style: none; }
+.v3-meet-steps li { flex: 1; display: flex; align-items: center; gap: 5px; padding: 6px 7px; border-radius: 9px; background: #fff; border: 1px solid var(--line); font-size: 11px; color: var(--sub); line-height: 1.2; }
+.v3-meet-steps li b { width: 18px; height: 18px; border-radius: 50%; background: #e6e8e6; color: #556; display: grid; place-items: center; font-size: 10.5px; flex: none; }
+.v3-meet-steps li small { font-size: 9.5px; }
+.v3-meet-steps li.on { border-color: var(--green); color: var(--ink); background: #eef5f1; }
+.v3-meet-steps li.on b { background: var(--green); color: #fff; }
+.v3-meet-steps li.ok b { background: #2f6f5a; color: #fff; }
+.v3-meet-mic .tm { margin-left: 6px; font-variant-numeric: tabular-nums; font-weight: 600; opacity: .9; }
+.v3-meet-live .dot.pause { background: #d9a400; animation: none; }
+.v3-meet-prog { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; padding: 7px 10px; background: #fff; border-radius: 10px; font-size: 12px; color: var(--sub); }
+.v3-meet-prog b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.v3-meet-prog i { flex: 1; min-width: 80px; height: 6px; border-radius: 3px; background: #e6e8e6; overflow: hidden; display: block; }
+.v3-meet-prog i em { display: block; height: 100%; background: var(--green); transition: width .4s; }
+.v3-meet-prog .v3-link { display: inline-flex; align-items: center; gap: 4px; }
+.v3-meet-share { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; }
+.v3-meet-share .v3-btn { display: inline-flex; align-items: center; gap: 5px; flex: none; }
+.v3-meet-share .v3-note { margin: 0; }
+.v3-meet-log p { display: flex; align-items: baseline; gap: 6px; }
+.v3-meet-log p time { color: var(--sub); font-variant-numeric: tabular-nums; flex: none; min-width: 34px; }
+.v3-meet-log p .v3-ib.ed { width: 22px; height: 22px; margin-left: auto; color: #9a9d9b; opacity: 0; }
+.v3-meet-log p:hover .v3-ib.ed, .v3-meet-log p:focus-within .v3-ib.ed { opacity: 1; }
+.v3-meet-log p.ed input { flex: 1; height: 28px; border: 1px solid var(--green); border-radius: 7px; padding: 0 8px; font-size: 12px; }
+.v3-meet-pill.busy { color: #8a6200; }
+.v3-meet-pill.busy .dot { background: #d9a400; }

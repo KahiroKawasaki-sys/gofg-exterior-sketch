@@ -116,3 +116,23 @@ export async function readRequests(m: Meeting, book: PriceBook): Promise<{ reque
   if (!r.ok) throw Error(data.error || (r.status === 401 || r.status === 403 ? (isNativeApp() ? 'AIの通行証が通りませんでした。アプリを最新版にしてください' : 'ログインし直してください') : 'AIにつながりませんでした'));
   return { requests: mergeRequests(m.requests, data.requests || []), usage: data.usage };
 }
+
+// 前回AIに読ませてから増えた行数
+export const unreadCount = (m: Meeting, readCount: number) => Math.max(0, m.lines.length - Math.min(readCount, m.lines.length));
+
+// 打ち合わせのまとめ（LINE・メールに貼る箇条書き）。決定→要望→検討中の順、予算と見積、反映済み
+export function summaryText(m: Meeting, o: { total?: number; name?: string; now?: Date } = {}): string {
+  const now = o.now || new Date();
+  const live = m.requests.filter(r => r.status !== '不要');
+  const sec = (title: string, rows: MeetRequest[]) => rows.length ? [`■${title}`, ...rows.map(r => `・${r.text}${r.applied && r.action ? `（${actionLabel(r.action)}：反映済み）` : ''}`)] : [];
+  const out = [`【打ち合わせまとめ】${o.name ? ` ${o.name}` : ''}`, `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}`, ''];
+  out.push(...sec('決まったこと', live.filter(r => r.status === '決定')));
+  out.push(...sec('ご要望', live.filter(r => r.status === '要望')));
+  out.push(...sec('検討中', live.filter(r => r.status === '検討中')));
+  if (m.budget != null) {
+    out.push('', `■ご予算 ${m.budget.toLocaleString('ja-JP')}円`);
+    if (o.total != null) out.push(`　概算見積 ${Math.round(o.total).toLocaleString('ja-JP')}円（${o.total > m.budget ? `${Math.round(o.total - m.budget).toLocaleString('ja-JP')}円 超過` : `残り ${Math.round(m.budget - o.total).toLocaleString('ja-JP')}円`}）`);
+  }
+  if (!live.length) out.push('（要望はまだありません）');
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
