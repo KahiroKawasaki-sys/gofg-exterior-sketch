@@ -21,7 +21,7 @@ export async function initializeNativePlatform(): Promise<void> {
   await Keyboard.addListener('keyboardWillHide', () => keyboard(0));
 }
 
-function blobBase64(blob: Blob): Promise<string> {
+export function blobBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(',')[1]);
@@ -78,3 +78,12 @@ export type NativeSpeech = {
 };
 let speech: NativeSpeech | undefined;
 export const nativeSpeech = () => speech ??= registerPlugin<NativeSpeech>('GofgSpeech');
+
+// 端末の録音（ios/App/App/RecorderPlugin.swift）。数分ごとの区切りで音声（base64）を渡してくる
+export type NativeRecorder = {
+  start(o: { segmentSec: number }): Promise<void>; stop(): Promise<void>; discard(o: { path: string }): Promise<void>;
+  addListener(event: 'segment', fn: (e: { i: number; startMs: number; durMs: number; base64: string; mime: string; path: string }) => void): Promise<PluginListenerHandle>;
+  addListener(event: 'state', fn: (e: { state: 'recording' | 'paused' | 'error'; message?: string }) => void): Promise<PluginListenerHandle>;
+};
+let recorder: NativeRecorder | undefined;
+export const nativeRecorder = () => recorder ??= registerPlugin<NativeRecorder>('GofgRecorder');

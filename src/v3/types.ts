@@ -37,7 +37,8 @@ export type Doc = {
 // 打ち合わせの記録（会話の文字・AIが読み取った要望・予算）
 export type AiAction = { type: 'height'; role: 'wall' | 'fence'; mm: number } | { type: 'extra'; name: string; qty?: number; unit?: string } | { type: 'budget'; yen: number };
 export type MeetRequest = { id: string; kind: string; text: string; quote?: string; status: '要望' | '決定' | '検討中' | '不要'; action?: AiAction; applied?: boolean };
-export type MeetLine = { t: string; text: string };
+// from/to：録音開始からの秒（録音から文字にした行だけ。手で足したメモには無い）
+export type MeetLine = { t: string; text: string; from?: number; to?: number };
 export type Meeting = { lines: MeetLine[]; requests: MeetRequest[]; budget?: number; readAt?: string };
 
 // この図面だけの見積の調整（数量・単価の上書き、追加項目、値引き）。単価表そのものは端末ごとに持つ

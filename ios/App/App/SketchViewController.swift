@@ -6,6 +6,7 @@ final class SketchViewController: CAPBridgeViewController, UIScribbleInteraction
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(SpeechPlugin())
+        bridge?.registerPluginInstance(RecorderPlugin())
         configureDrawingSurface()
     }
 
