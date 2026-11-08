@@ -94,7 +94,7 @@
 - 画面側の切替は `VITE_EDITION`（`src/v3/edition.ts`）。Web版は指定なし＝全部入り。
 - Pro の打ち合わせAI（2026-11-08 から「録音→文字→AI」方式）：
   - 録音は端末の `ios/App/App/RecorderPlugin.swift`（JSからは `GofgRecorder`）。AAC 16kHz 32kbps、3分ごとに区切ってファイルにし、区切りごとに base64 で JS へ渡す。`UIBackgroundModes: audio` で画面ロック・他アプリ切替中も録音が続く（橙のマイク表示）。着信などの中断は自動で再開。文字にし終えた区切りは JS から `discard` で消す。
-  - 文字起こしは本番Workerの `/api/ai/transcribe`（Cloudflare Workers AI の Whisper large-v3-turbo。日本語＋外構用語の前置き）。要望の読み取りは `/api/ai/meeting`（Claude Opus 5.5。ツール強制が使えないので auto＋言い直し）。どちらも端末の通信（CapacitorHttp）で呼ぶ。
+  - 文字起こしは本番Workerの `/api/ai/transcribe`（Cloudflare Workers AI の Whisper large-v3-turbo。日本語＋外構用語の前置き）。本番の配信設定 `.wrangler/deploy.wrangler.jsonc`（git管理外）にも `"ai": {"binding": "AI"}` が要る（2026-11-08 に追加済み）。要望の読み取りは `/api/ai/meeting`（Claude Opus 5.5。ツール強制が使えないので auto＋言い直し）。どちらも端末の通信（CapacitorHttp）で呼ぶ。
   - その場の音声認識（`SpeechPlugin.swift`、`GofgSpeech`）はコードを残しているが画面からは使っていない（将来のリアルタイム用）。
   - 通行証は当面 Cloudflare Access のサービストークン。GitHub Secrets `AI_ACCESS_CLIENT_ID`／`AI_ACCESS_CLIENT_SECRET` をProのビルドに埋め込み、Accessのポリシーで通したサービストークンには打ち合わせAIだけを通す（Worker の変数 `APP_SERVICE_TOKEN_ID` にClient IDを入れれば、そのトークンに限定できる）（クラウド図面には入れない）。Accessのポリシーにこのトークンの「Service Auth」ルールが必要。
   - 個別ライセンスキー方式へ切り替えるときは `src/v3/appAuth.ts` と Worker の判定だけを差し替える。
