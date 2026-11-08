@@ -1,5 +1,5 @@
 import { it, expect } from 'vitest';
-import { edgeFace, isClockwise, faceU, faceAxis, polyBBox, buildingHeight, roofFace, quadrants, darkBounds, wallTopRatio, whiteToAlpha, guessPaper, mmPerPxFromPaper, findBody, simplifyRoof, eraseLevelLines, largestComponent } from '../src/v3/elevation';
+import { edgeFace, isClockwise, faceU, faceAxis, polyBBox, buildingHeight, roofFace, quadrants, darkBounds, wallTopRatio, whiteToAlpha, guessPaper, mmPerPxFromPaper, findBody, simplifyRoof, eraseLevelLines, largestComponent, detectWindows, tintLines } from '../src/v3/elevation';
 
 const img = (w: number, h: number, paint: (x: number, y: number) => number | null): ImageData => {
   const data = new Uint8ClampedArray(w * h * 4);
@@ -102,4 +102,24 @@ it('レベル線（細くて長い横線）は消え、壁と交わる所は残�
   expect(mask[50 * W + 10]).toBe(0); expect(mask[50 * W + 100]).toBe(1); expect(mask[40 * W + 100]).toBe(1);
   const c = largestComponent(mask, W, H)!;
   expect(c.count).toBe(41); expect(c.pick[40 * W + 100]).toBe(1); expect(c.pick[22 * W + 22]).toBe(0);
+});
+
+it('窓：壁の中で線に囲まれた穴を窓とし、格子で分かれたガラスは1つにまとめる。壁全体や細い隙間は窓にしない', () => {
+  const W = 300, H = 200;
+  // 壁 x 20..280、軒 y=40、GL y=180。窓A: 60..120 × 80..130（中桟 x=90）、窓B: 180..230 × 70..140
+  const d = img(W, H, (x, y) => {
+    const wall = (x === 20 || x === 280) && y >= 40 && y <= 180, top = y === 40 && x >= 20 && x <= 280, gl = y === 180 && x >= 20 && x <= 280;
+    const a = ((x === 60 || x === 120 || x === 90) && y >= 80 && y <= 130) || ((y === 80 || y === 130) && x >= 60 && x <= 120);
+    const b = ((x === 180 || x === 230) && y >= 70 && y <= 140) || ((y === 70 || y === 140) && x >= 180 && x <= 230);
+    return wall || top || gl || a || b ? 30 : null;
+  });
+  whiteToAlpha(d);
+  const rect = { x: 0, y: 0, w: W, h: H };
+  const wins = detectWindows(d, rect, { eaves: 40, gl: 180 }, [20, 280]);
+  expect(wins).toHaveLength(2);
+  const A = wins.find(w => w.x < 0.5)!, B = wins.find(w => w.x > 0.5)!;
+  expect(Math.abs(A.x * W - 58)).toBeLessThanOrEqual(2); expect(Math.abs((A.x + A.w) * W - 123)).toBeLessThanOrEqual(2); expect(Math.abs(A.y * H - 78)).toBeLessThanOrEqual(2);
+  expect(Math.abs(B.w * W - 55)).toBeLessThanOrEqual(3); expect(Math.abs(B.h * H - 75)).toBeLessThanOrEqual(3);
+  tintLines(d, [10, 20, 30]);
+  expect(Array.from(d.data.slice((40 * W + 100) * 4, (40 * W + 100) * 4 + 3))).toEqual([10, 20, 30]);
 });

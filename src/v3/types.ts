@@ -37,13 +37,16 @@ export type Doc = {
   // 立面図（面ごとの絵。3Dの建物に貼る）と、その大きさの調整（1=用紙の縮尺どおり）
   elevations?: Partial<Record<ElevFace, Elevation>>;
   elevScale?: number;
+  // 3Dの家の色：外壁・屋根（未指定は既定）
+  elevStyle?: { wall?: string; roof?: string };
 };
 
 // 立面図の1面：白を透明にしたPNG、px寸法、1pxの実寸(mm)、壁の上端の位置（上から 0..1。屋根の下）
 export type ElevFace = 'N' | 'E' | 'S' | 'W';
 export type RoofPt = { x: number; y: number }; // 切り出した絵の中の位置（0..1。y は下からの高さ）
 // wallU：絵の中で建物の壁（基礎）がある横範囲、roof：屋根の輪郭（妻側なら三角、平側なら軒の帯）
-export type Elevation = { src: string; w: number; h: number; mmPerPx: number; wallTop?: number; wallU?: [number, number]; roof?: RoofPt[] };
+export type WinRect = { x: number; y: number; w: number; h: number }; // 切り出した絵の中の位置（0..1。y は上から）
+export type Elevation = { src: string; w: number; h: number; mmPerPx: number; wallTop?: number; wallU?: [number, number]; roof?: RoofPt[]; windows?: WinRect[] };
 
 // 打ち合わせの記録（会話の文字・AIが読み取った要望・予算）
 export type AiAction = { type: 'height'; role: 'wall' | 'fence'; mm: number } | { type: 'extra'; name: string; qty?: number; unit?: string } | { type: 'budget'; yen: number };

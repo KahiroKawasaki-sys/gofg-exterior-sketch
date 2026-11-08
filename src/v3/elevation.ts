@@ -1,6 +1,6 @@
 // 立面図：1枚の用紙（東・南・西・北の4面）を切り出して、3Dの建物の各面に貼る。
 // 純粋な計算（面の割り当て・貼り方・建物本体の見つけ方）と、画像の処理（切り出し・白抜き）を分けている。
-import { type Elevation, type ElevFace, type RoofPt } from './types';
+import { type Elevation, type ElevFace, type RoofPt, type WinRect } from './types';
 import { type P2 } from './scene3d';
 
 export const FACES: ElevFace[] = ['E', 'S', 'W', 'N'];
@@ -91,7 +91,7 @@ export function darkBounds(data: ImageData, r: Rect, threshold = 200): Rect | nu
 
 const opaque = (d: ImageData, x: number, y: number) => d.data[(y * d.width + x) * 4 + 3] > 40;
 
-export type Body = { rect: Rect; ground: number; wallU: [number, number]; roof: RoofPt[]; eaves: number; ridge: number };
+export type Body = { rect: Rect; ground: number; wallU: [number, number]; roof: RoofPt[]; eaves: number; ridge: number; windows?: WinRect[] };
 
 // 細くて長い横線（▽最高高・GL などのレベル線、寸法線）を消す。壁や屋根の線と交わる所（太い所）は残す。
 // keep を渡すと、その横範囲（建物の壁の中）は消さず、外にはみ出した部分だけ消す
@@ -196,6 +196,55 @@ export function findBody(d: ImageData): Body | null {
   return { rect, ground, wallU: [(gx0 - x0) / rect.w, (gx1 - x0 + 1) / rect.w], roof: simplifyRoof(pts, 0.012), eaves: (eavesRow - rect.y) / rect.h, ridge: 0 };
 }
 
+// 窓：壁の中（軒〜GL・壁の左右の間）で、線に囲まれた「穴」（外側とつながっていない透明な領域）のうち、
+// 大きすぎず小さすぎないもの。格子で分かれたガラスは近いもの同士をまとめて1つの窓にする。位置は切り出し後の 0..1
+export function detectWindows(d: ImageData, rect: Rect, rows: { eaves: number; gl: number }, walls: [number, number]): WinRect[] {
+  const W = d.width, H = d.height;
+  const y0 = Math.max(0, Math.round(rows.eaves) + 3), y1 = Math.min(H - 1, Math.round(rows.gl) - 3), x0 = Math.max(0, walls[0] + 2), x1 = Math.min(W - 1, walls[1] - 2);
+  const Hw = y1 - y0, Ww = x1 - x0;
+  if (Hw < 20 || Ww < 20) return [];
+  const mask = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) if (d.data[i * 4 + 3] > 40) mask[i] = 1;
+  // 外側（縁から透明をたどる）
+  const ext = new Uint8Array(W * H); const stack: number[] = [];
+  const push = (i: number) => { if (!mask[i] && !ext[i]) { ext[i] = 1; stack.push(i); } };
+  for (let x = 0; x < W; x++) { push(x); push((H - 1) * W + x); }
+  for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+  while (stack.length) { const j = stack.pop()!, x = j % W, y = (j - x) / W; if (x > 0) push(j - 1); if (x < W - 1) push(j + 1); if (y > 0) push(j - W); if (y < H - 1) push(j + W); }
+  // 穴の塊
+  const label = new Int32Array(W * H); let cur = 0;
+  const holes: { x0: number; y0: number; x1: number; y1: number; n: number }[] = [];
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = y * W + x; if (mask[i] || ext[i] || label[i]) continue;
+    cur++; const h = { x0: x, y0: y, x1: x, y1: y, n: 0 }; label[i] = cur; stack.push(i);
+    while (stack.length) {
+      const j = stack.pop()!, jx = j % W, jy = (j - jx) / W; h.n++;
+      if (jx < h.x0) h.x0 = jx; if (jx > h.x1) h.x1 = jx; if (jy < h.y0) h.y0 = jy; if (jy > h.y1) h.y1 = jy;
+      for (const nb of [j - 1, j + 1, j - W, j + W]) { const nx = nb % W, ny = (nb - nx) / W; if (nb < 0 || nb >= W * H || Math.abs(nx - jx) > 1 || ny < y0 - 1 || ny > y1 + 1) continue; if (!mask[nb] && !ext[nb] && !label[nb]) { label[nb] = cur; stack.push(nb); } }
+    }
+    holes.push(h);
+  }
+  const minDim = Math.max(4, Hw * 0.05), maxW = Ww * 0.6, maxH = Hw * 0.75;
+  const cand = holes.filter(h => { const w = h.x1 - h.x0 + 1, hh = h.y1 - h.y0 + 1; return w >= minDim && hh >= minDim && w <= maxW && hh <= maxH && h.n >= w * hh * 0.5; });
+  // 近い穴（格子で分かれたガラス）をまとめる
+  const gap = Math.max(3, Hw * 0.04);
+  const groups: { x0: number; y0: number; x1: number; y1: number }[] = [];
+  for (const h of cand.sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0)) {
+    const g = groups.find(q => h.x0 <= q.x1 + gap && h.x1 >= q.x0 - gap && h.y0 <= q.y1 + gap && h.y1 >= q.y0 - gap);
+    if (g) { g.x0 = Math.min(g.x0, h.x0); g.y0 = Math.min(g.y0, h.y0); g.x1 = Math.max(g.x1, h.x1); g.y1 = Math.max(g.y1, h.y1); }
+    else groups.push({ ...h });
+  }
+  return groups.filter(g => g.x1 - g.x0 + 1 <= maxW && g.y1 - g.y0 + 1 <= maxH)
+    .map(g => ({ x: (g.x0 - 2 - rect.x) / rect.w, y: (g.y0 - 2 - rect.y) / rect.h, w: (g.x1 - g.x0 + 5) / rect.w, h: (g.y1 - g.y0 + 5) / rect.h }))
+    .filter(w => w.x >= 0 && w.y >= 0 && w.x + w.w <= 1 && w.y + w.h <= 1);
+}
+
+// 線の色を揃える（黒い線を少し柔らかいグレーに。3Dでは外壁色の上に乗る）
+export function tintLines(data: ImageData, rgb: [number, number, number] = [84, 86, 88], alpha = 0.6) {
+  const d = data.data;
+  for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0) { d[i] = rgb[0]; d[i + 1] = rgb[1]; d[i + 2] = rgb[2]; d[i + 3] = Math.round(d[i + 3] * alpha); }
+}
+
 // 家のシルエットの上端（列ごとの行）。壁の外のレベル線を消してから、透明な所を縁から塗りつぶす（外側）。
 // 列ごとに、上から見て「外側でない画素が minRun 以上続く」最初の行を返す。無ければ軒より下（none）
 export function silhouetteTop(d: ImageData, rows: { ridge: number; eaves: number; gl: number }, walls: [number, number], rx0: number, rx1: number, drop: number, maxThick: number): number[] {
@@ -268,7 +317,7 @@ export function bodyFromLevels(d: ImageData, rows: { ridge: number; eaves: numbe
   const rect = { x: x0, y: Math.max(0, ridge - Math.round(H * 0.01)), w: x1 - x0 + 1, h: 0 };
   rect.h = Math.min(H - 1, gl + Math.round(H * 0.012)) - rect.y + 1;
   const pts = prof.slice(a, b + 1).map((t, i) => ({ x: i / Math.max(1, b - a), y: (rect.y + rect.h - 1 - Math.min(eaves + drop, Math.max(ridge, t))) / rect.h }));
-  return { rect, ground: gl, wallU: [(wx0 - x0) / rect.w, (wx1 - x0 + 1) / rect.w], roof: simplifyRoof(pts, 0.015), eaves: (eaves - rect.y) / rect.h, ridge: 0 };
+  return { rect, ground: gl, wallU: [(wx0 - x0) / rect.w, (wx1 - x0 + 1) / rect.w], roof: simplifyRoof(pts, 0.015), eaves: (eaves - rect.y) / rect.h, ridge: 0, windows: detectWindows(d, rect, { eaves, gl }, [wx0, wx1]) };
 }
 
 // 輪郭の間引き（Ramer–Douglas–Peucker）。端点は残す
@@ -307,13 +356,14 @@ export function cropToElevation(img: CanvasImageSource & { width: number; height
   g.drawImage(img, crop.x, crop.y, crop.w, crop.h, 0, 0, w, h);
   const data = g.getImageData(0, 0, w, h);
   whiteToAlpha(data);
+  tintLines(data);
   const body = (rows && bodyFromLevels(data, { ridge: (rows.ridge - crop.y) * k, eaves: (rows.eaves - crop.y) * k, gl: (rows.gl - crop.y) * k }, bans.map(b => (b - crop.x) * k))) || findBody(data);
   let out: Elevation;
   if (body) {
     const r = body.rect, c2 = document.createElement('canvas'); c2.width = r.w; c2.height = r.h;
     g.putImageData(data, 0, 0);
     c2.getContext('2d')!.drawImage(c, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
-    out = { src: c2.toDataURL('image/png'), w: r.w, h: r.h, mmPerPx: mmPerPx / k, wallTop: body.eaves, wallU: body.wallU, roof: body.roof };
+    out = { src: c2.toDataURL('image/png'), w: r.w, h: r.h, mmPerPx: mmPerPx / k, wallTop: body.eaves, wallU: body.wallU, roof: body.roof, ...(body.windows?.length && { windows: body.windows }) };
     c2.width = c2.height = 0;
   } else {
     g.putImageData(data, 0, 0);

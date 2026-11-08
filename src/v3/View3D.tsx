@@ -8,7 +8,8 @@ import { type Role3, type Mat3, type ElevFace, type Elevation } from './types';
 import { type Doc, type LibItem, rad } from './types';
 import { readSource } from './source';
 import { edgeFace, isClockwise, faceU, faceAxis, polyBBox, roofFace } from './elevation';
-import { wallMaterial, meshFenceMaterial, grassMaterial, skyTexture, elevationTexture, WALL_MATS, FENCE_MATS } from './materials3d';
+import { wallMaterial, meshFenceMaterial, grassMaterial, skyTexture, elevationTexture, WALL_MATS, FENCE_MATS, WALL_COLORS, ROOF_COLORS, wallColor, roofMaterial, glassMaterial, sashMaterial } from './materials3d';
+import { siteGround } from './siteGround';
 import { ElevationDialog } from './ElevationDialog';
 import { type RenderCtx } from './markup';
 import { contentBox, docSVG, rasterize } from './raster';
@@ -184,6 +185,9 @@ function solidObject(s: Solid): THREE.Object3D {
   return shadowed(g);
 }
 
+// 家の色（build のたびに図面から入れる）
+let houseStyle: { wall?: string; roof?: string } = {};
+
 // 色を少し暗く／明るく
 function shade(hex: string, k: number): string {
   const c = new THREE.Color(hex); c.multiplyScalar(k); return '#' + c.getHexString();
@@ -193,7 +197,8 @@ function shade(hex: string, k: number): string {
 // 屋根は妻側（軒と棟の差が大きい面）の輪郭を断面にして、建物の奥行きぶん押し出した立体にする（絵の屋根は使わない）
 function buildingWithElevations(g: THREE.Group, poly: P2[], h: number, faces: Partial<Record<ElevFace, Elevation>>, wallTop: number) {
   const cw = isClockwise(poly), bb = polyBBox(poly);
-  const plain = mat('#f1efe9');
+  const plain = mat(wallColor(houseStyle.wall), { roughness: 0.9 });
+  const edges: { face: ElevFace; a: P2; b: P2; nx: number; nz: number; rot: number }[] = [];
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i], b = poly[(i + 1) % poly.length];
     const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
@@ -202,7 +207,8 @@ function buildingWithElevations(g: THREE.Group, poly: P2[], h: number, faces: Pa
     // 外向きの法線（画面座標で時計回りなら進行方向の右手側）
     const nx = (cw ? dz : -dz) / len, nz = (cw ? -dx : dx) / len;
     const rot = Math.atan2(nx, nz), cx = (a.x + b.x) / 2, cz = (a.z + b.z) / 2;
-    // 壁の下地（白）
+    edges.push({ face, a, b, nx, nz, rot });
+    // 壁の下地（外壁色）
     const base = new THREE.Mesh(new THREE.PlaneGeometry(len, wallTop), plain);
     base.position.set(cx, wallTop / 2, cz); base.rotation.y = rot; g.add(base);
     if (!elev) continue;
@@ -218,6 +224,7 @@ function buildingWithElevations(g: THREE.Group, poly: P2[], h: number, faces: Pa
     const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: elevationTexture(elev.src), transparent: true, alphaTest: 0.08, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -1 }));
     m.position.set(cx + nx * 0.006, wallTop / 2, cz + nz * 0.006); m.rotation.y = rot; g.add(m);
   }
+  windows3d(g, edges, bb, faces, h);
   // 天井（軒の高さ）と床
   const shape = new THREE.Shape(poly.map(p => new THREE.Vector2(p.x, -p.z)));
   const capGeo = new THREE.ShapeGeometry(shape);
@@ -228,10 +235,37 @@ function buildingWithElevations(g: THREE.Group, poly: P2[], h: number, faces: Pa
   roofSolid(g, bb, faces, h, wallTop);
 }
 
+// 窓：立面図で見つけた窓を、その面の壁の上にガラス＋サッシの立体で置く（線画の窓の上に重なる）
+function windows3d(g: THREE.Group, edges: { face: ElevFace; a: P2; b: P2; nx: number; nz: number; rot: number }[], bb: ReturnType<typeof polyBBox>, faces: Partial<Record<ElevFace, Elevation>>, h: number) {
+  const glass = glassMaterial(), sash = sashMaterial();
+  for (const face of ['N', 'E', 'S', 'W'] as ElevFace[]) {
+    const e = faces[face]; if (!e?.windows?.length) continue;
+    const [ua, ub] = e.wallU ?? [0, 1], span = Math.max(1e-6, ub - ua);
+    const alongX = face === 'N' || face === 'S', extent = alongX ? bb.maxX - bb.minX : bb.maxZ - bb.minZ;
+    const mine = edges.filter(ed => ed.face === face);
+    for (const w of e.windows) {
+      const uc = (w.x + w.w / 2 - ua) / span; if (uc < 0 || uc > 1) continue;
+      const sc = faceAxis(face, uc, bb), ww = w.w / span * extent, wh = w.h * h, yc = h * (1 - (w.y + w.h / 2));
+      if (ww < 0.2 || wh < 0.2) continue;
+      // この面の辺のうち、窓の位置を含むもの
+      const ed = mine.find(d => { const lo = alongX ? Math.min(d.a.x, d.b.x) : Math.min(d.a.z, d.b.z), hi = alongX ? Math.max(d.a.x, d.b.x) : Math.max(d.a.z, d.b.z); return sc >= lo - 0.05 && sc <= hi + 0.05; }) || mine[0];
+      if (!ed) continue;
+      const wx = alongX ? sc : ed.a.x, wz = alongX ? ed.a.z : sc;
+      const grp = new THREE.Group();
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(ww + 0.1, wh + 0.1, 0.05), sash); frame.position.z = 0.025; grp.add(frame);
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(ww, wh), glass); pane.position.z = 0.052; grp.add(pane);
+      // 中桟（幅 1.2m 以上は縦に1本）
+      if (ww >= 1.2) { const bar = new THREE.Mesh(new THREE.BoxGeometry(0.05, wh, 0.03), sash); bar.position.z = 0.06; grp.add(bar); }
+      grp.position.set(wx + ed.nx * 0.012, yc, wz + ed.nz * 0.012); grp.rotation.y = ed.rot;
+      g.add(grp);
+    }
+  }
+}
+
 // 屋根：妻側の輪郭（0..1）を実寸の断面にして、直交する方向に建物の幅＋軒の出ぶん押し出す
 function roofSolid(g: THREE.Group, bb: ReturnType<typeof polyBBox>, faces: Partial<Record<ElevFace, Elevation>>, h: number, wallTop: number) {
   const face = roofFace(faces), e = face ? faces[face] : undefined;
-  const roofM = mat('#5e6165', { roughness: 0.8 }), eaveM = mat('#f1efe9');
+  const roofM = roofMaterial(houseStyle.roof), eaveM = mat('#f4f2ec'), capM = mat(shade(roofM.color.getHexString() ? '#' + roofM.color.getHexString() : '#5a5d61', 0.8));
   const W = bb.maxX - bb.minX, D = bb.maxZ - bb.minZ, over = 0.45;
   if (!face || !e?.roof?.length) {
     // 輪郭が無ければ薄い陸屋根
@@ -245,9 +279,9 @@ function roofSolid(g: THREE.Group, bb: ReturnType<typeof polyBBox>, faces: Parti
   const eave = Math.min(...pts.map(p => p.y), wallTop);
   // 断面の形：輪郭 → 軒の下端で閉じる（厚み 0.2m）
   const shape = new THREE.Shape();
-  shape.moveTo(pts[0].s, eave - 0.2);
+  shape.moveTo(pts[0].s, eave - 0.15);
   for (const p of pts) shape.lineTo(p.s, p.y);
-  shape.lineTo(pts[pts.length - 1].s, eave - 0.2);
+  shape.lineTo(pts[pts.length - 1].s, eave - 0.15);
   shape.closePath();
   const alongX = face === 'N' || face === 'S'; // 断面が x 方向に広がる＝z 方向へ押し出す
   const depth = (alongX ? D : W) + over * 2;
@@ -259,13 +293,21 @@ function roofSolid(g: THREE.Group, bb: ReturnType<typeof polyBBox>, faces: Parti
   if (alongX) mesh.position.set(0, 0, bb.minZ - over);
   else { mesh.rotation.y = -Math.PI / 2; mesh.position.set(bb.maxX + over, 0, 0); }
   g.add(shadowed(mesh));
+  // 棟（いちばん高い所）に棟包み
+  const apex = pts.reduce((m, p) => p.y > m.y ? p : m, pts[0]);
+  if (apex.y > eave + 0.3) {
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(alongX ? 0.3 : depth, 0.09, alongX ? depth : 0.3), capM);
+    cap.position.set(alongX ? apex.s : (bb.minX + bb.maxX) / 2, apex.y + 0.02, alongX ? (bb.minZ + bb.maxZ) / 2 : apex.s);
+    g.add(shadowed(cap));
+  }
 }
 
-async function groundTexture(doc: Doc, lib: LibItem[], ctx: RenderCtx) {
+type Box = { x: number; y: number; w: number; h: number };
+async function groundTexture(doc: Doc, lib: LibItem[], ctx: RenderCtx, boxOverride?: Box) {
   // 図面より少し広く取り、長い辺が MAX_TEX になる解像度で画像化する（iPad の上限内）
-  const box = contentBox(doc, 200), scale = MAX_TEX / Math.max(box.w, box.h, 1);
+  const box = boxOverride || contentBox(doc, 200), scale = MAX_TEX / Math.max(box.w, box.h, 1);
   const w = Math.round(box.w * scale), h = Math.round(box.h * scale);
-  const canvas = await rasterize(docSVG(doc, lib, ctx, box, { background: '#f3f2ee', pxW: w, pxH: h }), w, h);
+  const canvas = await rasterize(docSVG(doc, lib, ctx, box, { background: boxOverride ? '#dedbd3' : '#f3f2ee', pxW: w, pxH: h }), w, h);
   return { canvas, box };
 }
 
@@ -362,8 +404,21 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
 
     const build = async (d: Doc, o: SceneOpts) => {
       const my = ++seq;
+      houseStyle = d.elevStyle || {};
       const { solids, raised } = buildScene(d, lib, o);
-      const { canvas, box } = await groundTexture(groundDoc(d, raised), lib, ctx);
+      // 地面：立面図のある図面では、下絵（配置図）を「敷地の図」だけに整える（文字・表題欄・用紙の枠を消す）
+      let gdoc = groundDoc(d, raised), gbox: Box | undefined;
+      if (d.underlay?.visible && d.elevations && Object.keys(d.elevations).length) {
+        const items = contentBox({ ...d, underlay: undefined }, 0);
+        const sg = await siteGround(d.underlay, items.w > 0 ? items : { x: d.underlay.x + d.underlay.w * 0.3, y: d.underlay.y + d.underlay.h * 0.3, w: d.underlay.w * 0.4, h: d.underlay.h * 0.4 });
+        if (sg) {
+          gdoc = { ...gdoc, underlay: { ...d.underlay, src: sg.src, opacity: 1 } };
+          const ib = contentBox({ ...d, underlay: undefined }, 200);
+          const x0 = Math.min(sg.box.x, ib.x), y0 = Math.min(sg.box.y, ib.y);
+          gbox = { x: x0, y: y0, w: Math.max(sg.box.x + sg.box.w, ib.x + ib.w) - x0, h: Math.max(sg.box.y + sg.box.h, ib.y + ib.h) - y0 };
+        }
+      }
+      const { canvas, box } = await groundTexture(gdoc, lib, ctx, gbox);
       if (!alive || my !== seq) return;
       scene.remove(world); disposeAll(world); world = new THREE.Group();
       const k = d.mmPerPx / 1000, gw = box.w * k, gd = box.h * k;
@@ -380,7 +435,7 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
       const hasItems = d.layers.some(l => l.visible && l.items.some(i => !(i.type === 'obj' && i.hidden)));
       const fb = hasItems ? contentBox({ ...d, underlay: undefined }, 300) : box;
       center = new THREE.Vector3((fb.x + fb.w / 2) * k, 0, (fb.y + fb.h / 2) * k);
-      span = Math.max(fb.w * k, fb.h * k, 8); eyeZ = (fb.y + fb.h) * k;
+      span = Math.max(fb.w * k, fb.h * k, 8) * (hasItems ? 1.6 : 1); eyeZ = (fb.y + fb.h) * k; // 建物まわりが入るよう少し引く
       // 手前（図面の下側）斜め左から照らし、見る側の面が明るくなるようにする
       sun.position.set(center.x - span * 0.5, span * 1.1, center.z + span * 0.8); sun.target.position.copy(center);
       const sc = sun.shadow.camera; sc.left = sc.bottom = -span * 0.8; sc.right = sc.top = span * 0.8; sc.near = 0.5; sc.far = span * 4; sc.updateProjectionMatrix();
@@ -487,6 +542,10 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
               <input type="range" min={3} max={9} step={0.5} value={opts.buildingH} onChange={e => setOpts({ ...opts, buildingH: +e.target.value })} aria-label="建物の高さ" />
             </label>
           )}
+          {hasElev && onDoc && <div className="v3-3d-colors">
+            <span>外壁</span>{WALL_COLORS.map(([k, l, c]) => <button key={k} className={(doc.elevStyle?.wall || 'white') === k ? 'on' : ''} style={{ background: c }} title={l} aria-label={`外壁 ${l}`} onClick={() => onDoc(d => ({ ...d, elevStyle: { ...d.elevStyle, wall: k } }), '外壁の色')} />)}
+            <span>屋根</span>{ROOF_COLORS.map(([k, l, c]) => <button key={k} className={(doc.elevStyle?.roof || 'dark') === k ? 'on' : ''} style={{ background: c }} title={l} aria-label={`屋根 ${l}`} onClick={() => onDoc(d => ({ ...d, elevStyle: { ...d.elevStyle, roof: k } }), '屋根の色')} />)}
+          </div>}
           {onDoc && <div className="v3-3d-elev">
             <button className="v3-btn" onClick={() => fileRef.current?.click()}><ImagePlus size={14} />{hasElev ? '立面図を読み込み直す' : '立面図を読み込む'}</button>
             {hasElev && <button className="v3-btn" onClick={() => onDoc(d => ({ ...d, elevations: undefined, elevScale: undefined }), '立面図を外す')}>外す</button>}

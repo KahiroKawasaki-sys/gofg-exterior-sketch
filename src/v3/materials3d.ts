@@ -81,3 +81,22 @@ export function elevationTexture(src: string): THREE.Texture {
   elevCache.set(src, t);
   return t;
 }
+
+// 家の色：外壁・屋根の選択肢（key はデータに保存する値）
+export const WALL_COLORS: [string, string, string][] = [['white', 'ホワイト', '#f3f1ea'], ['ivory', 'アイボリー', '#ebe3d2'], ['lightgray', 'ライトグレー', '#d9dadb'], ['gray', 'グレー', '#9a9ea2'], ['beige', 'ベージュ', '#d6c4a8'], ['navy', 'ネイビー', '#3b4a5e'], ['brown', 'ダークブラウン', '#5a4536']];
+export const ROOF_COLORS: [string, string, string][] = [['dark', 'ダークグレー', '#5a5d61'], ['black', 'ブラック', '#2e3033'], ['brown', 'ブラウン', '#6a4b3b'], ['green', 'グリーン', '#44584c'], ['silver', 'シルバー', '#a7abb0']];
+export const wallColor = (key?: string) => WALL_COLORS.find(c => c[0] === key)?.[2] || WALL_COLORS[0][2];
+export const roofColor = (key?: string) => ROOF_COLORS.find(c => c[0] === key)?.[2] || ROOF_COLORS[0][2];
+
+// 屋根材：横の段（瓦・スレート 0.3m ピッチ）。ExtrudeGeometry の側面 UV は実寸（m）なので repeat 1
+export function roofMaterial(key?: string): THREE.MeshStandardMaterial {
+  const map = patternTexture('roof-rows', (g, s) => {
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 3; i++) { const y = Math.round(s * i / 3); g.fillStyle = 'rgba(0,0,0,.22)'; g.fillRect(0, y, s, Math.max(1, s * 0.014)); g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(0, y + Math.max(1, s * 0.014), s, Math.max(1, s * 0.02)); }
+    noise(g, s, 1500, 0.05);
+  }).clone();
+  map.needsUpdate = true; map.repeat.set(1, 1);
+  return new THREE.MeshStandardMaterial({ color: roofColor(key), map, roughness: 0.75, metalness: key === 'silver' ? 0.5 : 0.05 });
+}
+export const glassMaterial = () => new THREE.MeshStandardMaterial({ color: '#8eb1c9', metalness: 0.55, roughness: 0.12, transparent: true, opacity: 0.82 });
+export const sashMaterial = () => new THREE.MeshStandardMaterial({ color: '#3b3e42', roughness: 0.5, metalness: 0.3 });
