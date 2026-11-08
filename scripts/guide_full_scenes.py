@@ -4,6 +4,8 @@ r は record-guide.py の Rec。押すボタンは枠で光らせ、下に一言
 """
 import pathlib
 
+from guide_meeting_scene import meeting as f_meeting  # noqa: E402
+
 FIXTURE = pathlib.Path(__file__).resolve().parent.parent / 'tests' / 'fixtures' / 'site-plan.pdf'
 
 
@@ -339,5 +341,6 @@ def save(r):
 FULL_SCENES = {
     'f-screen': screen, 'f-pen': pen, 'f-dim': dim, 'f-select': select, 'f-objects': objects,
     'f-layers': layers, 'f-guides': guides, 'f-paint': paint, 'f-underlay': underlay, 'f-save': save,
+    'f-meeting': f_meeting,
 }
 FULL_OPEN = {'f-underlay': open_underlay}

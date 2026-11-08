@@ -279,10 +279,12 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     names = ARGS.only or list(SCENES)
     with sync_playwright() as pw, tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-        browser = pw.chromium.launch()
+        # 偽マイク：打ち合わせの録音を実際に動かす
+        browser = pw.chromium.launch(args=['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'])
         for name in names:
             ctx = browser.new_context(viewport={'width': W, 'height': H}, record_video_dir=tmp,
                                       record_video_size={'width': W, 'height': H}, accept_downloads=True)
+            ctx.grant_permissions(['microphone', 'clipboard-read', 'clipboard-write'], origin=ARGS.url.rstrip('/'))
             ctx.add_init_script(OVERLAY)
             full = name.startswith('f-')
             if full:

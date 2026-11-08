@@ -1,5 +1,6 @@
 // 詳細モードの解説動画（python scripts/record-guide.py --only f-... で撮り直す）
 import { type GuideVideo } from './Simple';
+import { PRO } from './edition';
 import screenMp4 from './guide/f-screen.mp4';
 import screenJpg from './guide/f-screen.jpg';
 import penMp4 from './guide/f-pen.mp4';
@@ -20,6 +21,10 @@ import underlayMp4 from './guide/f-underlay.mp4';
 import underlayJpg from './guide/f-underlay.jpg';
 import saveMp4 from './guide/f-save.mp4';
 import saveJpg from './guide/f-save.jpg';
+import meetingMp4 from './guide/f-meeting.mp4';
+import meetingJpg from './guide/f-meeting.jpg';
+
+export { meetingMp4, meetingJpg };
 
 export const GUIDE_FULL: GuideVideo[] = [
   { id: 'f-screen', title: '画面の見方', text: '2段の道具・左のボタン・右のパネル', video: screenMp4, poster: screenJpg },
@@ -32,4 +37,6 @@ export const GUIDE_FULL: GuideVideo[] = [
   { id: 'f-paint', title: '塗る（砂利・芝・ウッド）', text: '囲まれた所をタップして素材を選ぶ、大きさ・向きの調整', video: paintMp4, poster: paintJpg },
   { id: 'f-underlay', title: '下絵と縮尺合わせ', text: 'PDFを敷く、濃さ、2点で実寸に合わせる', video: underlayMp4, poster: underlayJpg },
   { id: 'f-save', title: '保存・書き出し・履歴', text: '別名保存、PDF・編集データ、履歴で戻す', video: saveMp4, poster: saveJpg },
-];
+  // Pro だけ：打ち合わせ（録音→文字→AIが要望に）
+  { id: 'f-meeting', title: '打ち合わせ（録音→AIが要望に）', text: '録音して止めると文字になり、AIが要望をカードに。図面・見積へ反映', video: meetingMp4, poster: meetingJpg },
+].filter(v => PRO || v.id !== 'f-meeting');

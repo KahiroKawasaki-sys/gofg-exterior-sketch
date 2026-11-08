@@ -79,6 +79,7 @@ export function MeetingPanel({ doc, lib, book, onDoc, onMeeting, onClose, onHide
     try { await src?.stop(); } catch { /* 止め損ねても続ける */ }
     setRec('idle');
     await transcriber().flush();
+    await new Promise(r => setTimeout(r, 120)); // 文字の行が図面に入って描画されるのを待つ（docRef が最新になる）
     const cur = docRef.current.meeting || EMPTY;
     if (cur.lines.length > readCount.current) await readRef.current(); else setPhase(cur.lines.length ? 'done' : 'idle');
   };

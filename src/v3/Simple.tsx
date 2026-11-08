@@ -18,6 +18,8 @@ import partsMp4 from './guide/parts.mp4';
 import paintMp4 from './guide/paint.mp4';
 import outMp4 from './guide/out.mp4';
 import undoMp4 from './guide/undo.mp4';
+import meetingMp4 from './guide/f-meeting.mp4';
+import meetingJpg from './guide/f-meeting.jpg';
 
 export type Step = 'draw' | 'parts' | 'paint' | 'out';
 export type ExportKind = 'png' | 'a4' | 'a3' | 'json' | 'dxf';
@@ -305,7 +307,7 @@ export function Tour({ steps, onDone }: { steps: TourStep[]; onDone: () => void 
 }
 
 // ---------------- 使い方（動く見本の一覧） ----------------
-export type HelpItem = { demo: DemoKind; title: string; text: string; video?: string };
+export type HelpItem = { demo?: DemoKind; title: string; text: string; video?: string; poster?: string };
 export const HELP: HelpItem[] = [
   { demo: 'flow', title: '全体の流れ', text: '下の①〜④を左から順に' },
   { demo: 'draw', title: '① 描く', text: 'ペンを選んでなぞる', video: drawMp4 },
@@ -315,6 +317,8 @@ export const HELP: HelpItem[] = [
   { demo: 'move', title: '動かす', text: '「動かす」で選んでドラッグ', video: partsMp4 },
   { demo: 'undo', title: '間違えたら', text: '上の「戻す」で1つ前へ', video: undoMp4 },
   { demo: 'pinch', title: '拡大・移動', text: '2本指で広げる・ずらす' },
+  // Pro だけ：打ち合わせ（録音→文字→AIが要望に）。詳細モードと同じ動画
+  ...(PRO ? [{ title: '⑤ 打ち合わせ', text: '録音→AIが要望に→図面・見積へ', video: meetingMp4, poster: meetingJpg }] : []),
 ];
 
 // 詳細モードの解説動画（guideFull.ts）。サムネイル画像つき
@@ -353,7 +357,7 @@ export function HelpSheet({ items, full, tab: tab0 = 'simple', open, onClose, on
           <div className="sx-hgrid">
             {items.map(h => (
               <div key={h.title} className="sx-hcard">
-                <Demo kind={h.demo} />
+                {h.demo ? <Demo kind={h.demo} /> : h.poster && <span className="th sx-hposter"><img src={h.poster} alt="" /></span>}
                 <b>{h.title}</b><span>{h.text}</span>
                 {h.video && <button className="sx-watch" onClick={() => setPlaying({ title: h.title, src: h.video!, list: simpleList })}><Play size={13} />実際の画面で見る</button>}
               </div>
