@@ -32,8 +32,22 @@ describe('打ち合わせAI',()=>{
   expect(r.status).toBe(200);expect(await r.json()).toEqual({requests:[{id:'',kind:'駐車場',text:'車2台',status:'決定'}],usage:{input:1200,output:300}});
   const [url,init]=globalThis.fetch.mock.calls[0];expect(url).toBe('https://api.anthropic.com/v1/messages');
   expect(init.headers['x-api-key']).toBe('test-key');
-  const sent=JSON.parse(init.body);expect(sent.model).toBe('claude-opus-5-5');expect(sent.tool_choice).toEqual({type:'tool',name:'record_requests'});
+  const sent=JSON.parse(init.body);expect(sent.model).toBe('claude-opus-5-5');expect(sent.tool_choice).toEqual({type:'auto'});expect(sent.max_tokens).toBeGreaterThanOrEqual(16000);expect(sent.output_config).toEqual({effort:'low'});
+  expect(sent.system).toContain('乱形石');expect(sent.system).toContain('必ず record_requests');
   expect(sent.messages[0].content).toContain('[r1] 芝生にしたい');expect(sent.messages[0].content).toContain('駐車場は2台ほしいです');
+ });
+ it('ツールを呼ばずに文章だけ返したら、1回だけ言い直して呼ばせる。それでも無ければ空で返す',async()=>{
+  globalThis.fetch=vi.fn()
+   .mockResolvedValueOnce(new Response(JSON.stringify({content:[{type:'text',text:'要望は駐車場2台です'}],usage:{input_tokens:100,output_tokens:10}}),{status:200}))
+   .mockResolvedValueOnce(new Response(JSON.stringify({content:[{type:'tool_use',name:'record_requests',input:{requests:[{id:'',kind:'駐車場',text:'車2台',status:'決定'}]}}],usage:{input_tokens:120,output_tokens:30}}),{status:200}));
+  let r=await worker.fetch(req({transcript:'駐車場は2台ほしいです'}),env());
+  expect(r.status).toBe(200);expect(await r.json()).toEqual({requests:[{id:'',kind:'駐車場',text:'車2台',status:'決定'}],usage:{input:220,output:40}});
+  expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  const second=JSON.parse(globalThis.fetch.mock.calls[1][1].body);
+  expect(second.messages).toHaveLength(3);expect(second.messages[1].role).toBe('assistant');expect(second.messages[2].content).toContain('record_requests');
+  globalThis.fetch=vi.fn(async()=>new Response(JSON.stringify({content:[{type:'text',text:'…'}],usage:{input_tokens:1,output_tokens:1}}),{status:200}));
+  r=await worker.fetch(req({transcript:'a'}),env());
+  expect(r.status).toBe(200);expect((await r.json()).requests).toEqual([]);expect(globalThis.fetch).toHaveBeenCalledTimes(2);
  });
  it('モデルは設定で変えられる。キー間違い・混雑は分かる言葉で返す',async()=>{
   globalThis.fetch=vi.fn(async()=>new Response('{}',{status:401}));

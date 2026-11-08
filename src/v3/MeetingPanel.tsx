@@ -7,8 +7,8 @@ import { quantities, textureAreas } from './quantities';
 import { buildEstimate, type PriceBook } from './estimate';
 
 const AUTO_MS = 10 * 60 * 1000; // 話している間は10分ごとに読み取る（新しい会話があるときだけ）
-// AI利用料の目安（1Mトークンあたり 入力5ドル・出力25ドル、1ドル200円）
-const costYen = (u: { input: number; output: number }) => (u.input * 5 + u.output * 25) / 1e6 * 200;
+// AI利用料の目安（Opus 5.5：1Mトークンあたり 入力4ドル・出力20ドル、1ドル200円）
+const costYen = (u: { input: number; output: number }) => (u.input * 4 + u.output * 20) / 1e6 * 200;
 const hhmm = (iso: string) => { const d = new Date(iso); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const jpy = (n: number) => '¥' + Math.round(n).toLocaleString('ja-JP');
 const EMPTY: Meeting = { lines: [], requests: [] };
