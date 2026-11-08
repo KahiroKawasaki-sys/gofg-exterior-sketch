@@ -336,7 +336,7 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
     const setView = (v: ViewKind) => {
       const c = center;
       if (v === 'top') { camera.position.set(c.x, span * 1.25, c.z + 0.01); controls.target.copy(c); }
-      else if (v === 'eye') { camera.position.set(c.x, 1.55, eyeZ + 2); controls.target.set(c.x, 1.3, c.z); }
+      else if (v === 'eye') { camera.position.set(c.x, 1.55, eyeZ + Math.max(6, span * 0.7)); controls.target.set(c.x, 2.0, c.z); } // 道路側から家を見る高さ・距離
       else { camera.position.set(c.x + span * 0.45, span * 0.55, c.z + span * 0.85); controls.target.copy(c); }
       controls.update();
     };

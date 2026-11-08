@@ -196,6 +196,38 @@ export function findBody(d: ImageData): Body | null {
   return { rect, ground, wallU: [(gx0 - x0) / rect.w, (gx1 - x0 + 1) / rect.w], roof: simplifyRoof(pts, 0.012), eaves: (eavesRow - rect.y) / rect.h, ridge: 0 };
 }
 
+// 家のシルエットの上端（列ごとの行）。壁の外のレベル線を消してから、透明な所を縁から塗りつぶす（外側）。
+// 列ごとに、上から見て「外側でない画素が minRun 以上続く」最初の行を返す。無ければ軒より下（none）
+export function silhouetteTop(d: ImageData, rows: { ridge: number; eaves: number; gl: number }, walls: [number, number], rx0: number, rx1: number, drop: number, maxThick: number): number[] {
+  const W = d.width, H = d.height;
+  const mask = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) if (d.data[i * 4 + 3] > 40) mask[i] = 1;
+  eraseLevelLines(mask, W, H, 0.35, maxThick, walls);
+  // 外側：透明な画素を縁から4近傍で塗りつぶす
+  const ext = new Uint8Array(W * H); const stack: number[] = [];
+  const push = (i: number) => { if (!mask[i] && !ext[i]) { ext[i] = 1; stack.push(i); } };
+  for (let x = 0; x < W; x++) { push(x); push((H - 1) * W + x); }
+  for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+  while (stack.length) {
+    const j = stack.pop()!, x = j % W, y = (j - x) / W;
+    if (x > 0) push(j - 1); if (x < W - 1) push(j + 1); if (y > 0) push(j - W); if (y < H - 1) push(j + W);
+  }
+  const minRun = Math.max(4, Math.round(H * 0.03)), none = rows.eaves + drop + 1;
+  const yTop = Math.max(0, Math.round(rows.ridge) - 2), yBot = Math.min(H - 1, Math.round(rows.eaves + drop));
+  const out: number[] = [];
+  for (let x = rx0; x <= rx1; x++) {
+    let t = none;
+    for (let y = yTop; y <= yBot; y++) {
+      if (ext[y * W + x]) continue;
+      let run = 0; while (y + run <= Math.min(H - 1, yBot + minRun) && !ext[(y + run) * W + x]) run++;
+      if (run >= minRun) { t = y; break; }
+      y += run;
+    }
+    out.push(t);
+  }
+  return out;
+}
+
 // 図面の文字から分かった行（最高高・軒高・GL）を手がかりに本体を見つける（PDF向け。こちらが本命）。
 // 壁：軒〜GLの間に縦線が6割以上続く列のうち、いちばん外側の2本（棟より上まで伸びる寸法線は除く）。
 // 屋根：棟〜軒の間の各列の上端（レベル線そのものの行は飛ばす）。壁の外へ屋根が続く範囲が軒の出
@@ -222,13 +254,10 @@ export function bodyFromLevels(d: ImageData, rows: { ridge: number; eaves: numbe
   const allow = Math.round((wx1 - wx0) * 0.2);
   const rx0 = Math.max(0, wx0 - allow), rx1 = Math.min(W - 1, wx1 + allow);
   // 軒の出は壁の外で下がるので、軒高より少し下（6%）まで見る
-  const drop = Math.round(H * 0.06), none = eaves + drop + 1;
-  const top: number[] = [];
-  for (let x = rx0; x <= rx1; x++) {
-    let t = -1;
-    for (let y = ridge + skip; y <= eaves + drop; y++) { if (Math.abs(y - eaves) <= 1) continue; if (opaque(d, x, y)) { t = y; break; } }
-    top.push(t < 0 ? none : t);
-  }
+  const drop = Math.round(H * 0.06);
+  // 屋根の輪郭＝家のシルエットの上端。外側（透明）を縁から塗りつぶし、塗りつぶされなかった所が家。
+  // 勾配の記号・引き出し線・文字は「薄い」ので、縦に一定以上つながる所だけを家とみなす
+  const top = silhouetteTop(d, { ridge, eaves, gl }, [wx0, wx1], rx0, rx1, drop, Math.max(3, Math.round(H * 0.007)));
   const win = Math.max(1, Math.round(top.length * 0.02));
   const prof = top.map((_, i) => { const s = top.slice(Math.max(0, i - win), Math.min(top.length, i + win + 1)).sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; });
   // 屋根が実際にある範囲（壁から外へ続けて屋根の線がある列）。そこまでが軒の出
@@ -239,7 +268,7 @@ export function bodyFromLevels(d: ImageData, rows: { ridge: number; eaves: numbe
   const rect = { x: x0, y: Math.max(0, ridge - Math.round(H * 0.01)), w: x1 - x0 + 1, h: 0 };
   rect.h = Math.min(H - 1, gl + Math.round(H * 0.012)) - rect.y + 1;
   const pts = prof.slice(a, b + 1).map((t, i) => ({ x: i / Math.max(1, b - a), y: (rect.y + rect.h - 1 - Math.min(eaves + drop, Math.max(ridge, t))) / rect.h }));
-  return { rect, ground: gl, wallU: [(wx0 - x0) / rect.w, (wx1 - x0 + 1) / rect.w], roof: simplifyRoof(pts, 0.01), eaves: (eaves - rect.y) / rect.h, ridge: 0 };
+  return { rect, ground: gl, wallU: [(wx0 - x0) / rect.w, (wx1 - x0 + 1) / rect.w], roof: simplifyRoof(pts, 0.015), eaves: (eaves - rect.y) / rect.h, ridge: 0 };
 }
 
 // 輪郭の間引き（Ramer–Douglas–Peucker）。端点は残す
