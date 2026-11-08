@@ -1,13 +1,14 @@
 // 平面図 → 3Dの立体リスト。描画ライブラリに依存しない純粋な変換（テストしやすくするため）。
 // 座標は m。図面の x → x、図面の y（下向き）→ z。高さは y（上向き）。
-import { type Doc, type Item, type LibItem, type Pt, type Role3, corners, segDist } from './types';
+import { type Doc, type Item, type LibItem, type Pt, type Role3, type Mat3, type ElevFace, type Elevation, corners, segDist } from './types';
+import { buildingHeight } from './elevation';
 
 export type P2 = { x: number; z: number };
 export type Solid = (
-  | { kind: 'wall'; a: P2; b: P2; h: number; t: number; color: string }
-  | { kind: 'fence'; a: P2; b: P2; h: number; base: number }
+  | { kind: 'wall'; a: P2; b: P2; h: number; t: number; color: string; mat?: Mat3 }
+  | { kind: 'fence'; a: P2; b: P2; h: number; base: number; mat?: Mat3 }
   | { kind: 'gate'; a: P2; b: P2; h: number }
-  | { kind: 'building'; poly: P2[]; h: number }
+  | { kind: 'building'; poly: P2[]; h: number; faces?: Partial<Record<ElevFace, Elevation>>; wallTop?: number }
   | { kind: 'tree'; x: number; z: number; r: number; h: number; form: 'round' | 'cone' | 'palm'; color: string }
   | { kind: 'shrub'; x: number; z: number; rx: number; rz: number; h: number; rot: number; color: string }
   | { kind: 'box'; x: number; z: number; w: number; d: number; h: number; rot: number; color: string; y0?: number }
@@ -18,7 +19,8 @@ export type Solid = (
   | { kind: 'stone'; x: number; z: number; rx: number; rz: number; h: number; rot: number }
 ) & { src?: string };
 
-export type SceneOpts = { wallH: number; buildingH: number };
+// elevations：立面図があれば建物の面に貼り、高さも立面図から決める（elevScale で大きさを調整）
+export type SceneOpts = { wallH: number; buildingH: number; elevations?: Partial<Record<ElevFace, Elevation>>; elevScale?: number };
 export const DEFAULT_SCENE_OPTS: SceneOpts = { wallH: 1.2, buildingH: 6 };
 // 囲みが建物とみなされる最小の広さ（㎡）。花壇や駐車枠を建物にしないため
 export const BUILDING_MIN_AREA = 20;
@@ -85,7 +87,10 @@ function raiseSolids(it: Item & { type: 'line' | 'stroke' | 'shape' }, m: (p: Pt
   if (role === 'ground') return [];
   if (role === 'building') {
     const poly = closed ? pts.slice(0, -1) : pts;
-    return poly.length >= 3 ? [{ kind: 'building', poly, h: h ?? o.buildingH, src }] : [];
+    if (poly.length < 3) return [];
+    const faces = o.elevations && Object.keys(o.elevations).length ? o.elevations : undefined;
+    const eh = faces ? buildingHeight(faces, o.elevScale ?? 1) : null;
+    return [{ kind: 'building', poly, h: h ?? eh?.h ?? o.buildingH, src, ...(faces && { faces, wallTop: eh?.wallTop }) }];
   }
   if (role === 'gate') {
     const a = pts[0], b = pts[pts.length - 1];
@@ -95,7 +100,7 @@ function raiseSolids(it: Item & { type: 'line' | 'stroke' | 'shape' }, m: (p: Pt
   for (let i = 1; i < pts.length; i++) {
     const a = pts[i - 1], b = pts[i];
     if (Math.hypot(b.x - a.x, b.z - a.z) < MIN_SEG) continue;
-    out.push(role === 'fence' ? { kind: 'fence', a, b, h: h ?? o.wallH, base: FENCE_BASE, src } : { kind: 'wall', a, b, h: h ?? o.wallH, t: WALL_T, color: '#d9d6cf', src });
+    out.push(role === 'fence' ? { kind: 'fence', a, b, h: h ?? o.wallH, base: FENCE_BASE, src, mat: it.mat3 } : { kind: 'wall', a, b, h: h ?? o.wallH, t: WALL_T, color: '#d9d6cf', src, mat: it.mat3 });
   }
   return out;
 }

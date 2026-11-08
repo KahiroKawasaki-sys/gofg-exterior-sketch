@@ -93,7 +93,7 @@ it('使い方には動く見本と実画面の動画がある', async () => {
   localStorage.setItem('gofg-v3-tour', 'done');
   await open();
   await click(q('[aria-label="使い方"]'));
-  expect(qa('.sx-hcard').length).toBe(8);
+  expect(qa('.sx-hcard').length).toBe(9);
   expect(qa('.sx-hcard .sx-demo').length).toBe(8);
   await click(byText('.sx-hcard', '① 描く').querySelector('.sx-watch'));
   expect(q('.sx-player video')?.getAttribute('src')).toMatch(/draw.*\.mp4/);
@@ -129,7 +129,7 @@ it('詳細モード：「使い方」で詳細の解説動画一覧を開き、�
   await openFull();
   await click(byText('.sx-modebtn', '使い方'));
   expect(byText('.sx-tabs button.on', '詳細モード')).toBeTruthy();
-  expect(qa('.sx-vcard').length).toBe(10);
+  expect(qa('.sx-vcard').length).toBe(11);
   await click(byText('.sx-vcard', '画面の見方'));
   expect(q('.sx-player video')?.getAttribute('src')).toMatch(/f-screen.*\.mp4/);
   await click(byText('.sx-player .v3-btn', '次：ペン・線・図形'));

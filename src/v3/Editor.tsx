@@ -507,7 +507,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       {PRO && meet !== 'closed' && <div className={'v3-qty-wrap v3-meet-wrap' + (meet === 'min' ? ' min' : '')} onClick={e => { if (e.target === e.currentTarget) setMeet('min'); }}>
         <MeetingPanel doc={doc} lib={lib} book={book} hidden={meet === 'min'} toast={toast} onDoc={D.set} onMeeting={f => D.setMeeting(m => f(m || { lines: [], requests: [] }))}
           onHide={h => setMeet(h ? 'min' : 'open')} onClose={() => setMeet('closed')} onVideo={() => setHelp({ tab: 'full', open: 'f-meeting' })} /></div>}
-      {PRO && show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} onRaise={(id, v) => D.set(d => updateItem(d, id, it => ({ ...it, ...v }) as Item), '3Dの種類を変更')} /></Suspense>}
+      {PRO && show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} onDoc={D.set} onRaise={(id, v) => D.set(d => updateItem(d, id, it => ({ ...it, ...v }) as Item), '3Dの種類を変更')} /></Suspense>}
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
       {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}
       {prompt && <PromptDialog title={prompt.title} fields={prompt.fields} note={prompt.note} okLabel={prompt.ok} onOk={prompt.run} onCancel={() => { setPrompt(null); if (tool === 'calib') setTool('select'); }} />}

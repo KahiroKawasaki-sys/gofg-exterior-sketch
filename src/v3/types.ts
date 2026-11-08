@@ -5,7 +5,9 @@ export type Dash = 'solid' | 'dashed' | 'dotted';
 
 // 3Dでの見せ方（未指定は自動判定）。h3 は高さ mm（未指定は種類ごとの既定値）
 export type Role3 = 'auto' | 'wall' | 'fence' | 'gate' | 'building' | 'ground';
-export type Raise3 = { role3?: Role3; h3?: number };
+// mat3：3Dの見た目（塀：block=化粧ブロック / plaster=塗り壁 / wood=木目 / alumi=アルミ、フェンス：board=横板 / lattice=縦格子 / mesh=メッシュ）
+export type Mat3 = 'block' | 'plaster' | 'wood' | 'alumi' | 'board' | 'lattice' | 'mesh';
+export type Raise3 = { role3?: Role3; h3?: number; mat3?: Mat3 };
 export type StrokeItem = { id: string; type: 'stroke'; brush: Brush; color: string; width: number; dash: Dash; pts: Pt[] } & Raise3;
 export type LineItem = { id: string; type: 'line'; kind: 'line' | 'polyline' | 'arrow'; color: string; width: number; dash: Dash; pts: Pt[] } & Raise3;
 export type ShapeItem = { id: string; type: 'shape'; shape: 'rect' | 'ellipse' | 'circle'; color: string; width: number; dash: Dash; x: number; y: number; w: number; h: number; rot: number } & Raise3;
@@ -32,7 +34,14 @@ export type Doc = {
   view?: { x: number; y: number; k: number; r: number };
   est?: DocEstimate;
   meeting?: Meeting;
+  // 立面図（面ごとの絵。3Dの建物に貼る）と、その大きさの調整（1=用紙の縮尺どおり）
+  elevations?: Partial<Record<ElevFace, Elevation>>;
+  elevScale?: number;
 };
+
+// 立面図の1面：白を透明にしたPNG、px寸法、1pxの実寸(mm)、壁の上端の位置（上から 0..1。屋根の下）
+export type ElevFace = 'N' | 'E' | 'S' | 'W';
+export type Elevation = { src: string; w: number; h: number; mmPerPx: number; wallTop?: number };
 
 // 打ち合わせの記録（会話の文字・AIが読み取った要望・予算）
 export type AiAction = { type: 'height'; role: 'wall' | 'fence'; mm: number } | { type: 'extra'; name: string; qty?: number; unit?: string } | { type: 'budget'; yen: number };

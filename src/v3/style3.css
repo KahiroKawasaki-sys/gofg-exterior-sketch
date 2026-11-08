@@ -438,3 +438,27 @@ button.v3-mono:hover { color: var(--green); }
 .v3-meet-log p.ed input { flex: 1; height: 28px; border: 1px solid var(--green); border-radius: 7px; padding: 0 8px; font-size: 12px; }
 .v3-meet-pill.busy { color: #8a6200; }
 .v3-meet-pill.busy .dot { background: #d9a400; }
+
+/* 3D：見た目・立面図 */
+.v3-3d-roles.mats { grid-template-columns: repeat(4, 1fr); }
+.v3-3d-roles.mats button { font-size: 11.5px; padding: 0 2px; }
+.v3-3d-elev { display: flex; gap: 6px; flex-wrap: wrap; }
+.v3-3d-elev .v3-btn { display: inline-flex; align-items: center; gap: 5px; }
+.v3-elev { width: min(1040px, 96vw); max-height: 92vh; display: flex; flex-direction: column; background: #f6f6f4; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,.25); overflow: hidden; }
+.v3-elev-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.v3-elev-head .v3-note { margin: 0; }
+.v3-elev-head .sp { flex: 1; }
+.v3-elev-sheet { flex: 1; min-height: 240px; overflow: auto; padding: 12px; display: flex; justify-content: center; touch-action: none; }
+.v3-elev-canvas { position: relative; background-size: 100% 100%; background-repeat: no-repeat; box-shadow: 0 1px 6px rgba(0,0,0,.15); background-color: #fff; }
+.v3-elev-crop { position: absolute; border: 2px solid var(--green); background: rgba(46,87,71,.08); border-radius: 4px; cursor: move; }
+.v3-elev-crop.off { border-color: #b4b8b6; background: rgba(0,0,0,.04); border-style: dashed; }
+.v3-elev-crop select { position: absolute; left: -2px; top: -2px; height: 26px; border: 0; border-radius: 4px 0 6px 0; background: var(--green); color: #fff; font-size: 12px; font-weight: 700; padding: 0 6px; }
+.v3-elev-crop.off select { background: #8d918f; }
+.v3-elev-crop .hd { position: absolute; right: -9px; bottom: -9px; width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 2px solid var(--green); cursor: nwse-resize; }
+.v3-elev-crop.off .hd { border-color: #8d918f; }
+.v3-elev-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 13px; }
+.v3-elev-foot label { display: inline-flex; align-items: center; gap: 5px; }
+.v3-elev-foot select, .v3-elev-foot input { height: 32px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 13px; padding: 0 8px; }
+.v3-elev-foot input { width: 70px; }
+.v3-elev-foot .sp { flex: 1; }
+.v3-elev-foot .v3-note { margin: 0; }
