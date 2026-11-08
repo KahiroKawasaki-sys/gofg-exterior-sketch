@@ -37,7 +37,7 @@ export function TextDialog({ initial, onOk, onCancel, onDelete }: { initial: Tex
 }
 
 export type Field = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'checkbox'; value: string | number | boolean; options?: string[]; suffix?: string };
-export function PromptDialog({ title, fields, note, okLabel = 'OK', onOk, onCancel }: { title: string; fields: Field[]; note?: string; okLabel?: string; onOk: (v: Record<string, string | number | boolean>) => void; onCancel: () => void }) {
+export function PromptDialog({ title, fields, note, okLabel = 'OK', cancelLabel = 'キャンセル', onOk, onCancel }: { title: string; fields: Field[]; note?: string; okLabel?: string; cancelLabel?: string; onOk: (v: Record<string, string | number | boolean>) => void; onCancel: () => void }) {
   const [vals, setVals] = useState<Record<string, string | number | boolean>>(Object.fromEntries(fields.map(f => [f.key, f.value])));
   const first = useRef<HTMLInputElement>(null);
   useEffect(() => { first.current?.focus(); first.current?.select(); }, []);
@@ -54,7 +54,7 @@ export function PromptDialog({ title, fields, note, okLabel = 'OK', onOk, onCanc
           </label>
         ))}
         {note && <p className="v3-note">{note}</p>}
-        <div className="v3-actions"><span className="sp" /><button type="button" className="v3-btn" onClick={onCancel}>キャンセル</button><button type="submit" className="v3-btn primary">{okLabel}</button></div>
+        <div className="v3-actions"><span className="sp" /><button type="button" className="v3-btn" onClick={onCancel}>{cancelLabel}</button><button type="submit" className="v3-btn primary">{okLabel}</button></div>
       </form>
     </Modal>
   );

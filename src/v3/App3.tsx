@@ -45,7 +45,7 @@ export default function App3() {
     <div className="v3-home">
       <input ref={pdfRef} type="file" hidden accept="application/pdf,image/png,image/jpeg,image/webp" onChange={e => { fromFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={jsonRef} type="file" hidden accept="application/json,.json" onChange={e => { fromJson(e.target.files?.[0]); e.target.value = ''; }} />
-      <header className="v3-hhead"><span className="logo"><PenTool size={18} /></span><b>外構スケッチ</b><span className="v3-mono">ver 2026.10.06-01 (home-app)</span><span className="sp" /><button className={'v3-cloud ' + cloud.phase} title={cloud.detail || cloud.message} onClick={() => syncNow(true).then(refresh)} disabled={cloud.phase === 'syncing'}>{cloud.phase === 'syncing' ? <RefreshCw size={14} /> : cloud.phase === 'synced' || cloud.phase === 'pending' ? <Cloud size={14} /> : <CloudOff size={14} />}<span>{cloud.message}</span></button></header>
+      <header className="v3-hhead"><span className="logo"><PenTool size={18} /></span><b>外構スケッチ</b><span className="v3-mono">ver 2026.11.09-01 (elev-3d)</span><span className="sp" /><button className={'v3-cloud ' + cloud.phase} title={cloud.detail || cloud.message} onClick={() => syncNow(true).then(refresh)} disabled={cloud.phase === 'syncing'}>{cloud.phase === 'syncing' ? <RefreshCw size={14} /> : cloud.phase === 'synced' || cloud.phase === 'pending' ? <Cloud size={14} /> : <CloudOff size={14} />}<span>{cloud.message}</span></button></header>
       <main>
         <h1>キャンバス</h1>
         <p className="lead">平面図の上で、手描き → 清書 → 部品・植栽 → 素材の塗り分け → 寸法まで。</p>
@@ -54,7 +54,7 @@ export default function App3() {
         {!!cloud.forked && <p className="v3-note" onClick={clearForkNotice}>別の端末でも同時に編集された図面があったため、この端末の内容を「（この端末の版）」として残しました。</p>}
         <div className="v3-cards">
           <button className="v3-new" onClick={() => start(newDoc())}><Plus size={22} /><b>新しいキャンバス</b><span>白紙から描き始める</span></button>
-          <button className="v3-new" onClick={() => pdfRef.current?.click()}><FileUp size={22} /><b>下絵から始める</b><span>PDF・画像の配置図を読み込む</span></button>
+          <button className="v3-new" onClick={() => pdfRef.current?.click()}><FileUp size={22} /><b>下絵から始める</b><span>配置図のPDF・画像を読み込む。立面図もあれば3Dで家が立つ</span></button>
           <button className="v3-new accent" onClick={() => start(sampleDoc())}><Trees size={22} /><b>サンプル邸で試す</b><span>建物・敷地・車が入った見本</span></button>
           <button className="v3-new" onClick={() => jsonRef.current?.click()}><FolderOpen size={22} /><b>編集データを開く</b><span>.garden3.json を読み込む</span></button>
         </div>

@@ -39,7 +39,7 @@ import { buildEstimate, defaultBook, estimateCsv, importItems, parseCsv, parsePr
 // three.js は大きいので、3Dを開いたときだけ読み込む
 const View3D = lazy(() => import('./View3D'));
 
-const VERSION = 'ver 2026.11.08-01 (meeting-rec)';
+const VERSION = 'ver 2026.11.09-01 (elev-3d)';
 type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | 'qty' | null;
 
 // CSVは UTF-8 か Shift_JIS（Excelの既定）のどちらか
@@ -75,7 +75,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const [show3d, setShow3d] = useState(false);
   const [menu, setMenu] = useState<{ id: string; rect: DOMRect } | null>(null);
   const [textDlg, setTextDlg] = useState<{ p: Pt; edit?: TextItem } | null>(null);
-  const [prompt, setPrompt] = useState<{ title: string; fields: Field[]; note?: string; ok: string; run: (v: Record<string, string | number | boolean>) => void } | null>(null);
+  const [prompt, setPrompt] = useState<{ title: string; fields: Field[]; note?: string; ok: string; cancel?: string; run: (v: Record<string, string | number | boolean>) => void } | null>(null);
   const [saved, setSaved] = useState<'saved' | 'saving' | 'error'>('saved');
   const stageRef = useRef<HTMLDivElement>(null), fileRef = useRef<HTMLInputElement>(null), imgRef = useRef<HTMLInputElement>(null), camRef = useRef<HTMLInputElement>(null), jsonRef = useRef<HTMLInputElement>(null), elevRef = useRef<HTMLInputElement>(null);
   // 立面図（Pro）：読み込んだ用紙の絵。枠を合わせて3Dの建物に貼る
@@ -102,7 +102,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
     if (!PRO || !initial.underlay || initial.elevations || initial.layers.some(l => l.items.length) || tour) return;
     const key = 'gofg-elev-asked-' + initial.id;
     try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch { /* 保存できなくても聞く */ }
-    const t = setTimeout(() => setPrompt({ title: '立面図はありますか？', fields: [], note: '東・西・南・北の立面図（PDF）を読み込むと、家が3Dで立ち上がります。あとから「設定」や3D画面の「立面図を読み込む」でもできます。', ok: '立面図を読み込む', run: () => { setPrompt(null); elevRef.current?.click(); } }), 600);
+    const t = setTimeout(() => setPrompt({ title: '立面図はありますか？', fields: [], note: '東・西・南・北の立面図（PDF）を読み込むと、家が3Dで立ち上がります。あとから「設定」や3D画面の「立面図を読み込む」でもできます。', ok: '立面図を読み込む', cancel: 'あとで', run: () => { setPrompt(null); elevRef.current?.click(); } }), 600);
     return () => clearTimeout(t);
   }, [tour]);
 
@@ -198,7 +198,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         D.set(d => ({ ...d, underlay: { src: im.src, name: f.name, x: c.x - w / 2, y: c.y - h / 2, w, h, opacity: 0.6, visible: true, locked: true } }), '下絵を読み込み');
         toast(size.denom ? `下絵を読み込み、図面の縮尺 1/${size.denom}（${size.paper}）で実寸に合わせました` : '下絵を読み込みました。設定の「縮尺合わせ」で実寸に合わせられます');
         // Pro：立面図もあれば続けて読み込むと、3Dで家が立つ
-        if (PRO && !doc.elevations) setPrompt({ title: '立面図はありますか？', fields: [], note: '東・西・南・北の立面図（PDF）を読み込むと、家が3Dで立ち上がります。あとから3D画面の「立面図を読み込む」でもできます。', ok: '立面図を読み込む', run: () => { setPrompt(null); elevRef.current?.click(); } });
+        if (PRO && !doc.elevations) setPrompt({ title: '立面図はありますか？', fields: [], note: '東・西・南・北の立面図（PDF）を読み込むと、家が3Dで立ち上がります。あとから3D画面の「立面図を読み込む」でもできます。', ok: '立面図を読み込む', cancel: 'あとで', run: () => { setPrompt(null); elevRef.current?.click(); } });
       };
       if (src.pages > 1) setPrompt({ title: 'ページを選ぶ', fields: [{ key: 'page', label: `ページ（1〜${src.pages}）`, type: 'number', value: 1 }], ok: '読み込む', run: v => { setPrompt(null); run(Math.min(src.pages, Math.max(1, Math.round(+v.page || 1)))); } });
       else await run(1);
@@ -532,7 +532,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       {PRO && show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} onDoc={D.set} onRaise={(id, v) => D.set(d => updateItem(d, id, it => ({ ...it, ...v }) as Item), '3Dの種類を変更')} /></Suspense>}
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
       {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}
-      {prompt && <PromptDialog title={prompt.title} fields={prompt.fields} note={prompt.note} okLabel={prompt.ok} onOk={prompt.run} onCancel={() => { setPrompt(null); if (tool === 'calib') setTool('select'); }} />}
+      {prompt && <PromptDialog title={prompt.title} fields={prompt.fields} note={prompt.note} okLabel={prompt.ok} cancelLabel={prompt.cancel} onOk={prompt.run} onCancel={() => { setPrompt(null); if (tool === 'calib') setTool('select'); }} />}
       {PRO && elevSheet && <ElevationDialog sheet={elevSheet} onCancel={() => setElevSheet(null)}
         onSave={e => {
           setElevSheet(null);
@@ -565,9 +565,18 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
             <label className="v3-chk"><input type="checkbox" checked={u.visible} onChange={e => D.set(d => ({ ...d, underlay: { ...d.underlay!, visible: e.target.checked } }), '下絵の表示')} />表示</label>
             <label className="v3-chk"><input type="checkbox" checked={u.locked} onChange={e => D.set(d => ({ ...d, underlay: { ...d.underlay!, locked: e.target.checked } }), '下絵ロック')} />ロック（外すと選択ツールでドラッグ移動）</label>
             <div className="v3-slider"><span>濃さ</span><input type="range" min={5} max={100} value={Math.round(u.opacity * 100)} onChange={e => D.live(d => ({ ...d, underlay: { ...d.underlay!, opacity: +e.target.value / 100 } }))} onPointerUp={() => D.end('下絵の濃さ')} /><em>{Math.round(u.opacity * 100)}%</em></div>
-            <div className="v3-row wrap"><button className="v3-btn" onClick={() => { setTool('calib'); toast('長さが分かる2点を順に押してください'); }}>縮尺合わせ（2点）</button>{PRO && <button className="v3-btn" onClick={() => elevRef.current?.click()}>{doc.elevations ? '立面図を読み込み直す' : '立面図を読み込む（3D）'}</button>}<button className="v3-btn danger" onClick={() => D.set(d => ({ ...d, underlay: undefined }), '下絵を削除')}>下絵を外す</button></div>
+            <div className="v3-row wrap"><button className="v3-btn" onClick={() => { setTool('calib'); toast('長さが分かる2点を順に押してください'); }}>縮尺合わせ（2点）</button><button className="v3-btn danger" onClick={() => D.set(d => ({ ...d, underlay: undefined }), '下絵を削除')}>下絵を外す</button></div>
           </>}
         </section>
+        {PRO && <section className="v3-card"><h4>立面図（3D）</h4>
+          {doc.elevations ? <p className="v3-note">{(['N', 'E', 'S', 'W'] as const).filter(f => doc.elevations?.[f]).map(f => ({ N: '北', E: '東', S: '南', W: '西' })[f]).join('・')}面を建物に貼っています。3Dで確認できます。</p>
+            : <p className="v3-note">東・西・南・北の立面図（PDF・画像）を読み込むと、実寸の家が3Dで立ち上がります。建物の囲みが無ければ自動で置きます。</p>}
+          <div className="v3-row wrap">
+            <button className="v3-btn" onClick={() => elevRef.current?.click()}>{doc.elevations ? '立面図を読み込み直す' : '立面図を読み込む'}</button>
+            {doc.elevations && <button className="v3-btn" onClick={() => setShow3d(true)}>3Dで見る</button>}
+            {doc.elevations && <button className="v3-btn danger" onClick={() => D.set(d => ({ ...d, elevations: undefined, elevScale: undefined }), '立面図を外す')}>外す</button>}
+          </div>
+        </section>}
         <section className="v3-card"><h4>表示</h4>
           <label className="v3-kv"><span>単位</span><select aria-label="単位" value={opts.unit} onChange={e => setOpts({ ...opts, unit: e.target.value })}><option>mm</option><option>cm</option><option>m</option></select></label>
           <label className="v3-kv"><span>線の長さ</span><select aria-label="距離表示" value={opts.measure} onChange={e => setOpts({ ...opts, measure: e.target.value })}><option value="line">描くときに表示</option><option value="off">表示しない</option></select></label>

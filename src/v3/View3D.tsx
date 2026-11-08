@@ -493,7 +493,7 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
             <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) pickSheet(f); }} />
           </div>}
           {hasElev && <p>立面図：{(['N', 'E', 'S', 'W'] as ElevFace[]).filter(f => doc.elevations?.[f]).map(f => ({ N: '北', E: '東', S: '南', W: '西' })[f]).join('・')}面を建物に貼っています（「建物」にした囲みに貼られます）。</p>}
-          <p>線をタップすると、塀・フェンス・門扉・建物・地面のままを選べます。種類を選んでいない実線は塀、20㎡以上の実線の囲みは建物になります。1本指で回転、2本指で移動・拡大。</p>
+          <p>{hasElev ? '' : '立面図（PDF）を読み込むと、実寸の家が立ち上がります。'}線をタップすると、塀・フェンス・門扉・建物・地面のままを選べます。種類を選んでいない実線は塀、20㎡以上の実線の囲みは建物になります。1本指で回転、2本指で移動・拡大。</p>
         </div>
       )}
       {busy && <div className="v3-3d-msg">3Dを準備しています…</div>}
