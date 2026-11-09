@@ -50,7 +50,9 @@ describe('AIパース',()=>{
  it('混雑（429）は 503、画像が返らなければ AI の説明つきで 502',async()=>{
   fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({error:{message:'quota'}}),{status:429}));
   const busy=await worker.fetch(req({image:png}),env());
-  expect(busy.status).toBe(503);expect((await busy.json()).error).toContain('混み合って');
+  expect(busy.status).toBe(503);const busyMsg=(await busy.json()).error;expect(busyMsg).toContain('利用枠');expect(busyMsg).toContain('Google: quota');
+  fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({error:{message:'Resource has been exhausted'}}),{status:429}));
+  expect((await (await worker.fetch(req({image:png}),env())).json()).error).toContain('混み合って');
   fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({steps:[{type:'model_output',content:[{type:'text',text:'I cannot render this.'}]}]}),{status:200}));
   const none=await worker.fetch(req({image:png}),env());
   expect(none.status).toBe(502);expect((await none.json()).error).toContain('I cannot render this.');
