@@ -8,7 +8,7 @@ import { type Role3, type Mat3, type ElevFace, type Elevation } from './types';
 import { type Doc, type LibItem, rad } from './types';
 import { readSource } from './source';
 import { edgeFace, isClockwise, faceU, faceAxis, polyBBox, roofFace } from './elevation';
-import { wallMaterial, grassMaterial, skyTexture, elevationTexture, WALL_MATS, FENCE_MATS, WALL_COLORS, ROOF_COLORS, wallColor, roofMaterial, glassMaterial, sashMaterial } from './materials3d';
+import { wallMaterial, outerGroundMaterial, skyTexture, elevationTexture, WALL_MATS, FENCE_MATS, WALL_COLORS, ROOF_COLORS, wallColor, roofMaterial, glassMaterial, sashMaterial } from './materials3d';
 import { siteGround } from './siteGround';
 import { ElevationDialog } from './ElevationDialog';
 import { RenderDialog } from './RenderDialog';
@@ -246,7 +246,7 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
     sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005;
     scene.add(sun, sun.target);
     // 敷地の外側（ぼんやりした地面）
-    const outer = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), grassMaterial());
+    const outer = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), outerGroundMaterial());
     outer.rotation.x = -Math.PI / 2; outer.position.y = -0.01; outer.receiveShadow = true; scene.add(outer);
     let world = new THREE.Group(), ground: THREE.Mesh | null = null; scene.add(world);
     let center = new THREE.Vector3(), span = 20, eyeZ = 0, lit: string | null = null;

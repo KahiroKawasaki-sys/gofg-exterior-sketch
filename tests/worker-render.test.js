@@ -33,6 +33,8 @@ describe('AIパース',()=>{
   expect(body.input[0].text).toContain('eye level');
   expect(body.input[0].text).toContain('blue hour');
   expect(body.input[0].text).toContain('塀は黒いタイル');
+  expect(body.input[0].text).toContain('Never turn the surroundings into a meadow'); // 敷地の外を草原にしない
+  expect(body.input[0].text).toContain('follow the site plan drawn on the ground');
   expect(body.generation_config).toBeUndefined();
  });
  it('鍵が無ければ 503、画像が無ければ 400、大きすぎれば 413',async()=>{
@@ -76,7 +78,7 @@ describe('AIパース',()=>{
 describe('render の部品',()=>{
  it('指示は視点・時間帯・希望を含み、形を変えないよう念を押す',()=>{
   const p=renderPrompt('bird','night','');
-  expect(p).toContain('bird');expect(p).toContain('Night');expect(p).toContain('Do not add');expect(p).not.toContain('Customer request');
+  expect(p).toContain('bird');expect(p).toContain('Night');expect(p).toContain('do not add');expect(p).not.toContain('Customer request');
   expect(renderPrompt('top','day','芝は人工芝')).toContain('Customer request');
  });
  it('pickImage は model_output の最後の画像を選び、inline_data 形式も読む',()=>{

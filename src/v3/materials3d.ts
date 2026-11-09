@@ -61,6 +61,9 @@ export function wallMaterial(mat: Mat3 | undefined, fallback: string, len: numbe
 }
 export const meshFenceMaterial = (len: number, h: number) => { const map = meshTex().clone(); map.needsUpdate = true; map.repeat.set(Math.max(0.25, len), Math.max(0.25, h)); return new THREE.MeshStandardMaterial({ map, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.4 }); };
 export const grassMaterial = () => { const map = grassTex().clone(); map.needsUpdate = true; map.repeat.set(400, 400); return new THREE.MeshStandardMaterial({ map, roughness: 1 }); };
+// 敷地の外（図面の外）の地面：芝にすると AI パースが周りを草原にしてしまうので、何でもない薄いグレーの地面にする
+const outerTex = () => patternTexture('outer', (g, s) => { g.fillStyle = '#cfccc5'; g.fillRect(0, 0, s, s); noise(g, s, 1500, 0.06); noise(g, s, 600, 0.08, false); }, 128);
+export const outerGroundMaterial = () => { const map = outerTex().clone(); map.needsUpdate = true; map.repeat.set(400, 400); return new THREE.MeshStandardMaterial({ map, roughness: 1 }); };
 
 // 空：上が青、地平線が白っぽいグラデーション
 export function skyTexture(): THREE.Texture {
