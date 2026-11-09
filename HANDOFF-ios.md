@@ -134,6 +134,6 @@ TestFlight の Pro ビルドで、次を順に確認する。Web版（iPad Safar
 
 - **使い方**：3D画面右上の「AIパース」→ 今の視点の写しが左上に出る → 時間帯（昼・夕方・夜）と「お客様の希望」（例：塀は黒いタイル）を選んで「パースを作る」。30秒〜1分で右に写真調の絵が出る。「保存・共有」で iPad の共有シート（Web はダウンロード）。何枚か作ると下に帯で並び、左上の「元の3D」をタップすると見比べられる。できた絵は端末（IndexedDB `renders`、図面IDつき）に残り、同じ図面の3Dから開き直すとまた見られる。図面データ本体には入れない（容量のため。クラウド同期・バックアップZIPにも入らない）。
 - **仕組み**：`src/v3/RenderDialog.tsx`（画面）、`src/v3/render.ts`（写しを長辺1536pxのJPEGにして `/api/ai/render` へ）、`worker/render.ts`（Google の画像モデル **Nano Banana 2.1 `gemini-nano-banana-2.1`** を Interactions API で呼ぶ。視点・時間帯・希望を英語の指示にし「形・配置・視点は変えず材質と光だけ」と念を押す。出力は 2K の JPEG、1枚 約$0.05≒8円）。画像は変換するだけで保存しない。アプリ（サービストークン）からも使える。利用記録は `provider:'google'` で複業マネージャーへ。
-- **設定（本人作業・未完了）**：Worker に `GEMINI_API_KEY` が必要。未設定だと「AIパースの準備がまだできていません」と出る（他の機能は影響なし）。リポジトリ直下で `npx wrangler secret put GEMINI_API_KEY` を実行し、Google AI Studio で **この用途専用に発行した鍵**を貼る（台帳に記録）。モデルを替えるときは `RENDER_MODEL`、思考量を指定するときは `RENDER_THINKING`（minimal/medium/high。未設定ならモデル既定）。
+- **設定（2026-11-09 完了）**：Worker の `GEMINI_API_KEY` は Google AI Studio「Default Gemini Project」（有料 Tier 1）に発行した鍵 `gofg-exterior-sketch-render`（台帳に記録）。無料枠のプロジェクトでは 429「limit: 0 on Free Tier」で1枚も作れないので、鍵を替えるときは有料プロジェクトで発行する。入れ替えは `npx wrangler secret put GEMINI_API_KEY --profile gofg-kawakahi`。本番で生成確認済み（サンプル邸・昼、約60秒）。モデルを替えるときは `RENDER_MODEL`、思考量を指定するときは `RENDER_THINKING`（minimal/medium/high。未設定ならモデル既定）。
 - **実機で見るところ**：①鍵設定後、サンプル邸の3Dで昼→30秒〜1分で絵が出るか ②立面図を入れた邸で家の形・色・窓が保たれるか（崩れるなら指示文を調整） ③夕方・夜で灯りがつくか ④「保存・共有」で写真に保存できるか ⑤生成中に「3Dへ戻る」→ 開き直すと絵が残っているか。
 - **限界**：AIの想像で細部が変わる（植栽の種類・塀の模様など）。同じ設定でも毎回少し違う。真上視点は航空写真風になるだけで図面としては使えない。
