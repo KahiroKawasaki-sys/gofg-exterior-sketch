@@ -4,8 +4,9 @@ import { type Doc, type LibItem } from './types';
 const DB = 'gofg-sketch-v3';
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const r = indexedDB.open(DB, 1);
-    r.onupgradeneeded = () => { for (const n of ['docs', 'library', 'meta']) if (!r.result.objectStoreNames.contains(n)) r.result.createObjectStore(n, { keyPath: 'id' }); };
+    // v2: renders（AIパースの絵。図面IDつき）
+    const r = indexedDB.open(DB, 2);
+    r.onupgradeneeded = () => { for (const n of ['docs', 'library', 'meta', 'renders']) if (!r.result.objectStoreNames.contains(n)) r.result.createObjectStore(n, { keyPath: 'id' }); };
     r.onsuccess = () => resolve(r.result);
     r.onerror = () => reject(r.error);
   });
@@ -34,6 +35,11 @@ export const deleteLibItem = (id: string) => tx<void>('library', 'readwrite', s 
 export const getMeta = <T,>(id: string) => tx<{ id: string; value: T } | undefined>('meta', 'readonly', s => s.get(id)).then(v => v?.value);
 export const setMeta = (id: string, value: unknown) => tx<void>('meta', 'readwrite', s => { s.put({ id, value }); });
 export const deleteMeta = (id: string) => tx<void>('meta', 'readwrite', s => { s.delete(id); });
+// AIパース（図面ごと。新しい順）
+export const listRenders = async <T extends { id: string; docId: string; at: string }>(docId: string) => ((await tx<T[]>('renders', 'readonly', s => s.getAll())) || []).filter(r => r.docId === docId).sort((a, b) => b.at.localeCompare(a.at));
+export const saveRender = (r: { id: string }) => tx<void>('renders', 'readwrite', s => { s.put(r); });
+export const deleteRender = (id: string) => tx<void>('renders', 'readwrite', s => { s.delete(id); });
+export const deleteRendersOf = async (docId: string) => { for (const r of await listRenders(docId)) await deleteRender(r.id); };
 export const listMeta = async <T,>(prefix: string) => ((await tx<{ id: string; value: T }[]>('meta', 'readonly', s => s.getAll())) || []).filter(m => m.id.startsWith(prefix));
 
 export function validDoc(v: unknown): Doc {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { X, Camera, RotateCcw, ImagePlus } from 'lucide-react';
+import { X, Camera, RotateCcw, ImagePlus, Sparkles } from 'lucide-react';
 import { type Role3, type Mat3, type ElevFace, type Elevation } from './types';
 import { type Doc, type LibItem, rad } from './types';
 import { readSource } from './source';
@@ -11,6 +11,8 @@ import { edgeFace, isClockwise, faceU, faceAxis, polyBBox, roofFace } from './el
 import { wallMaterial, grassMaterial, skyTexture, elevationTexture, WALL_MATS, FENCE_MATS, WALL_COLORS, ROOF_COLORS, wallColor, roofMaterial, glassMaterial, sashMaterial } from './materials3d';
 import { siteGround } from './siteGround';
 import { ElevationDialog } from './ElevationDialog';
+import { RenderDialog } from './RenderDialog';
+import { PRO } from './edition';
 import { type RenderCtx } from './markup';
 import { contentBox, docSVG, rasterize } from './raster';
 import { buildScene, groundDoc, pickRaisable, canRaise, itemOutline, withElevations, hasBuilding, footprintFromElevations, placeBuilding, ROLE_LABELS, DEFAULT_SCENE_OPTS, type Solid, type SceneOpts, type P2 } from './scene3d';
@@ -215,6 +217,7 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
   const [sheet, setSheet] = useState<{ src: string; width: number; height: number; text?: import('./elevLabels').TextItem[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragScale, setDragScale] = useState<number | null>(null);
+  const [renderSnap, setRenderSnap] = useState<Blob | null>(null); // AIパースに渡す3Dの写し
   const pickSheet = async (f: File) => {
     setBusy(true); setErr('');
     try { const src = await readSource(f); try { const im = await src.render(1); const text = await src.text?.(1).catch(() => undefined); setSheet({ ...im, text }); } finally { await src.close(); } }
@@ -358,6 +361,8 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
   const pick = (v: ViewKind) => { setViewKind(v); api.current?.setView(v); };
   const save = async () => { const b = await api.current?.snap(); api.current?.highlight(picked); if (b) await saveFile(b, `${doc.name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'gaikou'}_3D.png`); };
   const unpick = () => { setPicked(null); api.current?.highlight(null); };
+  // AIパース：今の視点の写しを撮って、パース画面へ
+  const toRender = async () => { const b = await api.current?.snap(); api.current?.highlight(picked); if (b) setRenderSnap(b); };
 
   const item = picked ? doc.layers.flatMap(l => l.items).find(i => i.id === picked) : undefined;
   const sel = item && canRaise(item) ? item : null;
@@ -382,6 +387,7 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
         </div>
         <button className="v3-3d-btn" onClick={() => pick(viewKind)} aria-label="視点を戻す"><RotateCcw size={17} /></button>
         <button className="v3-3d-btn" onClick={save} aria-label="画像で保存"><Camera size={17} /><span>画像で保存</span></button>
+        {PRO && <button className="v3-3d-btn ai" onClick={toRender} disabled={busy} aria-label="AIパースを作る"><Sparkles size={17} /><span>AIパース</span></button>}
       </header>
       <div className="v3-3d-stage" ref={host} />
       {sel && onRaise ? (
@@ -439,6 +445,7 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
           onDoc(d => { const b = contentBox(d, 0); return withElevations(d, e, { x: b.x + b.w / 2, y: b.y + b.h / 2 }, rectId); }, '立面図を取り込み');
           if (auto && fp && u) findFootprintOnUnderlay(u, fp.w, fp.d, d0.mmPerPx).then(at => { if (at) onDoc(d => placeBuilding(d, rectId, at), '建物の位置合わせ'); }).catch(() => {});
         }} />}
+      {renderSnap && <RenderDialog snap={renderSnap} doc={doc} view={viewKind} onClose={() => setRenderSnap(null)} />}
     </div>
   );
 }

@@ -18,7 +18,7 @@ beforeAll(async()=>{
 },30000);
 afterAll(async()=>{vi.unstubAllGlobals();await mf?.dispose();});
 // 端末を入れ替える＝端末の保存領域を空にする
-async function newDevice(){for(const d of await listDocs())await deleteDoc(d.id);await new Promise<void>((resolve,reject)=>{const r=indexedDB.open('gofg-sketch-v3',1);r.onsuccess=()=>{const t=r.result.transaction('meta','readwrite');t.objectStore('meta').clear();t.oncomplete=()=>{r.result.close();resolve();};t.onerror=()=>reject(t.error);};r.onupgradeneeded=()=>{for(const n of ['docs','library','meta'])r.result.createObjectStore(n,{keyPath:'id'});};r.onerror=()=>reject(r.error);});}
+async function newDevice(){for(const d of await listDocs())await deleteDoc(d.id);await new Promise<void>((resolve,reject)=>{const r=indexedDB.open('gofg-sketch-v3',2);r.onsuccess=()=>{const t=r.result.transaction('meta','readwrite');t.objectStore('meta').clear();t.oncomplete=()=>{r.result.close();resolve();};t.onerror=()=>reject(t.error);};r.onupgradeneeded=()=>{for(const n of ['docs','library','meta','renders'])if(!r.result.objectStoreNames.contains(n))r.result.createObjectStore(n,{keyPath:'id'});};r.onerror=()=>reject(r.error);});}
 beforeEach(async()=>{offline=false;who='v3-owner@example.test';await newDevice();await db.exec('DELETE FROM canvas_assets; DELETE FROM canvas_versions; DELETE FROM canvases; DELETE FROM chunks; DELETE FROM blobs;');});
 const png=(seed:number)=>'data:image/png;base64,'+Buffer.from(Array.from({length:4000},(_,i)=>(i*seed)%251)).toString('base64');
 const edit=(d:Doc,name:string):Doc=>({...d,name,updatedAt:new Date(Date.parse(d.updatedAt)+1000).toISOString()});
@@ -53,7 +53,7 @@ it('通信できない間は端末に残り、つながったら送る',async()=
  expect((await request('/canvases/'+a.id)).status).toBe(200);
 });
 
-const idb=<T,>(f:(db:IDBDatabase)=>Promise<T>)=>new Promise<T>((resolve,reject)=>{const q=indexedDB.open('gofg-sketch-v3',1);q.onsuccess=()=>f(q.result).then(resolve,reject).finally(()=>q.result.close());q.onerror=()=>reject(q.error);});
+const idb=<T,>(f:(db:IDBDatabase)=>Promise<T>)=>new Promise<T>((resolve,reject)=>{const q=indexedDB.open('gofg-sketch-v3',2);q.onsuccess=()=>f(q.result).then(resolve,reject).finally(()=>q.result.close());q.onerror=()=>reject(q.error);});
 // 端末の同期情報だけを書き出し・書き戻す（古い状態の端末を再現する）
 const dumpMeta=()=>idb(db=>new Promise<unknown[]>(r=>{const g=db.transaction('meta').objectStore('meta').getAll();g.onsuccess=()=>r(g.result);}));
 const restoreMeta=(rows:unknown[])=>idb(db=>new Promise<void>(r=>{const t=db.transaction('meta','readwrite');for(const m of rows)t.objectStore('meta').put(m);t.oncomplete=()=>r();}));

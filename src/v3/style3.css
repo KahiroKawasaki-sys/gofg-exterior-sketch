@@ -468,3 +468,38 @@ button.v3-mono:hover { color: var(--green); }
 .v3-3d-colors span + button { margin-left: 0; }
 .v3-3d-colors button { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #c8c8c4; padding: 0; }
 .v3-3d-colors button.on { box-shadow: 0 0 0 2px var(--green); }
+
+/* AIパース（3D → 写真調） */
+.v3-render { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: #f3f3f0; }
+.v3-render-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px 1fr; }
+.v3-render-side { display: grid; align-content: start; gap: 12px; padding: 14px; border-right: 1px solid var(--line); background: var(--card); overflow: auto; font-size: 13px; }
+.v3-render-src { position: relative; border-radius: 10px; overflow: hidden; background: #ddd; aspect-ratio: 16 / 10; cursor: pointer; }
+.v3-render-src img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.v3-render-src span { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 8px; font-size: 11px; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.55)); }
+.v3-render-opt { display: grid; gap: 6px; }
+.v3-render-opt b { font-size: 12px; color: var(--sub); }
+.v3-render-opt input { height: 38px; border: 1px solid var(--line); border-radius: 9px; padding: 0 10px; font-size: 13px; background: #fff; }
+.v3-render-go { height: 46px; border: 0; border-radius: 12px; background: var(--green); color: #fff; font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.v3-render-go:disabled { opacity: .7; }
+.v3-render-note { margin: 0; font-size: 11.5px; line-height: 1.55; color: var(--sub); }
+.v3-render-err { margin: 0; padding: 8px 10px; border-radius: 8px; background: #fdecea; color: var(--danger); font-size: 12.5px; line-height: 1.5; }
+.v3-render-main { position: relative; min-width: 0; display: grid; grid-template-rows: 1fr auto; padding: 14px; gap: 10px; }
+.v3-render-main figure { margin: 0; min-height: 0; display: grid; grid-template-rows: 1fr auto; gap: 6px; }
+.v3-render-main figure img { width: 100%; height: 100%; min-height: 0; object-fit: contain; border-radius: 12px; background: #e6e6e2; }
+.v3-render-main figure.dim img { opacity: .45; }
+.v3-render-main figcaption { font-size: 12px; color: var(--sub); text-align: center; }
+.v3-render-main.busy figcaption { visibility: hidden; }
+.v3-render-busy { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 6px; padding: 18px 22px; border-radius: 14px; background: rgba(255,255,255,.95); box-shadow: 0 6px 24px rgba(0,0,0,.14); font-size: 14px; text-align: center; max-width: 320px; color: var(--green); }
+.v3-render-busy span { font-size: 11.5px; color: var(--sub); line-height: 1.5; }
+.v3-render-busy svg { animation: v3-pulse 1.2s ease-in-out infinite; }
+@keyframes v3-pulse { 0%, 100% { transform: scale(1); opacity: .7; } 50% { transform: scale(1.25); opacity: 1; } }
+.v3-render-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.v3-render-strip button { flex: none; width: 120px; border: 2px solid transparent; border-radius: 10px; padding: 0; background: none; display: grid; gap: 2px; font-size: 10.5px; color: var(--sub); }
+.v3-render-strip button img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; display: block; }
+.v3-render-strip button.on { border-color: var(--green); color: var(--green); }
+.v3-render-back { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); height: 36px; padding: 0 14px; border: 0; border-radius: 18px; background: rgba(40,44,42,.85); color: #fff; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; }
+.v3-render-back .spin { animation: v3-spin 1.4s linear infinite; }
+@keyframes v3-spin { to { transform: rotate(360deg); } }
+@media (max-width: 760px) { .v3-render-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } .v3-render-side { border-right: 0; border-bottom: 1px solid var(--line); grid-template-columns: 1fr 1fr; } .v3-render-src { display: none; } .v3-render-go, .v3-render-note, .v3-render-err { grid-column: 1 / -1; } }
+.v3-3d-btn.ai { background: var(--soft); color: var(--green); }
+.v3-3d-btn.ai:hover { background: #dfe9e2; }
