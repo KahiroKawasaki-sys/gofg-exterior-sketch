@@ -14,6 +14,10 @@ export type Solid = (
   | { kind: 'box'; x: number; z: number; w: number; d: number; h: number; rot: number; color: string; y0?: number }
   | { kind: 'car'; x: number; z: number; w: number; d: number; rot: number; color: string }
   | { kind: 'carport'; x: number; z: number; w: number; d: number; h: number; rot: number }
+  | { kind: 'hedge'; x: number; z: number; w: number; d: number; h: number; rot: number; color: string }
+  | { kind: 'gatepost'; x: number; z: number; w: number; d: number; h: number; rot: number; variant: 'wall' | 'func' }
+  | { kind: 'shed'; x: number; z: number; w: number; d: number; h: number; rot: number }
+  | { kind: 'light'; x: number; z: number; h: number; kind2: 'pole' | 'spot' }
   | { kind: 'cylinder'; x: number; z: number; r: number; h: number; color: string }
   | { kind: 'person'; x: number; z: number; h: number; color: string }
   | { kind: 'stone'; x: number; z: number; rx: number; rz: number; h: number; rot: number }
@@ -120,7 +124,7 @@ function objSolid(it: Item & { type: 'obj' }, lib: Map<string, LibItem>, mm: num
       return { kind: 'tree', x, z, r, h: Math.max(2.5, r * 2.6), form: 'round', color };
     }
     case '低木':
-      if (id.startsWith('wc-hedge')) return { kind: 'box', x, z, w, d, h: 1.2, rot, color: '#5f8b45' };
+      if (id.startsWith('wc-hedge')) return { kind: 'hedge', x, z, w, d, h: 1.2, rot, color: '#5f8b45' };
       return { kind: 'shrub', x, z, rx: w / 2, rz: d / 2, h: id === 'boxwood' ? 0.6 : 0.8, rot, color: id === 'tsutsuji' || id === 'wc-azalea' ? '#c77a9a' : id === 'ajisai' ? '#7f9fd6' : '#5f8b45' };
     case '下草': return { kind: 'shrub', x, z, rx: w / 2, rz: d / 2, h: 0.3, rot, color: '#7aa35c' };
     case '景石': return { kind: 'stone', x, z, rx: w / 2, rz: d / 2, h: Math.min(w, d) * 0.55, rot };
@@ -128,7 +132,7 @@ function objSolid(it: Item & { type: 'obj' }, lib: Map<string, LibItem>, mm: num
       if (/bicycle|bike|moped/.test(id)) return { kind: 'box', x, z, w: w * 0.6, d, h: 1.0, rot, color: '#555b60' };
       return { kind: 'car', x, z, w: w / 1.14, d, rot, color: tint || '#e9ecef' };
     case 'カーポート': return { kind: 'carport', x, z, w, d, h: 2.3, rot };
-    case '照明': return id === 'light1' ? { kind: 'cylinder', x, z, r: 0.05, h: 0.8, color: '#3d3d3d' } : { kind: 'cylinder', x, z, r: 0.06, h: 0.25, color: '#3d3d3d' };
+    case '照明': return id === 'light1' ? { kind: 'light', x, z, h: 0.8, kind2: 'pole' } : { kind: 'light', x, z, h: 0.3, kind2: 'spot' };
     case 'ガーデンファニチャー':
       if (/table|bico/.test(id)) return { kind: 'cylinder', x, z, r, h: 0.7, color: tint || '#4a4a4a' };
       if (/planter|cobble/.test(id)) return { kind: 'box', x, z, w, d, h: 0.45, rot, color: '#b9b2a6' };
@@ -136,13 +140,13 @@ function objSolid(it: Item & { type: 'obj' }, lib: Map<string, LibItem>, mm: num
       return { kind: 'box', x, z, w, d, h: 0.7, rot, color: '#6b6b6b' };
     case 'キャラクター': return { kind: 'person', x, z, h: 1.6, color: tint || '#3f7fbf' };
     case '未分類':
-      if (id === 'gatepost') return { kind: 'box', x, z, w, d, h: 1.4, rot, color: '#d8d5cf' };
-      if (id === 'funcpost') return { kind: 'box', x, z, w, d, h: 1.2, rot, color: '#4c4c4c' };
+      if (id === 'gatepost') return { kind: 'gatepost', x, z, w, d, h: 1.4, rot, variant: 'wall' };
+      if (id === 'funcpost') return { kind: 'gatepost', x, z, w, d, h: 1.5, rot, variant: 'func' };
       if (id === 'faucet') return { kind: 'box', x, z, w: w * 0.6, d: d * 0.6, h: 0.9, rot, color: '#bfb9ad' };
       if (id === 'ac') return { kind: 'box', x, z, w, d, h: 0.65, rot, color: '#f2f2f0' };
       return null;
     case 'その他':
-      if (id === 'shed') return { kind: 'box', x, z, w, d, h: 1.8, rot, color: '#efefec' };
+      if (id === 'shed') return { kind: 'shed', x, z, w, d, h: 1.9, rot };
       if (id === 'cycleport') return { kind: 'carport', x, z, w, d, h: 2.1, rot };
       if (id === 'bench') return { kind: 'box', x, z, w, d, h: 0.45, rot, color: '#c79f72' };
       if (id === 'dryer') return { kind: 'box', x, z, w, d: Math.min(d, 0.06), h: 1.8, rot, color: '#9a9a9a' };

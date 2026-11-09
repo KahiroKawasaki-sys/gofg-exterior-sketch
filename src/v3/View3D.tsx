@@ -8,7 +8,7 @@ import { type Role3, type Mat3, type ElevFace, type Elevation } from './types';
 import { type Doc, type LibItem, rad } from './types';
 import { readSource } from './source';
 import { edgeFace, isClockwise, faceU, faceAxis, polyBBox, roofFace } from './elevation';
-import { wallMaterial, meshFenceMaterial, grassMaterial, skyTexture, elevationTexture, WALL_MATS, FENCE_MATS, WALL_COLORS, ROOF_COLORS, wallColor, roofMaterial, glassMaterial, sashMaterial } from './materials3d';
+import { wallMaterial, grassMaterial, skyTexture, elevationTexture, WALL_MATS, FENCE_MATS, WALL_COLORS, ROOF_COLORS, wallColor, roofMaterial, glassMaterial, sashMaterial } from './materials3d';
 import { siteGround } from './siteGround';
 import { ElevationDialog } from './ElevationDialog';
 import { type RenderCtx } from './markup';
@@ -19,84 +19,17 @@ import { uid } from './types';
 import { saveFile } from './platform';
 
 type ViewKind = 'bird' | 'top' | 'eye';
-const MAX_TEX = 2048;
+const MAX_TEX = 2048, MAX_TEX_SITE = 3072; // 敷地の地面は少し高い解像度で（舗装の模様が近くで潰れないように）
 
-function mat(color: string, extra: THREE.MeshStandardMaterialParameters = {}) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...extra });
-}
-function shadowed<T extends THREE.Object3D>(o: T): T {
-  o.traverse(c => { if ((c as THREE.Mesh).isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-  return o;
-}
+import { partObject, mat, shadowed, shade } from './solids3d';
+import { textureContours } from './dxf';
 
+// 建物以外の部品は solids3d.ts
 function solidObject(s: Solid): THREE.Object3D {
-  const g = new THREE.Group();
-  switch (s.kind) {
-    case 'wall': {
-      const len = Math.hypot(s.b.x - s.a.x, s.b.z - s.a.z);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(len + s.t, s.h, s.t), wallMaterial(s.mat, s.color, len, s.h));
-      // 笠木（上の縁）で塀らしく
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(len + s.t + 0.04, 0.04, s.t + 0.04), mat(s.mat === 'alumi' ? '#4a4d50' : '#c9c4ba'));
-      cap.position.set((s.a.x + s.b.x) / 2, s.h + 0.02, (s.a.z + s.b.z) / 2); cap.rotation.y = -Math.atan2(s.b.z - s.a.z, s.b.x - s.a.x); g.add(cap);
-      m.position.set((s.a.x + s.b.x) / 2, s.h / 2, (s.a.z + s.b.z) / 2);
-      m.rotation.y = -Math.atan2(s.b.z - s.a.z, s.b.x - s.a.x);
-      g.add(m); break;
-    }
-    case 'fence': {
-      // ブロック基礎＋柱＋横板のフェンス
-      const len = Math.hypot(s.b.x - s.a.x, s.b.z - s.a.z);
-      const base = new THREE.Mesh(new THREE.BoxGeometry(len + 0.15, s.base, 0.15), mat('#cbc7bf'));
-      base.position.y = s.base / 2; g.add(base);
-      const n = Math.max(1, Math.ceil(len / 2)), postM = mat('#3f3b38'), slatM = mat('#6b4f3a');
-      for (let i = 0; i <= n; i++) {
-        const p = new THREE.Mesh(new THREE.BoxGeometry(0.06, s.h - s.base, 0.06), postM);
-        p.position.set(-len / 2 + len * i / n, s.base + (s.h - s.base) / 2, 0); g.add(p);
-      }
-      if (s.mat === 'mesh') {
-        // メッシュフェンス：網（透過テクスチャ）＋上下の横桟
-        const net = new THREE.Mesh(new THREE.PlaneGeometry(len, s.h - s.base), meshFenceMaterial(len, s.h - s.base));
-        net.position.set(0, s.base + (s.h - s.base) / 2, 0); g.add(net);
-        for (const y of [s.base + 0.03, s.h - 0.03]) { const r = new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, 0.04), postM); r.position.set(0, y, 0); g.add(r); }
-      } else if (s.mat === 'lattice') {
-        // 縦格子：細い縦桟を 60mm おき
-        const bars = Math.max(2, Math.floor(len / 0.06)), barM = mat('#4a4d50', { roughness: 0.5, metalness: 0.3 });
-        for (let j = 0; j <= bars; j++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.02, s.h - s.base - 0.05, 0.02), barM); b.position.set(-len / 2 + len * j / bars, s.base + (s.h - s.base) / 2, 0); g.add(b); }
-        for (const y of [s.base + 0.03, s.h - 0.03]) { const r = new THREE.Mesh(new THREE.BoxGeometry(len, 0.05, 0.04), barM); r.position.set(0, y, 0); g.add(r); }
-      } else {
-        const rows = Math.max(1, Math.floor((s.h - s.base) / 0.12));
-        for (let j = 0; j < rows; j++) {
-          const sl = new THREE.Mesh(new THREE.BoxGeometry(len, 0.09, 0.02), slatM);
-          sl.position.set(0, s.base + 0.06 + j * (s.h - s.base - 0.06) / rows, 0.04); g.add(sl);
-        }
-      }
-      g.position.set((s.a.x + s.b.x) / 2, 0, (s.a.z + s.b.z) / 2);
-      g.rotation.y = -Math.atan2(s.b.z - s.a.z, s.b.x - s.a.x); break;
-    }
-    case 'gate': {
-      // 門柱2本＋両開きの扉（縦格子）
-      const len = Math.hypot(s.b.x - s.a.x, s.b.z - s.a.z), frameM = mat('#3d3a37', { roughness: 0.5, metalness: 0.3 });
-      for (const x of [-len / 2, len / 2]) {
-        const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, s.h + 0.1, 0.12), frameM);
-        p.position.set(x, (s.h + 0.1) / 2, 0); g.add(p);
-      }
-      const leaves = len > 1.4 ? 2 : 1, lw = (len - 0.16) / leaves;
-      for (let i = 0; i < leaves; i++) {
-        const leaf = new THREE.Group(), y0 = 0.08, lh = s.h - 0.12;
-        for (const [w, h, x, y] of [[lw, 0.04, 0, y0], [lw, 0.04, 0, y0 + lh], [0.04, lh, -lw / 2, y0 + lh / 2], [0.04, lh, lw / 2, y0 + lh / 2]]) {
-          const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.04), frameM); b.position.set(x, y, 0); leaf.add(b);
-        }
-        const bars = Math.max(2, Math.floor(lw / 0.11));
-        for (let j = 1; j < bars; j++) {
-          const b = new THREE.Mesh(new THREE.BoxGeometry(0.02, lh, 0.02), frameM);
-          b.position.set(-lw / 2 + lw * j / bars, y0 + lh / 2, 0); leaf.add(b);
-        }
-        leaf.position.x = -len / 2 + 0.08 + lw * (i + 0.5); g.add(leaf);
-      }
-      g.position.set((s.a.x + s.b.x) / 2, 0, (s.a.z + s.b.z) / 2);
-      g.rotation.y = -Math.atan2(s.b.z - s.a.z, s.b.x - s.a.x); break;
-    }
-    case 'building': {
-      if (s.faces) { buildingWithElevations(g, s.poly, s.h, s.faces, s.wallTop ?? s.h * 0.7); break; }
+  if (s.kind === 'building') {
+    const g = new THREE.Group();
+    if (s.faces) buildingWithElevations(g, s.poly, s.h, s.faces, s.wallTop ?? s.h * 0.7);
+    else {
       // 図面の (x, z) を XY 平面の形にして押し出し、寝かせる（z → -y なので回転で戻す）
       const shape = new THREE.Shape(s.poly.map(p => new THREE.Vector2(p.x, -p.z)));
       const geo = new THREE.ExtrudeGeometry(shape, { depth: s.h, bevelEnabled: false });
@@ -104,94 +37,35 @@ function solidObject(s: Solid): THREE.Object3D {
       m.rotation.x = -Math.PI / 2;
       g.add(m);
       const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: '#9a978f' }));
-      edges.rotation.x = -Math.PI / 2; g.add(edges); break;
+      edges.rotation.x = -Math.PI / 2; g.add(edges);
     }
-    case 'tree': {
-      const trunkH = s.form === 'palm' ? s.h * 0.85 : s.h * 0.4;
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, trunkH, 8), mat('#7a5a3e'));
-      trunk.position.y = trunkH / 2; g.add(trunk);
-      const leaf = mat(s.color, { flatShading: true });
-      if (s.form === 'cone') {
-        const c = new THREE.Mesh(new THREE.ConeGeometry(s.r, s.h * 0.85, 10), leaf); c.position.y = s.h * 0.15 + s.h * 0.425; g.add(c);
-      } else if (s.form === 'palm') {
-        for (let i = 0; i < 7; i++) {
-          const f = new THREE.Mesh(new THREE.BoxGeometry(s.r * 1.1, 0.04, 0.35), leaf);
-          f.position.set(Math.cos(i * 0.9) * s.r * 0.5, trunkH, Math.sin(i * 0.9) * s.r * 0.5);
-          f.rotation.y = -i * 0.9; f.rotation.z = -0.3; g.add(f);
-        }
-      } else {
-        // 丸い樹冠は2つ重ねて、少しずらす（のっぺりしないように）
-        const ry = (s.h - trunkH) * 0.6;
-        const c = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), leaf);
-        c.scale.set(s.r, ry, s.r); c.position.y = s.h - ry; g.add(c);
-        const c2 = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), mat(shade(s.color, 0.88), { flatShading: true }));
-        c2.scale.set(s.r * 0.72, ry * 0.7, s.r * 0.72); c2.position.set(s.r * 0.25, s.h - ry * 0.55, -s.r * 0.2); c2.rotation.y = 0.7; g.add(c2);
-      }
-      g.position.set(s.x, 0, s.z); break;
-    }
-    case 'shrub': {
-      const c = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(s.color, { flatShading: true }));
-      c.scale.set(s.rx, s.h, s.rz); g.add(c);
-      g.position.set(s.x, 0, s.z); g.rotation.y = -rad(s.rot); break;
-    }
-    case 'stone': {
-      const c = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 0), mat('#a9a49a', { flatShading: true }));
-      c.scale.set(s.rx, s.h, s.rz); c.position.y = s.h * 0.45; g.add(c);
-      g.position.set(s.x, 0, s.z); g.rotation.y = -rad(s.rot); break;
-    }
-    case 'box': {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, s.d), mat(s.color));
-      m.position.y = (s.y0 ?? 0) + s.h / 2; g.add(m);
-      g.position.set(s.x, 0, s.z); g.rotation.y = -rad(s.rot); break;
-    }
-    case 'car': {
-      // 車体（下）＋客室（上）。図面の上側が車の前
-      const body = new THREE.Mesh(new THREE.BoxGeometry(s.w, 0.75, s.d), mat(s.color, { roughness: 0.4 }));
-      body.position.y = 0.2 + 0.375; g.add(body);
-      const cabin = new THREE.Mesh(new THREE.BoxGeometry(s.w * 0.86, 0.55, s.d * 0.5), mat('#5d6b78', { roughness: 0.3 }));
-      cabin.position.set(0, 0.95 + 0.275, s.d * 0.06); g.add(cabin);
-      for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.2, 14), mat('#222'));
-        w.rotation.z = Math.PI / 2; w.position.set(dx * (s.w / 2 - 0.08), 0.32, dz * s.d * 0.33); g.add(w);
-      }
-      g.position.set(s.x, 0, s.z); g.rotation.y = -rad(s.rot); break;
-    }
-    case 'carport': {
-      const post = mat('#8a8a86');
-      for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-        const p = new THREE.Mesh(new THREE.BoxGeometry(0.1, s.h, 0.1), post);
-        p.position.set(dx * (s.w / 2 - 0.1), s.h / 2, dz * (s.d / 2 - 0.15)); g.add(p);
-      }
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(s.w, 0.06, s.d), mat('#cfe3ea', { transparent: true, opacity: 0.55, roughness: 0.2 }));
-      roof.position.y = s.h; g.add(roof);
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(s.w, 0.12, 0.1), post);
-      frame.position.set(0, s.h - 0.03, -s.d / 2); g.add(frame);
-      const frame2 = frame.clone(); frame2.position.z = s.d / 2; g.add(frame2);
-      g.position.set(s.x, 0, s.z); g.rotation.y = -rad(s.rot); break;
-    }
-    case 'cylinder': {
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(s.r, s.r, s.h, 18), mat(s.color));
-      m.position.y = s.h / 2; g.add(m); g.position.set(s.x, 0, s.z); break;
-    }
-    case 'person': {
-      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, s.h - 0.62, 4, 10), mat(s.color));
-      body.position.y = (s.h - 0.26) / 2; g.add(body);
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), mat('#e8c9a8'));
-      head.position.y = s.h - 0.12; g.add(head);
-      g.position.set(s.x, 0, s.z); break;
+    g.userData.src = s.src;
+    return shadowed(g);
+  }
+  return partObject(s) || new THREE.Group();
+}
+
+// ウッドデッキ：塗った範囲（輪郭）を 0.4m の高さに持ち上げ、上面に木目
+async function deckObjects(d: Doc): Promise<THREE.Object3D[]> {
+  const decks = d.layers.flatMap(l => l.visible ? l.items.filter(i => i.type === 'texture' && i.tex === 'deck') : []);
+  if (!decks.length) return [];
+  const loops = await textureContours(d, 600);
+  const k = d.mmPerPx / 1000, out: THREE.Object3D[] = [];
+  const top = wallMaterial('wood', '#9c7a55', 1, 1), side = mat('#7a5a3e');
+  for (const it of decks) {
+    for (const loop of loops.get(it.id) || []) {
+      if (loop.length < 3) continue;
+      const shape = new THREE.Shape(loop.map(p => new THREE.Vector2(p.x * k, -p.y * k)));
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.4, bevelEnabled: false });
+      const m = new THREE.Mesh(geo, [top, side]); m.rotation.x = -Math.PI / 2; m.position.y = 0.4; m.userData.src = it.id;
+      out.push(shadowed(m));
     }
   }
-  g.userData.src = s.src;
-  return shadowed(g);
+  return out;
 }
 
 // 家の色（build のたびに図面から入れる）
 let houseStyle: { wall?: string; roof?: string } = {};
-
-// 色を少し暗く／明るく
-function shade(hex: string, k: number): string {
-  const c = new THREE.Color(hex); c.multiplyScalar(k); return '#' + c.getHexString();
-}
 
 // 立面図を建物に貼る：各辺を向きで東西南北に振り分け、その面の絵の「壁の範囲」を軒の高さまで貼る。
 // 屋根は妻側（軒と棟の差が大きい面）の輪郭を断面にして、建物の奥行きぶん押し出した立体にする（絵の屋根は使わない）
@@ -305,7 +179,7 @@ function roofSolid(g: THREE.Group, bb: ReturnType<typeof polyBBox>, faces: Parti
 type Box = { x: number; y: number; w: number; h: number };
 async function groundTexture(doc: Doc, lib: LibItem[], ctx: RenderCtx, boxOverride?: Box) {
   // 図面より少し広く取り、長い辺が MAX_TEX になる解像度で画像化する（iPad の上限内）
-  const box = boxOverride || contentBox(doc, 200), scale = MAX_TEX / Math.max(box.w, box.h, 1);
+  const box = boxOverride || contentBox(doc, 200), scale = (boxOverride ? MAX_TEX_SITE : MAX_TEX) / Math.max(box.w, box.h, 1);
   const w = Math.round(box.w * scale), h = Math.round(box.h * scale);
   const canvas = await rasterize(docSVG(doc, lib, ctx, box, { background: boxOverride ? '#dedbd3' : '#f3f2ee', pxW: w, pxH: h }), w, h);
   return { canvas, box };
@@ -427,6 +301,7 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
       ground.rotation.x = -Math.PI / 2; ground.position.set((box.x + box.w / 2) * k, 0, (box.y + box.h / 2) * k); ground.receiveShadow = true;
       world.add(ground);
       for (const s of solids) world.add(solidObject(s));
+      for (const o of await deckObjects(d)) { if (!alive || my !== seq) return; world.add(o); }
       scene.add(world);
       highlight(lit);
       if (framed) return;

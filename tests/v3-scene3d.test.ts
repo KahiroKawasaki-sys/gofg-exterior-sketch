@@ -47,7 +47,7 @@ it('塀と建物の高さは指定どおりになる', () => {
 it('部品は種類ごとの形になり、立体にした部品は地面の絵から外れる', () => {
   const items = [obj('b-aqua', 0, 0), obj('b-wc-symbol', 500, 0), obj('b-carport1', 0, 600), obj('b-gatepost', 900, 0), obj('b-teiboku1', 900, 300)];
   const d = withItems(items), { solids, raised } = buildScene(d, lib);
-  expect(kinds(solids)).toEqual(['car', 'tree', 'carport', 'box', 'shrub']);
+  expect(kinds(solids)).toEqual(['car', 'tree', 'carport', 'gatepost', 'shrub']);
   expect(solids[0]).toMatchObject({ kind: 'car' });
   expect((solids[0] as Extract<Solid, { kind: 'car' }>).d).toBeCloseTo(4.05);
   expect(raised.size).toBe(5);
