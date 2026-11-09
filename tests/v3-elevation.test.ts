@@ -1,5 +1,5 @@
 import { it, expect } from 'vitest';
-import { edgeFace, isClockwise, faceU, faceAxis, polyBBox, buildingHeight, roofFace, quadrants, darkBounds, wallTopRatio, whiteToAlpha, guessPaper, mmPerPxFromPaper, findBody, simplifyRoof, eraseLevelLines, largestComponent, detectWindows, tintLines } from '../src/v3/elevation';
+import { roofPeak, edgeFace, isClockwise, faceU, faceAxis, polyBBox, buildingHeight, roofFace, quadrants, darkBounds, wallTopRatio, whiteToAlpha, guessPaper, mmPerPxFromPaper, findBody, simplifyRoof, eraseLevelLines, largestComponent, detectWindows, tintLines } from '../src/v3/elevation';
 
 const img = (w: number, h: number, paint: (x: number, y: number) => number | null): ImageData => {
   const data = new Uint8ClampedArray(w * h * 4);
@@ -89,6 +89,12 @@ it('建物の本体を見つける：地面の線で幅、上端の輪郭で屋�
   const ys = b.roof.map(p => p.y); expect(Math.max(...ys)).toBeGreaterThan(0.9); expect(b.roof.length).toBeLessThanOrEqual(12);
   expect(roofFace({ E: { src: '', w: 1, h: 1, mmPerPx: 1, roof: b.roof }, S: { src: '', w: 1, h: 1, mmPerPx: 1, roof: [{ x: 0, y: 0.6 }, { x: 1, y: 0.6 }] } })).toBe('E');
   expect(simplifyRoof([{ x: 0, y: 0 }, { x: 0.5, y: 0.001 }, { x: 1, y: 0 }], 0.01)).toHaveLength(2);
+  // 平側で軒の出の端だけ下がる帯（太陽光パネルの網掛けなど）は山ではない。妻側の三角が勝つ（滝本様②）
+  const band = [{ x: 0, y: 0.6 }, { x: 0.03, y: 0.85 }, { x: 0.97, y: 0.85 }, { x: 1, y: 0.6 }];
+  const gable = [{ x: 0, y: 0.6 }, { x: 0.5, y: 0.85 }, { x: 1, y: 0.6 }];
+  expect(roofPeak(band)).toBeLessThan(0.04); expect(roofPeak(gable)).toBeGreaterThan(0.1);
+  expect(roofFace({ S: { src: '', w: 1, h: 1, mmPerPx: 1, roof: band }, E: { src: '', w: 1, h: 1, mmPerPx: 1, roof: gable } })).toBe('E');
+  expect(roofFace({ S: { src: '', w: 1, h: 1, mmPerPx: 1, roof: band } })).toBeNull(); // 平側しか無ければ陸屋根
   // 何も描かれていない絵は null
   const blank = img(100, 100, () => null); whiteToAlpha(blank); expect(findBody(blank)).toBeNull();
 });

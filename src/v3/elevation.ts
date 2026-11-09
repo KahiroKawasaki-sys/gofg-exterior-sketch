@@ -55,16 +55,32 @@ export function buildingHeight(elev: Partial<Record<ElevFace, Elevation>>, scale
   return { h, wallTop: Math.min(h, Math.max(0.5, h - Math.max(...tops))) };
 }
 
-// 屋根の断面に使う面：軒と棟の差が一番大きい面（妻側）。無ければ null
+// 屋根の断面に使う面：輪郭が「山」になっている面（妻側）。無ければ null（陸屋根）
 export function roofFace(elev: Partial<Record<ElevFace, Elevation>>): ElevFace | null {
-  // 「山」の高さ＝輪郭の最高点と両端の平均の差。平側（屋根の帯が平らに見える面）はほぼ0、妻側は大きい
+  // 「山」の高さ＝輪郭の最高点と中央値の差。妻側（三角）は棟〜軒の半分くらい、平側（屋根の帯が平らに見える面）はほぼ0。
+  // 両端だけ見ると、平側で軒の出が端で下がる絵（太陽光パネルの網掛けなど）も山に見えてしまうので、中央値で見る
   let best: ElevFace | null = null, peak = 0.04;
   for (const f of FACES) {
     const e = elev[f]; if (!e?.roof?.length) continue;
-    const ys = e.roof.map(p => p.y), s = Math.max(...ys) - (ys[0] + ys[ys.length - 1]) / 2;
+    const s = roofPeak(e.roof);
     if (s > peak) { peak = s; best = f; }
   }
   return best;
+}
+
+// 輪郭の「山」の高さ（0..1）。輪郭を横に等間隔で 33 点に補間し、最高点 − 中央値
+export function roofPeak(roof: RoofPt[]): number {
+  if (roof.length < 2) return 0;
+  const pts = [...roof].sort((a, b) => a.x - b.x);
+  const ys: number[] = [];
+  for (let i = 0; i <= 32; i++) {
+    const x = pts[0].x + (pts[pts.length - 1].x - pts[0].x) * i / 32;
+    let k = 0; while (k < pts.length - 2 && pts[k + 1].x < x) k++;
+    const a = pts[k], b = pts[k + 1], t = b.x > a.x ? Math.min(1, Math.max(0, (x - a.x) / (b.x - a.x))) : 0;
+    ys.push(a.y + (b.y - a.y) * t);
+  }
+  const sorted = [...ys].sort((a, b) => a - b);
+  return Math.max(...ys) - sorted[Math.floor(sorted.length / 2)];
 }
 
 // ---- 画像の処理（ブラウザだけ） ----
