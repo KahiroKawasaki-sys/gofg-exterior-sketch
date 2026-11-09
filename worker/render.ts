@@ -113,9 +113,9 @@ export async function render(req:Request,env:RenderEnv,app=false,ctx?:Pick<Execu
   const text=pickText(j);
   const apiMsg=j&&typeof j==='object'&&typeof (j as {error?:{message?:string}}).error?.message==='string'?(j as {error:{message:string}}).error.message:'';
   if(status===401||status===403)return error('画像AIの鍵が通りませんでした。設定を確認してください',502);
-  if(status===429)return error('画像AIが混み合っています。少し待ってからもう一度お試しください',503);
+  if(status===429)return error((/quota|billing|exceeded|free.tier/i.test(apiMsg)?'画像AIの利用枠が足りません。Google AI Studio の鍵のプロジェクトに課金設定（請求アカウント）があるか確認してください':'画像AIが混み合っています。少し待ってからもう一度お試しください')+(apiMsg?`（Google: ${apiMsg.slice(0,160)}）`:''),503);
   if(status===400)return error('画像AIが入力を受け付けませんでした'+(apiMsg?`（${apiMsg.slice(0,120)}）`:''),502);
-  if(status>=500)return error('画像AIが一時的に使えません。少し待ってからもう一度お試しください',503);
+  if(status>=500)return error('画像AIが一時的に使えません。少し待ってからもう一度お試しください'+(apiMsg?`（Google: ${apiMsg.slice(0,160)}）`:''),503);
   return error('パースを作れませんでした。視点や希望を変えてもう一度お試しください'+(text?`（AI: ${text.slice(0,120)}）`:''),502);
  }
  return json({image:`data:${img.mime};base64,${img.data}`,text:pickText(j)||undefined,model,size,aspect,ms:Date.now()-started});

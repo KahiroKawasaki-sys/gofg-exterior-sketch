@@ -45,7 +45,7 @@ export default function App3() {
     <div className="v3-home">
       <input ref={pdfRef} type="file" hidden accept="application/pdf,image/png,image/jpeg,image/webp" onChange={e => { fromFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={jsonRef} type="file" hidden accept="application/json,.json" onChange={e => { fromJson(e.target.files?.[0]); e.target.value = ''; }} />
-      <header className="v3-hhead"><span className="logo"><PenTool size={18} /></span><b>外構スケッチ</b><span className="v3-mono">ver 2026.11.09-01 (elev-3d)</span><span className="sp" /><button className={'v3-cloud ' + cloud.phase} title={cloud.detail || cloud.message} onClick={() => syncNow(true).then(refresh)} disabled={cloud.phase === 'syncing'}>{cloud.phase === 'syncing' ? <RefreshCw size={14} /> : cloud.phase === 'synced' || cloud.phase === 'pending' ? <Cloud size={14} /> : <CloudOff size={14} />}<span>{cloud.message}</span></button></header>
+      <header className="v3-hhead"><span className="logo"><PenTool size={18} /></span><b>外構スケッチ</b><span className="v3-mono">ver 2026.11.09-02 (ai-render)</span><span className="sp" /><button className={'v3-cloud ' + cloud.phase} title={cloud.detail || cloud.message} onClick={() => syncNow(true).then(refresh)} disabled={cloud.phase === 'syncing'}>{cloud.phase === 'syncing' ? <RefreshCw size={14} /> : cloud.phase === 'synced' || cloud.phase === 'pending' ? <Cloud size={14} /> : <CloudOff size={14} />}<span>{cloud.message}</span></button></header>
       <main>
         <h1>キャンバス</h1>
         <p className="lead">平面図の上で、手描き → 清書 → 部品・植栽 → 素材の塗り分け → 寸法まで。</p>
