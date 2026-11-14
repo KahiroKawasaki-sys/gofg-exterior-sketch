@@ -254,6 +254,9 @@ function misc(): LibItem[] {
   return out;
 }
 
+// 人の服の色（図面の部品 person0〜6 の順。3Dでも同じ色にする）
+export const PERSON_COLORS = ['#d9534f', '#3f7fbf', '#e0a43a', '#5aa36c', '#8e6cc0', '#e98aa7', '#6b6b6b'];
+
 let built: LibItem[] | null = null;
 export function builtinLibrary(): LibItem[] {
   if (built) return built;
@@ -326,7 +329,7 @@ export function builtinLibrary(): LibItem[] {
   L.push(chair('clickchair', 'HOUSEクリックダイニングチェア アノーアーム', '#3d3d3d', '#7a7a7a', 60, true));
   L.push(roundTable('circletable', 'HOUSEサークルテーブル', 100, '#5a5a5a', '#9a9a9a'));
   // キャラクター
-  ['#d9534f', '#3f7fbf', '#e0a43a', '#5aa36c', '#8e6cc0', '#e98aa7', '#6b6b6b'].forEach((c, i) => L.push(person('person' + i, ['大人（赤）', '大人（青）', '大人（黄）', '大人（緑）', '大人（紫）', '子ども', '大人（グレー）'][i], c, 500 + i)));
+  PERSON_COLORS.forEach((c, i) => L.push(person('person' + i, ['大人（赤）', '大人（青）', '大人（黄）', '大人（緑）', '大人（紫）', '子ども', '大人（グレー）'][i], c, 500 + i)));
   L.push(...misc());
   built = L;
   return L;

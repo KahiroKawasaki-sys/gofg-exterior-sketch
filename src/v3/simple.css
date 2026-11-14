@@ -211,3 +211,8 @@
 @media (max-width: 520px) { .sx-hhead { flex-wrap: wrap; } .sx-tabs { margin-left: 0; order: 3; width: 100%; } .sx-tabs button { flex: 1; } }
 .sx-hposter { display: block; width: 100%; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; background: #e9ece9; }
 .sx-hposter img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* 出力のボタン：縦向きなど入りきらない幅では2段に折り返す（「CAD」「編集データ」が画面の外に隠れていた） */
+@media (max-width: 1000px) and (min-width: 521px) { .sx-row.center { width: 100%; flex-wrap: wrap; justify-content: center; } }
+/* 上の帯：保存の状態は折らない */
+.sx-name em { white-space: nowrap; }

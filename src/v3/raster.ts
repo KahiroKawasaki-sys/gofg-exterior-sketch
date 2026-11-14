@@ -137,8 +137,11 @@ export async function fillAt(doc: Doc, lib: LibItem[], ctx: RenderCtx, sel: Sele
   sel.add(mask); return true;
 }
 
+const MAX_CANVAS_AREA = 16_000_000;
 export async function exportImage(doc: Doc, lib: LibItem[], ctx: RenderCtx, maxPx = 3000): Promise<Blob> {
-  const box = contentBox(doc, 60), k = Math.min(3, maxPx / Math.max(box.w, box.h)), w = Math.round(box.w * k), h = Math.round(box.h * k);
+  const box = contentBox(doc, 60), k0 = Math.min(3, maxPx / Math.max(box.w, box.h));
+  // iPad は絵の広さ（画素数）に上限がある（約1670万）。正方形に近い図面で超えると真っ白になるので、超えるぶんは縮める
+  const k = k0 * Math.min(1, Math.sqrt(MAX_CANVAS_AREA / Math.max(1, box.w * k0 * box.h * k0))), w = Math.round(box.w * k), h = Math.round(box.h * k);
   const c = await rasterize(docSVG(doc, lib, ctx, box, { background: '#ffffff', pxW: w, pxH: h }), w, h);
   return await new Promise<Blob>((res, rej) => c.toBlob(b => b ? res(b) : rej(Error('PNGを作れませんでした')), 'image/png'));
 }

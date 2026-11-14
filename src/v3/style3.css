@@ -521,3 +521,43 @@ button.v3-mono:hover { color: var(--green); }
 @media (max-width: 760px) { .v3-render-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } .v3-render-side { border-right: 0; border-bottom: 1px solid var(--line); grid-template-columns: 1fr 1fr; } .v3-render-src { display: none; } .v3-render-go, .v3-render-note, .v3-render-err { grid-column: 1 / -1; } }
 .v3-3d-btn.ai { background: var(--soft); color: var(--green); }
 .v3-3d-btn.ai:hover { background: #dfe9e2; }
+
+/* ---------- 文字の表示崩れを防ぐ（iPad の横・縦・Split View。scripts/verify_layout.py で確かめる） ---------- */
+/* 高さの決まったボタンは文字を折らない（折れると上下が切れる） */
+.v3-btn, .v3-selbar button, .v3-3d-seg button, .v3-3d-btn, .v3-3d-roles button, .v3-seg button { white-space: nowrap; }
+/* 選んだ時の操作帯：幅は中身ぶん。画面に収まらなければ段を折り返す（left:50% の箱は半分の幅しか使えず、文字が1字ずつ縦に割れていた） */
+.v3-selbar { width: max-content; max-width: calc(100% - 20px); flex-wrap: wrap; justify-content: center; }
+.v3-selbar button, .v3-sel3d { flex: none; }
+/* 上の道具の帯：入りきらない幅では横に流さず、段を折り返す（右端の「履歴」「設定」や色が隠れない） */
+@media (max-width: 1100px) { .v3-bar.r2 { flex-wrap: wrap; height: auto; min-height: 42px; padding-top: 4px; padding-bottom: 4px; row-gap: 2px; overflow-x: visible; } }
+@media (max-width: 860px) { .v3-bar.r1 { flex-wrap: wrap; height: auto; min-height: 46px; padding-top: 4px; padding-bottom: 4px; row-gap: 2px; overflow-x: visible; } }
+/* レイヤーの見出し：ボタン7つが横幅に収まるよう詰める（右端の × が切れていた） */
+.v3-phead.layer { gap: 0; }
+.v3-phead.layer .v3-ib { width: 26px; }
+.v3-phead.layer .vert { margin-right: 2px; }
+.v3-phead.layer .sx-vbtn { padding: 0 6px; margin-right: 0; }
+/* 見積：細いパネルではボタンの行を折り返す。金額は折らない */
+.v3-est-book .v3-row { flex-wrap: wrap; }
+.v3-est-sum > div { flex-wrap: wrap; }
+.v3-est-sum > div > b { margin-left: auto; white-space: nowrap; }
+/* 見積の比べる表：細いパネルでは品名を1行まるごと使い、金額をその下に並べる（品名が「化粧ブ…」になっていた） */
+.v3-qty:not(.sheet) .v3-est-cmp > div { grid-template-columns: 1fr 1fr; }
+.v3-qty:not(.sheet) .v3-est-cmp > div > span { grid-column: 1 / -1; }
+.v3-qty:not(.sheet) .v3-est-cmp .hd span { display: none; }
+/* 設定の項目名（「グリッド間隔」など）は折らない */
+.v3-kv span { width: auto; min-width: 56px; white-space: nowrap; }
+/* 文の切れ目（<wbr>）だけで折る短いボタン */
+.v3-pbtn.kw { word-break: keep-all; }
+/* 3D：塀の「見た目」は2列（「化粧ブロック」が1行に入る） */
+.v3-3d-roles.mats { grid-template-columns: repeat(2, 1fr); }
+.v3-3d-roles.mats button { font-size: 12.5px; }
+/* 3D の上の帯：狭い幅では「閉じる」「画像で保存」を絵だけにして、視点の切り替えを1行に保つ */
+@media (max-width: 860px) { .v3-3d-btn:not(.ai) span { display: none; } .v3-3d-seg button { padding: 0 9px; } }
+/* お知らせ（トースト）：下から出るシートや3D画面の上に出す（裏に隠れて読めなかった） */
+.v3-toast { position: fixed; z-index: 90; bottom: calc(18px + env(safe-area-inset-bottom)); max-width: min(90%, 520px); }
+.v3-simple .v3-toast { bottom: calc(168px + env(safe-area-inset-bottom)); }
+/* 打ち合わせのたたみ表示：かんたんモードでは下の道具の段に重ねない */
+.v3-simple .v3-meet-pill { bottom: calc(164px + env(safe-area-inset-bottom)); }
+/* 立面図の取り込み：見出しと読み取り結果は折らない */
+.v3-elev-head b { white-space: nowrap; flex: none; }
+.v3-elev-crop .rd { white-space: nowrap; }

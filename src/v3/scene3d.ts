@@ -2,25 +2,30 @@
 // 座標は m。図面の x → x、図面の y（下向き）→ z。高さは y（上向き）。
 import { type Doc, type Item, type LibItem, type Pt, type Role3, type Mat3, type ElevFace, type Elevation, type ShapeItem, corners, segDist, uid } from './types';
 import { buildingHeight } from './elevation';
+import { PERSON_COLORS } from './library';
 
 export type P2 = { x: number; z: number };
+export type CarBody = 'sedan' | 'hatch' | 'suv' | 'kei';
+export type PropType = 'table' | 'chair' | 'tableset' | 'bench' | 'planter' | 'planterbench' | 'bicycle' | 'motorbike' | 'faucet' | 'ac' | 'dryer' | 'meter';
+// join：この線分の終点で次の線分につながる（角をつなぐ）
 export type Solid = (
-  | { kind: 'wall'; a: P2; b: P2; h: number; t: number; color: string; mat?: Mat3 }
-  | { kind: 'fence'; a: P2; b: P2; h: number; base: number; mat?: Mat3 }
+  | { kind: 'wall'; a: P2; b: P2; h: number; t: number; color: string; mat?: Mat3; join?: boolean }
+  | { kind: 'fence'; a: P2; b: P2; h: number; base: number; mat?: Mat3; join?: boolean }
   | { kind: 'gate'; a: P2; b: P2; h: number }
   | { kind: 'building'; poly: P2[]; h: number; faces?: Partial<Record<ElevFace, Elevation>>; wallTop?: number }
-  | { kind: 'tree'; x: number; z: number; r: number; h: number; form: 'round' | 'cone' | 'palm'; color: string }
-  | { kind: 'shrub'; x: number; z: number; rx: number; rz: number; h: number; rot: number; color: string }
+  | { kind: 'tree'; x: number; z: number; r: number; h: number; form: 'round' | 'multi' | 'cone' | 'palm'; color: string }
+  | { kind: 'shrub'; x: number; z: number; rx: number; rz: number; h: number; rot: number; color: string; form?: 'mound' | 'ball' | 'cover' | 'tuft' | 'rosette'; flower?: string }
   | { kind: 'box'; x: number; z: number; w: number; d: number; h: number; rot: number; color: string; y0?: number }
-  | { kind: 'car'; x: number; z: number; w: number; d: number; rot: number; color: string }
-  | { kind: 'carport'; x: number; z: number; w: number; d: number; h: number; rot: number }
-  | { kind: 'hedge'; x: number; z: number; w: number; d: number; h: number; rot: number; color: string }
+  | { kind: 'car'; x: number; z: number; w: number; d: number; rot: number; color: string; body?: CarBody }
+  | { kind: 'carport'; x: number; z: number; w: number; d: number; h: number; rot: number; posts?: 2 | 4 }
+  | { kind: 'hedge'; x: number; z: number; w: number; d: number; h: number; rot: number; color: string; flower?: string }
   | { kind: 'gatepost'; x: number; z: number; w: number; d: number; h: number; rot: number; variant: 'wall' | 'func' }
   | { kind: 'shed'; x: number; z: number; w: number; d: number; h: number; rot: number }
-  | { kind: 'light'; x: number; z: number; h: number; kind2: 'pole' | 'spot' }
+  | { kind: 'light'; x: number; z: number; h: number; kind2: 'pole' | 'spot'; rot?: number }
   | { kind: 'cylinder'; x: number; z: number; r: number; h: number; color: string }
-  | { kind: 'person'; x: number; z: number; h: number; color: string }
+  | { kind: 'person'; x: number; z: number; h: number; color: string; rot?: number }
   | { kind: 'stone'; x: number; z: number; rx: number; rz: number; h: number; rot: number }
+  | { kind: 'prop'; type: PropType; x: number; z: number; w: number; d: number; rot: number; color?: string }
 ) & { src?: string };
 
 // elevations：立面図があれば建物の面に貼り、高さも立面図から決める（elevScale で大きさを調整）
@@ -104,53 +109,80 @@ function raiseSolids(it: Item & { type: 'line' | 'stroke' | 'shape' }, m: (p: Pt
   for (let i = 1; i < pts.length; i++) {
     const a = pts[i - 1], b = pts[i];
     if (Math.hypot(b.x - a.x, b.z - a.z) < MIN_SEG) continue;
-    out.push(role === 'fence' ? { kind: 'fence', a, b, h: h ?? o.wallH, base: FENCE_BASE, src, mat: it.mat3 } : { kind: 'wall', a, b, h: h ?? o.wallH, t: WALL_T, color: '#d9d6cf', src, mat: it.mat3 });
+    // 次の線分へ続く所（閉じた線は最後も）は、角をつなぐ
+    const join = i < pts.length - 1 || closed;
+    out.push(role === 'fence' ? { kind: 'fence', a, b, h: h ?? o.wallH, base: FENCE_BASE, src, mat: it.mat3, ...(join && { join }) } : { kind: 'wall', a, b, h: h ?? o.wallH, t: WALL_T, color: '#d9d6cf', src, mat: it.mat3, ...(join && { join }) });
   }
   return out;
 }
 
-// 部品の種類（カテゴリと部品ID）から、汎用の形と高さを決める。メーカー商品の形は使わない
+// 葉の色（図面の部品の色味に合わせる）
+const LEAF = { light: '#8fb85e', mid: '#76a64f', dark: '#557f3c', olive: '#9fb08c', autumn: '#cf7445', momiji: '#9cbb68' };
+const TREE_COLOR: Record<string, string> = { 'tree-top': LEAF.light, ego: LEAF.light, oak: LEAF.light, chuboku2: LEAF.light, 'wc-symbol': LEAF.light, momiji: LEAF.momiji, olive: LEAF.olive, 'wc-olive': LEAF.olive, 'wc-tree-d': LEAF.dark, 'wc-maple': LEAF.autumn };
+// 株立ち（細い幹が数本）で見せる樹種
+const MULTI_STEM = new Set(['aodamo', 'june', 'ego', 'shara', 'momiji']);
+const CAR_BODY: Record<string, CarBody> = { car4900: 'sedan', car4600: 'sedan', vezel: 'suv', polo: 'hatch', car4300: 'hatch', aqua: 'hatch', kei3500: 'kei', kei3300: 'kei' };
+const TABLE_COLOR: Record<string, string> = { table: '#262626', bico: '#2c2c2c', housetable: '#b8875a', circletable: '#5f6164' };
+
+// 部品の種類（カテゴリと部品ID）から、形と高さを決める。メーカー商品の形は使わない
 function objSolid(it: Item & { type: 'obj' }, lib: Map<string, LibItem>, mm: number): Solid | null {
   const L = lib.get(it.ref);
   if (!L || !L.builtin) return null;
   const k = mm / 1000, x = (it.x + it.w / 2) * k, z = (it.y + it.h / 2) * k, w = it.w * k, d = it.h * k, rot = it.rot;
-  const id = it.ref.replace(/^b-/, ''), r = Math.min(w, d) / 2, tint = it.color;
+  const id = it.ref.replace(/^b-/, ''), r = Math.min(w, d) / 2, tint = it.color || undefined;
+  const prop = (type: PropType, color?: string, extraRot = 0): Solid => ({ kind: 'prop', type, x, z, w, d, rot: rot + extraRot, color });
   switch (L.cat) {
     case '植栽': {
       if (id === 'palm') return { kind: 'tree', x, z, r, h: 4.5, form: 'palm', color: '#6f9a4a' };
       if (id === 'conifer') return { kind: 'tree', x, z, r, h: Math.max(2, r * 4), form: 'cone', color: '#4f7a3e' };
-      if (id === 'agave') return { kind: 'shrub', x, z, rx: w / 2, rz: d / 2, h: 0.8, rot, color: '#7f9c8a' };
-      const color = id.includes('maple') || id === 'momiji' ? '#c7793d' : id.includes('olive') ? '#93a886' : id.endsWith('-d') ? '#4f7a3e' : '#78a352';
-      return { kind: 'tree', x, z, r, h: Math.max(2.5, r * 2.6), form: 'round', color };
+      if (id === 'agave') return { kind: 'shrub', x, z, rx: w / 2, rz: d / 2, h: 0.7, rot, color: '#7f9c8a', form: 'rosette' };
+      const multi = MULTI_STEM.has(id);
+      return { kind: 'tree', x, z, r, h: Math.max(multi ? 3 : 2.5, r * (multi ? 2.9 : 2.6)), form: multi ? 'multi' : 'round', color: TREE_COLOR[id] || LEAF.mid };
     }
-    case '低木':
-      if (id.startsWith('wc-hedge')) return { kind: 'hedge', x, z, w, d, h: 1.2, rot, color: '#5f8b45' };
-      return { kind: 'shrub', x, z, rx: w / 2, rz: d / 2, h: id === 'boxwood' ? 0.6 : 0.8, rot, color: id === 'tsutsuji' || id === 'wc-azalea' ? '#c77a9a' : id === 'ajisai' ? '#7f9fd6' : '#5f8b45' };
-    case '下草': return { kind: 'shrub', x, z, rx: w / 2, rz: d / 2, h: 0.3, rot, color: '#7aa35c' };
+    case '低木': {
+      if (id.startsWith('wc-hedge')) return { kind: 'hedge', x, z, w, d, h: 1.2, rot, color: '#5f8b45', flower: id === 'wc-hedge-f' ? '#ee6f85' : undefined };
+      if (id === 'boxwood') return { kind: 'shrub', x, z, rx: w / 2, rz: d / 2, h: Math.max(0.5, Math.min(w, d) * 0.9), rot, color: '#4f7a3e', form: 'ball' };
+      const dark = id === 'wc-shrub-d' || /teiboku[135]/.test(id);
+      return { kind: 'shrub', x, z, rx: w / 2, rz: d / 2, h: 0.8, rot, color: dark ? LEAF.dark : '#5f8b45', flower: id === 'tsutsuji' || id === 'wc-azalea' ? '#e883ab' : id === 'ajisai' ? '#8fb0e6' : undefined };
+    }
+    case '下草': {
+      if (id === 'agave2') return { kind: 'shrub', x, z, rx: w / 2, rz: d / 2, h: 0.4, rot, color: '#7f9c8a', form: 'rosette' };
+      if (id === 'hosta' || id === 'fukkiso') return { kind: 'shrub', x, z, rx: w / 2, rz: d / 2, h: 0.28, rot, color: id === 'hosta' ? '#8db36a' : LEAF.dark, form: 'cover' };
+      // 奇数番の下草・リュウノヒゲは低い株、偶数番・グラスは背のある葉
+      const low = id === 'ryunohige' || /shitakusa[135]/.test(id);
+      return { kind: 'shrub', x, z, rx: w / 2, rz: d / 2, h: low ? 0.22 : 0.5, rot, color: low ? '#4f7f45' : '#84ab5c', form: 'tuft' };
+    }
     case '景石': return { kind: 'stone', x, z, rx: w / 2, rz: d / 2, h: Math.min(w, d) * 0.55, rot };
     case '乗り物':
-      if (/bicycle|bike|moped/.test(id)) return { kind: 'box', x, z, w: w * 0.6, d, h: 1.0, rot, color: '#555b60' };
-      return { kind: 'car', x, z, w: w / 1.14, d, rot, color: tint || '#e9ecef' };
-    case 'カーポート': return { kind: 'carport', x, z, w, d, h: 2.3, rot };
-    case '照明': return id === 'light1' ? { kind: 'light', x, z, h: 0.8, kind2: 'pole' } : { kind: 'light', x, z, h: 0.3, kind2: 'spot' };
+      if (id === 'bicycle') return prop('bicycle', tint);
+      if (id === 'bike' || id === 'moped') return prop('motorbike', tint);
+      return { kind: 'car', x, z, w: w / 1.14, d, rot, color: tint || '#e9ecef', body: CAR_BODY[id] || 'hatch' };
+    case 'カーポート': return { kind: 'carport', x, z, w, d, h: 2.3, rot, posts: 4 };
+    case '照明': return id === 'light1' ? { kind: 'light', x, z, h: 0.8, kind2: 'pole', rot } : { kind: 'light', x, z, h: 0.3, kind2: 'spot', rot: rot + 90 };
     case 'ガーデンファニチャー':
-      if (/table|bico/.test(id)) return { kind: 'cylinder', x, z, r, h: 0.7, color: tint || '#4a4a4a' };
-      if (/planter|cobble/.test(id)) return { kind: 'box', x, z, w, d, h: 0.45, rot, color: '#b9b2a6' };
-      if (/chair/.test(id)) return { kind: 'box', x, z, w, d, h: 0.8, rot, color: '#4a4a4a' };
-      return { kind: 'box', x, z, w, d, h: 0.7, rot, color: '#6b6b6b' };
-    case 'キャラクター': return { kind: 'person', x, z, h: 1.6, color: tint || '#3f7fbf' };
+      if (id === 'tableset') return prop('tableset');
+      if (/table|bico/.test(id)) return prop('table', tint || TABLE_COLOR[id]);
+      if (id === 'cobblebench') return prop('planterbench');
+      if (id === 'cobble') return prop('planter');
+      if (/chair/.test(id)) return prop('chair', tint, id === 'clickchair' ? 45 : 0); // クリックチェアは図面で45°回した向き
+      return null;
+    case 'キャラクター': {
+      const i = +id.replace('person', '') || 0;
+      return { kind: 'person', x, z, h: i === 5 ? 1.15 : 1.65, color: tint || PERSON_COLORS[i] || '#3f7fbf', rot };
+    }
     case '門まわり・設備':
     case '未分類':
       if (id === 'gatepost') return { kind: 'gatepost', x, z, w, d, h: 1.4, rot, variant: 'wall' };
       if (id === 'funcpost') return { kind: 'gatepost', x, z, w, d, h: 1.5, rot, variant: 'func' };
-      if (id === 'faucet') return { kind: 'box', x, z, w: w * 0.6, d: d * 0.6, h: 0.9, rot, color: '#bfb9ad' };
-      if (id === 'ac') return { kind: 'box', x, z, w, d, h: 0.65, rot, color: '#f2f2f0' };
+      if (id === 'faucet') return prop('faucet');
+      if (id === 'ac') return prop('ac');
+      if (id === 'meter') return prop('meter');
       return null;
     case 'その他':
       if (id === 'shed') return { kind: 'shed', x, z, w, d, h: 1.9, rot };
-      if (id === 'cycleport') return { kind: 'carport', x, z, w, d, h: 2.1, rot };
-      if (id === 'bench') return { kind: 'box', x, z, w, d, h: 0.45, rot, color: '#c79f72' };
-      if (id === 'dryer') return { kind: 'box', x, z, w, d: Math.min(d, 0.06), h: 1.8, rot, color: '#9a9a9a' };
+      if (id === 'cycleport') return { kind: 'carport', x, z, w, d, h: 2.1, rot, posts: 2 };
+      if (id === 'bench') return prop('bench');
+      if (id === 'dryer') return prop('dryer');
       return null;
   }
   return null;

@@ -1,4 +1,4 @@
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import {uid,validatePlan,materials,type Plan,type Underlay} from './model';
 import {drawingSVG} from './render';
 import {getOriginal,putOriginal} from './storage';
@@ -10,7 +10,7 @@ export type Source={pages:number;file:File;render:(page:number)=>Promise<SourceI
 export async function readSource(file:File):Promise<Source>{
  if(file.size>MAX_FILE)throw Error('20MB以下のPDF・PNG・JPEG・WebPを選んでください');
  if(file.type==='application/pdf'||/\.pdf$/i.test(file.name)){
-  const pdfjs=await import('pdfjs-dist');pdfjs.GlobalWorkerOptions.workerSrc=workerUrl;
+  const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');pdfjs.GlobalWorkerOptions.workerSrc=workerUrl;
   const task=pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer()),useSystemFonts:true});
   let pdf;try{pdf=await task.promise;}catch(e){await task.destroy();throw Error(e instanceof Error&&/password/i.test(e.name)?'パスワード付きPDFです。解除したPDFを選んでください':'PDFを読み込めません。ファイルを確認してください');}
   let closed=false;let queue:Promise<unknown>=Promise.resolve();

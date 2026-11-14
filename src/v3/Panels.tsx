@@ -259,9 +259,9 @@ export function PaintPanel({ e }: { e: EditorApi }) {
       <Head title="塗る" onClose={e.close} video={() => e.video('f-paint')} />
       <Card title="① 塗る場所を選ぶ">
         <div className="v3-grid3">
-          <button className={'v3-pbtn sm' + (tool === 'aiFill' ? ' on' : '')} onClick={() => setTool('aiFill')}>囲まれた所をタップ</button>
-          <button className={'v3-pbtn sm' + (tool === 'aiBrush' ? ' on' : '')} onClick={() => setTool('aiBrush')}>なぞって追加</button>
-          <button className={'v3-pbtn sm' + (tool === 'aiErase' ? ' on' : '')} onClick={() => setTool('aiErase')}>なぞって減らす</button>
+          <button className={'v3-pbtn sm kw' + (tool === 'aiFill' ? ' on' : '')} onClick={() => setTool('aiFill')}>囲まれた所を<wbr />タップ</button>
+          <button className={'v3-pbtn sm kw' + (tool === 'aiBrush' ? ' on' : '')} onClick={() => setTool('aiBrush')}>なぞって<wbr />追加</button>
+          <button className={'v3-pbtn sm kw' + (tool === 'aiErase' ? ' on' : '')} onClick={() => setTool('aiErase')}>なぞって<wbr />減らす</button>
         </div>
         <div className="v3-row"><span className="v3-badge">{e.aiCount ? '場所を選びました' : 'まだ選んでいません'}</span>{e.aiCount > 0 && <button className="v3-link" onClick={e.clearAi}>選び直す</button>}</div>
       </Card>

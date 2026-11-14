@@ -5,10 +5,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { X, Camera, RotateCcw, ImagePlus, Sparkles } from 'lucide-react';
 import { type Role3, type Mat3, type ElevFace, type Elevation } from './types';
-import { type Doc, type LibItem, rad } from './types';
+import { type Doc, type LibItem, pointInPoly } from './types';
 import { readSource } from './source';
 import { edgeFace, isClockwise, faceU, faceAxis, polyBBox, roofFace } from './elevation';
-import { wallMaterial, outerGroundMaterial, skyTexture, elevationTexture, WALL_MATS, FENCE_MATS, WALL_COLORS, ROOF_COLORS, wallColor, roofMaterial, glassMaterial, sashMaterial } from './materials3d';
+import { wallMaterial, outerGroundMaterial, skyTexture, envEquirect, elevationTexture, WALL_MATS, FENCE_MATS, WALL_COLORS, ROOF_COLORS, wallColor, roofMaterial, glassMaterial, sashMaterial } from './materials3d';
 import { siteGround } from './siteGround';
 import { ElevationDialog } from './ElevationDialog';
 import { RenderDialog } from './RenderDialog';
@@ -47,7 +47,9 @@ function solidObject(s: Solid): THREE.Object3D {
   return partObject(s) || new THREE.Group();
 }
 
-// ウッドデッキ：塗った範囲（輪郭）を 0.4m の高さに持ち上げ、上面に木目
+// ウッドデッキ：塗った範囲（輪郭）を地面から 0.4m の高さの台にし、上面に木目。くり抜いた所は穴のまま
+const DECK_H = 0.4;
+const loopArea = (l: { x: number; y: number }[]) => l.reduce((s, a, i) => { const b = l[(i + 1) % l.length]; return s + a.x * b.y - b.x * a.y; }, 0) / 2;
 async function deckObjects(d: Doc): Promise<THREE.Object3D[]> {
   const decks = d.layers.flatMap(l => l.visible ? l.items.filter(i => i.type === 'texture' && (i.tex === 'b:deck' || i.tex === 'deck')) : []);
   if (!decks.length) return [];
@@ -55,11 +57,16 @@ async function deckObjects(d: Doc): Promise<THREE.Object3D[]> {
   const k = d.mmPerPx / 1000, out: THREE.Object3D[] = [];
   const top = wallMaterial('wood', '#9c7a55', 1, 1), side = mat('#7a5a3e');
   for (const it of decks) {
-    for (const loop of loops.get(it.id) || []) {
-      if (loop.length < 3) continue;
+    const all = (loops.get(it.id) || []).filter(l => l.length >= 3);
+    if (!all.length) continue;
+    // 輪郭の向き：いちばん広い輪郭と同じ向きが「外周」、逆向きが「穴」
+    const sign = Math.sign(loopArea(all.reduce((a, b) => Math.abs(loopArea(b)) > Math.abs(loopArea(a)) ? b : a)));
+    const outers = all.filter(l => Math.sign(loopArea(l)) === sign), holes = all.filter(l => Math.sign(loopArea(l)) !== sign);
+    for (const loop of outers) {
       const shape = new THREE.Shape(loop.map(p => new THREE.Vector2(p.x * k, -p.y * k)));
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.4, bevelEnabled: false });
-      const m = new THREE.Mesh(geo, [top, side]); m.rotation.x = -Math.PI / 2; m.position.y = 0.4; m.userData.src = it.id;
+      for (const h of holes) if (pointInPoly(h[0], loop)) shape.holes.push(new THREE.Path(h.map(p => new THREE.Vector2(p.x * k, -p.y * k))));
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: DECK_H, bevelEnabled: false });
+      const m = new THREE.Mesh(geo, [top, side]); m.rotation.x = -Math.PI / 2; m.userData.src = it.id;
       out.push(shadowed(m));
     }
   }
@@ -141,8 +148,8 @@ function windows3d(g: THREE.Group, edges: { face: ElevFace; a: P2; b: P2; nx: nu
 // 屋根：妻側の輪郭（0..1）を実寸の断面にして、直交する方向に建物の幅＋軒の出ぶん押し出す
 function roofSolid(g: THREE.Group, bb: ReturnType<typeof polyBBox>, faces: Partial<Record<ElevFace, Elevation>>, h: number, wallTop: number) {
   const face = roofFace(faces), e = face ? faces[face] : undefined;
-  const roofM = roofMaterial(houseStyle.roof), eaveM = mat('#f4f2ec'), capM = mat(shade(roofM.color.getHexString() ? '#' + roofM.color.getHexString() : '#5a5d61', 0.8));
-  const W = bb.maxX - bb.minX, D = bb.maxZ - bb.minZ, over = 0.45;
+  const roofM = roofMaterial(houseStyle.roof), capM = mat(shade('#' + roofM.color.getHexString(), 0.8));
+  const W = bb.maxX - bb.minX, D = bb.maxZ - bb.minZ, over = 0.45, T = 0.18; // 軒の出・屋根の厚み
   if (!face || !e?.roof?.length) {
     // 輪郭が無ければ薄い陸屋根
     const slab = new THREE.Mesh(new THREE.BoxGeometry(W + over, 0.18, D + over), roofM);
@@ -151,24 +158,41 @@ function roofSolid(g: THREE.Group, bb: ReturnType<typeof polyBBox>, faces: Parti
   const [ua, ub] = e.wallU ?? [0, 1];
   // 絵の横位置 u → 面の軸の座標（壁の範囲 ua..ub を建物の幅に合わせ、外は軒の出として外挿）
   const axis = (u: number) => faceAxis(face, (u - ua) / Math.max(1e-6, ub - ua), bb);
-  const pts = e.roof.map(p => ({ s: axis(p.x), y: Math.max(wallTop - 0.05, Math.min(h, p.y * h)) }));
+  const pts = e.roof.map(p => ({ s: axis(p.x), y: Math.max(wallTop - 0.05, Math.min(h, p.y * h)) })).sort((a, b) => a.s - b.s);
   const eave = Math.min(...pts.map(p => p.y), wallTop);
-  // 断面の形：輪郭 → 軒の下端で閉じる（厚み 0.2m）
+  // 屋根：輪郭に沿った厚み T の板（中は詰めない）。妻の三角は下で壁の位置に別に張る
   const shape = new THREE.Shape();
-  shape.moveTo(pts[0].s, eave - 0.15);
-  for (const p of pts) shape.lineTo(p.s, p.y);
-  shape.lineTo(pts[pts.length - 1].s, eave - 0.15);
+  shape.moveTo(pts[0].s, pts[0].y);
+  for (const p of pts.slice(1)) shape.lineTo(p.s, p.y);
+  for (let i = pts.length - 1; i >= 0; i--) shape.lineTo(pts[i].s, pts[i].y - T);
   shape.closePath();
   const alongX = face === 'N' || face === 'S'; // 断面が x 方向に広がる＝z 方向へ押し出す
   const depth = (alongX ? D : W) + over * 2;
   const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
-  // ExtrudeGeometry の材質：[0]=断面（妻の三角＝壁の色）、[1]=押し出した面（屋根面＝屋根の色）
-  const mesh = new THREE.Mesh(geo, [eaveM, roofM]);
+  // ExtrudeGeometry の材質：[0]=断面（屋根の小口＝破風）、[1]=押し出した面（屋根面と軒裏）
+  const mesh = new THREE.Mesh(geo, [capM, roofM]);
   // ExtrudeGeometry は XY 平面の形を +Z に押し出す。南北面の断面は x 方向なのでそのまま z へ押し出す。
   // 東西面の断面は z 方向：y 軸まわりに -90° 回すと local x → world z、押し出し（local z）→ world -x になる
   if (alongX) mesh.position.set(0, 0, bb.minZ - over);
   else { mesh.rotation.y = -Math.PI / 2; mesh.position.set(bb.maxX + over, 0, 0); }
   g.add(shadowed(mesh));
+  // 妻壁：壁の上端から屋根の下までの三角を、壁の位置に外壁の色で張る（建物の両端）
+  const lo = alongX ? bb.minX : bb.minZ, hi = alongX ? bb.maxX : bb.maxZ;
+  const yAt = (s: number) => { let k = 0; while (k < pts.length - 2 && pts[k + 1].s < s) k++; const a = pts[k], b = pts[k + 1] ?? a, t = b.s > a.s ? Math.min(1, Math.max(0, (s - a.s) / (b.s - a.s))) : 0; return a.y + (b.y - a.y) * t; };
+  const gp = [{ s: lo, y: yAt(lo) }, ...pts.filter(p => p.s > lo && p.s < hi), { s: hi, y: yAt(hi) }];
+  if (Math.max(...gp.map(p => p.y)) > wallTop + 0.1) {
+    const base = wallTop - 0.02, gs = new THREE.Shape();
+    gs.moveTo(lo, base);
+    for (const p of gp) gs.lineTo(p.s, Math.max(base, p.y - T / 2));
+    gs.lineTo(hi, base); gs.closePath();
+    const gableGeo = new THREE.ShapeGeometry(gs), wallM = mat(wallColor(houseStyle.wall), { roughness: 0.9, side: THREE.DoubleSide });
+    for (const end of [0, 1]) {
+      const m = new THREE.Mesh(gableGeo, wallM);
+      if (alongX) m.position.z = end ? bb.maxZ : bb.minZ;
+      else { m.rotation.y = -Math.PI / 2; m.position.x = end ? bb.maxX : bb.minX; }
+      g.add(shadowed(m));
+    }
+  }
   // 棟（いちばん高い所）に棟包み
   const apex = pts.reduce((m, p) => p.y > m.y ? p : m, pts[0]);
   if (apex.y > eave + 0.3) {
@@ -192,7 +216,7 @@ function disposeAll(o: THREE.Object3D) {
     const m = c as THREE.Mesh;
     if (m.geometry) m.geometry.dispose();
     const ms = m.material ? (Array.isArray(m.material) ? m.material : [m.material]) : [];
-    for (const x of ms) { (x as THREE.MeshStandardMaterial).map?.dispose(); x.dispose(); }
+    for (const x of ms) { if (x.userData.shared) continue; (x as THREE.MeshStandardMaterial).map?.dispose(); x.dispose(); } // 使い回す材質は捨てない
   });
 }
 
@@ -228,7 +252,8 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
   useEffect(() => {
     const el = host.current!;
     let renderer: THREE.WebGLRenderer;
-    try { renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); }
+    // 画像の保存・AIパースは「描いた直後に写す」ので、描画バッファを残す設定は要らない（iPad で軽くなる）
+    try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
     catch { setErr('この端末では3D表示を使えませんでした（WebGLに対応していません）'); setBusy(false); return; }
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -238,26 +263,51 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
     const scene = new THREE.Scene();
     scene.background = skyTexture();
     scene.fog = new THREE.Fog('#e6eef4', 140, 320);
+    // 映り込み：空と地面の色を写した環境。金属・ガラス・車の塗装に空が映る（無いと暗く平たく見える）
+    let envTex: THREE.Texture | null = null;
+    try {
+      const pm = new THREE.PMREMGenerator(renderer), eq = envEquirect();
+      envTex = pm.fromEquirectangular(eq).texture; eq.dispose(); pm.dispose();
+      scene.environment = envTex; scene.environmentIntensity = 0.55;
+    } catch { /* 環境が作れない端末では光だけで描く */ }
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 600);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.maxPolarAngle = Math.PI / 2 - 0.02; controls.minDistance = 1.5; controls.maxDistance = 200;
-    scene.add(new THREE.HemisphereLight('#dfeaf6', '#b8b2a3', 1.0));
-    const sun = new THREE.DirectionalLight('#fff4e0', 1.7);
-    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005;
+    // 2本指で動かしても、見ている点が地面の下へ行かないようにする（カメラが地面に潜って裏が見えるのを防ぐ）
+    controls.addEventListener('change', () => { const t = controls.target; if (t.y < 0) { camera.position.y -= t.y; t.y = 0; } if (camera.position.y < 0.25) camera.position.y = 0.25; });
+    scene.add(new THREE.HemisphereLight('#dfeaf6', '#b8b2a3', envTex ? 0.6 : 1.0));
+    const sun = new THREE.DirectionalLight('#fff4e0', 1.8);
+    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0002; sun.shadow.normalBias = 0.03;
     scene.add(sun, sun.target);
-    // 敷地の外側（ぼんやりした地面）
-    const outer = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), outerGroundMaterial());
-    outer.rotation.x = -Math.PI / 2; outer.position.y = -0.01; outer.receiveShadow = true; scene.add(outer);
+    // 敷地の外側（ぼんやりした地面）。敷地の地面と重なってちらつかないよう少し下げる
+    const outer = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), outerGroundMaterial());
+    outer.rotation.x = -Math.PI / 2; outer.position.y = -0.04; outer.receiveShadow = true; scene.add(outer);
     let world = new THREE.Group(), ground: THREE.Mesh | null = null; scene.add(world);
-    let center = new THREE.Vector3(), span = 20, eyeZ = 0, lit: string | null = null;
-    let alive = true, framed = false, seq = 0;
+    let center = new THREE.Vector3(), span = 20, eyeZ = 0, tall = 0, lit: string | null = null;
+    let alive = true, framed = false, seq = 0, last: { d: Doc; o: SceneOpts } | null = null;
 
     const setView = (v: ViewKind) => {
       const c = center;
       if (v === 'top') { camera.position.set(c.x, span * 1.25, c.z + 0.01); controls.target.copy(c); }
-      else if (v === 'eye') { camera.position.set(c.x, 1.55, eyeZ + Math.max(6, span * 0.7)); controls.target.set(c.x, 2.0, c.z); } // 道路側から家を見る高さ・距離
+      else if (v === 'eye') { camera.position.set(c.x, 1.55, eyeZ + Math.max(5, span * 0.48)); controls.target.set(c.x, Math.max(1.6, tall * 0.42), c.z); } // 道路側から家を見る高さ・距離
       else { camera.position.set(c.x + span * 0.45, span * 0.55, c.z + span * 0.85); controls.target.copy(c); }
       controls.update();
+    };
+    // 図面の範囲に合わせて、光・影・霧・見える距離を決める（図面が広がるたびに合わせ直す。カメラの位置は動かさない）
+    const fit = (d: Doc, box: Box, maxH: number) => {
+      const k = d.mmPerPx / 1000;
+      const hasItems = d.layers.some(l => l.visible && l.items.some(i => !(i.type === 'obj' && i.hidden)));
+      const fb = hasItems ? contentBox({ ...d, underlay: undefined }, 100) : box;
+      center = new THREE.Vector3((fb.x + fb.w / 2) * k, 0, (fb.y + fb.h / 2) * k);
+      // 広さだけでなく高さも入るように引く（2階建ての家が画面からはみ出さないように）
+      const base = Math.max(fb.w * k, fb.h * k, 6); tall = maxH;
+      span = hasItems ? 1.3 * Math.max(base, base * 0.6 + maxH * 1.5) : base; eyeZ = (fb.y + fb.h) * k;
+      outer.position.set(center.x, -0.04, center.z);
+      // 手前（図面の下側）斜め左から照らし、見る側の面が明るくなるようにする
+      sun.position.set(center.x - span * 0.5, span * 1.1, center.z + span * 0.8); sun.target.position.copy(center);
+      const sc = sun.shadow.camera; sc.left = sc.bottom = -span * 0.75; sc.right = sc.top = span * 0.75; sc.near = 0.5; sc.far = span * 4; sc.updateProjectionMatrix();
+      const fog = scene.fog as THREE.Fog; fog.near = Math.max(140, span * 4); fog.far = Math.max(320, span * 9);
+      controls.maxDistance = Math.max(200, span * 3.5); camera.far = Math.max(600, span * 12); camera.updateProjectionMatrix();
     };
 
     // 選んだ線を少し光らせて、どれを変えているか分かるようにする
@@ -271,16 +321,22 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
         scene.add(mark);
       }
       world.traverse(o => {
-        const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
-        if (!m || !('emissive' in m)) return;
+        const mm = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+        if (!mm) return;
         let src: string | undefined, p: THREE.Object3D | null = o;
         while (p && !src) { src = p.userData.src; p = p.parent; }
-        m.emissive.set(id && src === id ? '#3a7d5c' : '#000000');
+        for (const x of Array.isArray(mm) ? mm : [mm]) {
+          const m = x as THREE.MeshStandardMaterial;
+          if (!m.emissive || m.userData.shared) continue; // 使い回す材質（部品）は触らない。選べるのは線・図形だけ
+          // 元の光り方（照明の灯りなど）を覚えておき、選択を外したら戻す
+          if (m.userData.glow === undefined) m.userData.glow = m.emissive.getHex();
+          m.emissive.set(id && src === id ? 0x3a7d5c : m.userData.glow);
+        }
       });
     };
 
     const build = async (d: Doc, o: SceneOpts) => {
-      const my = ++seq;
+      const my = ++seq; last = { d, o };
       houseStyle = d.elevStyle || {};
       const { solids, raised } = buildScene(d, lib, o);
       // 地面：立面図のある図面では、下絵（配置図）を「敷地の図」だけに整える（文字・表題欄・用紙の枠を消す）
@@ -307,18 +363,15 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
       for (const o of await deckObjects(d)) { if (!alive || my !== seq) return; world.add(o); }
       scene.add(world);
       highlight(lit);
+      // 光と影は毎回、図面の範囲に合わせる。カメラは最初の1回だけ（線・部品のある範囲に寄せる。下絵しか無ければ下絵全体）
+      fit(d, box, Math.max(0, ...solids.map(s => 'h' in s ? s.h : 0)));
       if (framed) return;
       framed = true;
-      // カメラは線・部品のある範囲（建物や外構）に寄せる。下絵しか無ければ下絵全体
-      const hasItems = d.layers.some(l => l.visible && l.items.some(i => !(i.type === 'obj' && i.hidden)));
-      const fb = hasItems ? contentBox({ ...d, underlay: undefined }, 300) : box;
-      center = new THREE.Vector3((fb.x + fb.w / 2) * k, 0, (fb.y + fb.h / 2) * k);
-      span = Math.max(fb.w * k, fb.h * k, 8) * (hasItems ? 1.6 : 1); eyeZ = (fb.y + fb.h) * k; // 建物まわりが入るよう少し引く
-      // 手前（図面の下側）斜め左から照らし、見る側の面が明るくなるようにする
-      sun.position.set(center.x - span * 0.5, span * 1.1, center.z + span * 0.8); sun.target.position.copy(center);
-      const sc = sun.shadow.camera; sc.left = sc.bottom = -span * 0.8; sc.right = sc.top = span * 0.8; sc.near = 0.5; sc.far = span * 4; sc.updateProjectionMatrix();
       setView('bird');
     };
+    // アプリを裏に回すなどで描画の土台（WebGL）が失われたら、戻ったときに作り直す
+    const onRestored = () => { if (last) build(last.d, last.o).catch(() => {}); };
+    renderer.domElement.addEventListener('webglcontextrestored', onRestored);
 
     // タップ（ほとんど動かさずに離した）で、その場所の線・図形を選ぶ
     const ray = new THREE.Raycaster(), down = { x: 0, y: 0, t: 0 };
@@ -349,7 +402,8 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
     return () => {
       alive = false; api.current = null; ro.disconnect(); renderer.setAnimationLoop(null); controls.dispose();
       renderer.domElement.removeEventListener('pointerdown', onDown); renderer.domElement.removeEventListener('pointerup', onUp);
-      disposeAll(scene); renderer.dispose(); renderer.domElement.remove();
+      renderer.domElement.removeEventListener('webglcontextrestored', onRestored);
+      disposeAll(scene); envTex?.dispose(); renderer.dispose(); renderer.domElement.remove();
     };
   }, [lib, ctx]);
 

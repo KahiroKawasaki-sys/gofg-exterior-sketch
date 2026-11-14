@@ -108,3 +108,46 @@ it('3D画面で地面をタップした位置の近くの線を探す', () => {
   expect(pickRaisable(d, { x: 2.5, z: 2.9 })).toBe(b.id);
   expect(pickRaisable(d, { x: 2.5, z: 1.5 })).toBeNull();
 });
+
+it('箱で代用していた部品にも専用の形が付く（家具・自転車・設備）', () => {
+  const pick = (ref: string) => buildScene(withItems([obj(ref, 0, 0)]), lib).solids[0];
+  expect(pick('b-tableset')).toMatchObject({ kind: 'prop', type: 'tableset' });
+  expect(pick('b-table')).toMatchObject({ kind: 'prop', type: 'table' });
+  expect(pick('b-chair')).toMatchObject({ kind: 'prop', type: 'chair', rot: 0 });
+  expect(pick('b-clickchair')).toMatchObject({ kind: 'prop', type: 'chair', rot: 45 });
+  expect(pick('b-bench')).toMatchObject({ kind: 'prop', type: 'bench' });
+  expect(pick('b-dryer')).toMatchObject({ kind: 'prop', type: 'dryer' });
+  expect(pick('b-bicycle')).toMatchObject({ kind: 'prop', type: 'bicycle' });
+  expect(pick('b-moped')).toMatchObject({ kind: 'prop', type: 'motorbike' });
+  expect(pick('b-faucet')).toMatchObject({ kind: 'prop', type: 'faucet' });
+  expect(pick('b-ac')).toMatchObject({ kind: 'prop', type: 'ac' });
+  expect(pick('b-meter')).toMatchObject({ kind: 'prop', type: 'meter' });
+});
+
+it('組み込みの部品は全部3Dの形になる', () => {
+  for (const l of lib) expect(buildScene(withItems([obj(l.id, 0, 0)]), lib).solids, l.id).toHaveLength(1);
+});
+
+it('車は車種で形が変わり、人は図面と同じ服の色・子どもは背が低い', () => {
+  const pick = (ref: string) => buildScene(withItems([obj(ref, 0, 0)]), lib).solids[0];
+  expect(pick('b-kei3500')).toMatchObject({ kind: 'car', body: 'kei' });
+  expect(pick('b-vezel')).toMatchObject({ kind: 'car', body: 'suv' });
+  expect(pick('b-car4900')).toMatchObject({ kind: 'car', body: 'sedan' });
+  expect(pick('b-person0')).toMatchObject({ kind: 'person', color: '#d9534f', h: 1.65 });
+  expect(pick('b-person5')).toMatchObject({ kind: 'person', h: 1.15 });
+});
+
+it('カーポートの柱は図面の記号どおり（カーポートは四隅、サイクルポートは奥の2本）、株立ちの樹種は幹が数本', () => {
+  const pick = (ref: string) => buildScene(withItems([obj(ref, 0, 0)]), lib).solids[0];
+  expect(pick('b-carport1')).toMatchObject({ kind: 'carport', posts: 4 });
+  expect(pick('b-cycleport')).toMatchObject({ kind: 'carport', posts: 2 });
+  expect(pick('b-aodamo')).toMatchObject({ kind: 'tree', form: 'multi' });
+  expect(pick('b-wc-tree-m')).toMatchObject({ kind: 'tree', form: 'round' });
+});
+
+it('折れ線の塀・フェンスは角でつながる（最後の線分は、閉じた線のときだけ）', () => {
+  const open = buildScene(withItems([line([[0, 0], [300, 0], [300, 200]], { role3: 'wall' })]), lib).solids as Extract<Solid, { kind: 'wall' }>[];
+  expect(open.map(s => !!s.join)).toEqual([true, false]);
+  const closed = buildScene(withItems([line([[0, 0], [200, 0], [200, 200], [0, 200], [0, 0]])]), lib).solids as Extract<Solid, { kind: 'wall' }>[];
+  expect(closed.map(s => !!s.join)).toEqual([true, true, true, true]);
+});

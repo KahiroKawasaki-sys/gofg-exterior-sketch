@@ -39,7 +39,7 @@ import { buildEstimate, defaultBook, estimateCsv, importItems, parseCsv, parsePr
 // three.js は大きいので、3Dを開いたときだけ読み込む
 const View3D = lazy(() => import('./View3D'));
 
-const VERSION = 'ver 2026.11.14-01 (estimate-pending)';
+const VERSION = 'ver 2026.11.14-02 (3d-parts)';
 type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | 'qty' | null;
 
 // CSVは UTF-8 か Shift_JIS（Excelの既定）のどちらか

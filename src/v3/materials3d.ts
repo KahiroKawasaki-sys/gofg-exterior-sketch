@@ -59,19 +59,44 @@ export function wallMaterial(mat: Mat3 | undefined, fallback: string, len: numbe
   const map = base.clone(); map.needsUpdate = true; map.repeat.set(Math.max(0.25, len), Math.max(0.25, h));
   return new THREE.MeshStandardMaterial({ map, roughness: mat === 'wood' ? 0.7 : 0.95 });
 }
+// 模様を貼らない面（塀の小口・上面）の色。模様を細い面に貼るとつぶれて縞になるので、同じ色味の無地にする
+export function wallPlain(mat: Mat3 | undefined, fallback: string): THREE.MeshStandardMaterial {
+  if (mat === 'alumi') return new THREE.MeshStandardMaterial({ color: '#5b5e61', roughness: 0.45, metalness: 0.5 });
+  return new THREE.MeshStandardMaterial({ color: mat === 'block' ? '#c6c1b7' : mat === 'plaster' ? '#e6e1d6' : mat === 'wood' ? '#8f6f4d' : fallback, roughness: 0.9 });
+}
 export const meshFenceMaterial = (len: number, h: number) => { const map = meshTex().clone(); map.needsUpdate = true; map.repeat.set(Math.max(0.25, len), Math.max(0.25, h)); return new THREE.MeshStandardMaterial({ map, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.4 }); };
 export const grassMaterial = () => { const map = grassTex().clone(); map.needsUpdate = true; map.repeat.set(400, 400); return new THREE.MeshStandardMaterial({ map, roughness: 1 }); };
 // 敷地の外（図面の外）の地面：芝にすると AI パースが周りを草原にしてしまうので、何でもない薄いグレーの地面にする
 const outerTex = () => patternTexture('outer', (g, s) => { g.fillStyle = '#cfccc5'; g.fillRect(0, 0, s, s); noise(g, s, 1500, 0.06); noise(g, s, 600, 0.08, false); }, 128);
-export const outerGroundMaterial = () => { const map = outerTex().clone(); map.needsUpdate = true; map.repeat.set(400, 400); return new THREE.MeshStandardMaterial({ map, roughness: 1 }); };
+export const outerGroundMaterial = () => { const map = outerTex().clone(); map.needsUpdate = true; map.repeat.set(800, 800); return new THREE.MeshStandardMaterial({ map, roughness: 1 }); };
 
 // 空：上が青、地平線が白っぽいグラデーション
 export function skyTexture(): THREE.Texture {
-  return patternTexture('sky', (g, s) => {
+  const t = patternTexture('sky', (g, s) => {
     const grad = g.createLinearGradient(0, 0, 0, s);
     grad.addColorStop(0, '#7fb2e0'); grad.addColorStop(0.55, '#c9dff0'); grad.addColorStop(1, '#eef3f6');
     g.fillStyle = grad; g.fillRect(0, 0, s, s);
   }, 64);
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; // 繰り返すと上の端に地平線の白い筋が出る
+  return t;
+}
+
+// 映り込み用の環境（全天の絵）：上半分は空、地平線は明るく、下半分は地面の色。太陽の方向に明るい光のかたまり
+export function envEquirect(): THREE.Texture {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+  const g = c.getContext('2d')!;
+  const sky = g.createLinearGradient(0, 0, 0, 128);
+  sky.addColorStop(0, '#5f9bd6'); sky.addColorStop(0.7, '#bcd8ee'); sky.addColorStop(1, '#f4f7f8');
+  g.fillStyle = sky; g.fillRect(0, 0, 512, 128);
+  const gr = g.createLinearGradient(0, 128, 0, 256);
+  gr.addColorStop(0, '#c9c5bb'); gr.addColorStop(1, '#8f8b82');
+  g.fillStyle = gr; g.fillRect(0, 128, 512, 128);
+  const sun = g.createRadialGradient(150, 50, 0, 150, 50, 70);
+  sun.addColorStop(0, 'rgba(255,255,250,1)'); sun.addColorStop(0.25, 'rgba(255,250,235,.7)'); sun.addColorStop(1, 'rgba(255,250,235,0)');
+  g.fillStyle = sun; g.fillRect(60, 0, 190, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 // 立面図（白抜きPNG）のテクスチャ。同じ絵は使い回す
@@ -98,7 +123,8 @@ export function roofMaterial(key?: string): THREE.MeshStandardMaterial {
     for (let i = 0; i < 3; i++) { const y = Math.round(s * i / 3); g.fillStyle = 'rgba(0,0,0,.22)'; g.fillRect(0, y, s, Math.max(1, s * 0.014)); g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(0, y + Math.max(1, s * 0.014), s, Math.max(1, s * 0.02)); }
     noise(g, s, 1500, 0.05);
   }).clone();
-  map.needsUpdate = true; map.repeat.set(1, 1);
+  // 押し出しの面は u＝断面の横方向、v＝棟の方向。段は棟と平行に走るので、絵を90°回して貼る
+  map.needsUpdate = true; map.repeat.set(1, 1); map.rotation = Math.PI / 2;
   return new THREE.MeshStandardMaterial({ color: roofColor(key), map, roughness: 0.75, metalness: key === 'silver' ? 0.5 : 0.05 });
 }
 export const glassMaterial = () => new THREE.MeshStandardMaterial({ color: '#8eb1c9', metalness: 0.55, roughness: 0.12, transparent: true, opacity: 0.82 });
