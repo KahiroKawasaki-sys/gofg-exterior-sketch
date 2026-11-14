@@ -11,7 +11,7 @@ jobs:
           ID: ${{ secrets.AI_ACCESS_CLIENT_ID }}
           SECRET: ${{ secrets.AI_ACCESS_CLIENT_SECRET }}
         run: |
-          echo "id length: ${#ID} / secret length: ${#SECRET} / id ends with .access: $([[ "$ID" == *.access ]] && echo yes || echo no)"
+          echo "id starts: ${ID:0:8} / id length: ${#ID} / secret length: ${#SECRET} / id ends with .access: $([[ "$ID" == *.access ]] && echo yes || echo no)"
           out=$(curl -s -o body.txt -w "%{http_code} %{redirect_url}" -X POST \
             https://gofg-exterior-sketch.kawakahi135.workers.dev/api/ai/meeting \
             -H "Content-Type: application/json" -H "X-Sketch-Client: 2" \
