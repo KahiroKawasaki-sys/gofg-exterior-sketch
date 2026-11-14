@@ -1,0 +1,26 @@
+name: Check AI service token
+# Pro アプリに埋め込む Cloudflare Access サービストークンが本番の AI API を通るかだけを確かめる（値は出さない）
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call production AI API with the app token
+        env:
+          ID: ${{ secrets.AI_ACCESS_CLIENT_ID }}
+          SECRET: ${{ secrets.AI_ACCESS_CLIENT_SECRET }}
+        run: |
+          echo "id length: ${#ID} / secret length: ${#SECRET} / id ends with .access: $([[ "$ID" == *.access ]] && echo yes || echo no)"
+          out=$(curl -s -o body.txt -w "%{http_code} %{redirect_url}" -X POST \
+            https://gofg-exterior-sketch.kawakahi135.workers.dev/api/ai/meeting \
+            -H "Content-Type: application/json" -H "X-Sketch-Client: 2" \
+            -H "CF-Access-Client-Id: $ID" -H "CF-Access-Client-Secret: $SECRET" -d '{}')
+          code=${out%% *}; redirect=${out#* }
+          echo "status: $code"
+          if [ "$code" = "302" ]; then
+            meta=$(python3 -c "import sys,urllib.parse as u;q=u.parse_qs(u.urlparse(sys.argv[1]).query);print(q.get('meta',[''])[0])" "$redirect")
+            python3 -c "import sys,json,base64;p=sys.argv[1].split('.')[1];p+='='*(-len(p)%4);d=json.loads(base64.urlsafe_b64decode(p));print('access says: service_token_status=',d.get('service_token_status'),'auth_status=',d.get('auth_status'))" "$meta"
+          else
+            head -c 300 body.txt; echo
+          fi
