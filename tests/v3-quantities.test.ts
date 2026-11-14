@@ -10,20 +10,24 @@ const line = (pts: [number, number][], extra: Partial<Item & { type: 'line' }> =
 const obj = (ref: string): Item => { const l = lib.find(v => v.id === ref)!; return { id: uid(), type: 'obj', ref, name: l.name, x: 0, y: 0, w: l.w, h: l.h, rot: 0, flip: false, color: null }; };
 const tex = (t: string, name: string): Item => ({ id: uid(), type: 'texture', name, mask: '', x: 0, y: 0, w: 100, h: 100, tex: t, texName: name, scale: 1, rot: 0, hue: 0, sat: 100, bright: 100, contrast: 100 });
 
-it('線は種類ごとに長さ（m）を合計し、自動判定かどうかを区別する', () => {
+it('線は種類ごとに長さ（m）を合計する。種類を決めていない実線は別枠にして塀に入れない', () => {
+  const unset = line([[0, 0], [300, 0], [300, 400]]); // 3m + 4m（種類なし）
   const rows = quantities(withItems([
-    line([[0, 0], [300, 0], [300, 400]]), // 3m + 4m の塀（自動）
+    unset,
+    line([[0, 500], [250, 500]], { role3: 'wall' }),
     line([[0, 600], [500, 600]], { role3: 'fence' }),
     line([[0, 700], [200, 700]], { role3: 'fence' }),
     line([[0, 800], [150, 800]], { role3: 'gate' }),
     line([[0, 900], [500, 900]], { dash: 'dashed' }), // 数えない
+    line([[0, 950], [600, 950]], { role3: 'ground' }), // 「数えない」と決めた線
   ]), lib);
   const by = (n: string) => rows.find(r => r.name === n)!;
-  expect(by('塀')).toMatchObject({ qty: 7, unit: 'm', auto: true });
+  expect(by('塀')).toMatchObject({ qty: 2.5, unit: 'm', area: 3 });
+  expect(by('塀').auto).toBeFalsy();
+  expect(by('種類を決めていない線')).toMatchObject({ key: 'line:unset', qty: 7, unit: 'm', pending: true, parts: [{ id: unset.id, qty: 7 }] });
   expect(by('フェンス')).toMatchObject({ qty: 7, unit: 'm', ids: expect.any(Array) });
-  expect(by('フェンス').auto).toBeFalsy();
   expect(by('門扉')).toMatchObject({ qty: 1, unit: '箇所' });
-  expect(rows.some(r => r.qty === 5)).toBe(false);
+  expect(rows.some(r => r.qty === 5 || r.qty === 6)).toBe(false);
 });
 
 it('部品は名前ごとに数え、車と人は数えない', () => {

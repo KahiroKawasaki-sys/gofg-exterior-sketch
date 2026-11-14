@@ -34,7 +34,7 @@ export function boardCards(rows: QtyRow[], book: PriceBook, doc: Doc, lib: LibIt
   const out: BoardCard[] = [];
   for (const row of rows) {
     // 建物と、種類の分からない線は仕様書に載せない
-    if (row.role === 'building' || row.role === 'ground') continue;
+    if (row.role === 'building' || row.pending) continue;
     const linked = linkFor(book, row).map(id => items.get(id)).filter((i): i is PriceItem => !!i);
     // 写真を登録する先：写真のある品目 → 会社の品目 → 仮の品目
     const main = linked.find(i => i.img) || linked.find(i => !i.prov) || linked[0];

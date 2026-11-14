@@ -139,6 +139,7 @@ function objSolid(it: Item & { type: 'obj' }, lib: Map<string, LibItem>, mm: num
       if (/chair/.test(id)) return { kind: 'box', x, z, w, d, h: 0.8, rot, color: '#4a4a4a' };
       return { kind: 'box', x, z, w, d, h: 0.7, rot, color: '#6b6b6b' };
     case 'キャラクター': return { kind: 'person', x, z, h: 1.6, color: tint || '#3f7fbf' };
+    case '門まわり・設備':
     case '未分類':
       if (id === 'gatepost') return { kind: 'gatepost', x, z, w, d, h: 1.4, rot, variant: 'wall' };
       if (id === 'funcpost') return { kind: 'gatepost', x, z, w, d, h: 1.5, rot, variant: 'func' };

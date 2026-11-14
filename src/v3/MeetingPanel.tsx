@@ -159,7 +159,7 @@ export function MeetingPanel({ doc, lib, book, onDoc, onMeeting, onClose, onHide
       <div className="v3-meet-ctl">
         {recording
           ? <button className="v3-meet-mic on" onClick={stopRec}><Square size={16} />録音を止める<span className="tm">{mmss(elapsed)}</span></button>
-          : <button className="v3-meet-mic" onClick={startRec} disabled={!canRecord || phase === 'transcribing' || busy}><Mic size={18} />{m.lines.length ? '録音を再開する' : '録音を始める'}</button>}
+          : <button className="v3-meet-mic" onClick={startRec} disabled={!canRecord || phase === 'transcribing' || busy}><Mic size={18} />{m.lines.some(l => l.from != null) ? '録音を再開する' : '録音を始める'}</button>}
         <button className="v3-btn" onClick={read} disabled={busy || recording || !m.lines.length}><Sparkles size={14} />{busy ? '読み取り中…' : unread > 0 && m.readAt ? `AIで読み取り直す（新しい会話 ${unread}行）` : 'AIで要望を読み取る'}</button>
       </div>
       {rec === 'paused' && <p className="v3-meet-live"><i className="dot pause" />{recMsg || '録音を中断しています'}</p>}

@@ -254,6 +254,11 @@ button.v3-mono:hover { color: var(--green); }
 .v3-more > summary { cursor: pointer; font-size: 12px; color: #555; padding: 4px 0; }
 .v3-more[open] > summary { margin-bottom: 6px; }
 .v3-bar.r1 .status { margin-left: auto; padding-left: 12px; }
+/* iPad横（1180〜1194px）でも2段目が横に流れないよう、左側の道具は絵だけにする */
+@media (max-width: 1280px) {
+  .v3-bar.r2 .v3-tl .lb { display: none; }
+  .v3-bar.r2 { gap: 1px; }
+}
 @media (max-width: 1100px) {
   .v3-tl .lb, .v3-bar.r1 .status { display: none; }
   .v3-tl { padding: 0 5px; }
@@ -318,7 +323,11 @@ button.v3-mono:hover { color: var(--green); }
 
 /* 概算見積 */
 .v3-seg { display: inline-flex; background: #e7ebe8; border-radius: 9px; padding: 2px; }
-.v3-seg button { border: 0; background: transparent; padding: 5px 12px; border-radius: 7px; font-size: 12.5px; font-weight: 600; color: var(--sub); }
+.v3-seg { flex: none; }
+.v3-seg button { border: 0; background: transparent; padding: 5px 12px; border-radius: 7px; font-size: 12.5px; font-weight: 600; color: var(--sub); white-space: nowrap; }
+/* 横の細いパネル（詳細モード）ではタブを詰め、CSVは絵だけにして1行に収める */
+.v3-qty:not(.sheet) .v3-seg button { padding: 5px 7px; font-size: 12px; }
+.v3-qty:not(.sheet) .v3-qty-head .v3-btn { font-size: 0; gap: 0; padding: 0 8px; }
 .v3-seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
 .v3-est-book { margin: 6px 0 2px; padding: 9px 10px; border-radius: 10px; background: #fff; font-size: 12px; line-height: 1.5; display: flex; flex-direction: column; gap: 7px; }
 .v3-est-book.prov { background: #fff7e8; }
@@ -326,6 +335,15 @@ button.v3-mono:hover { color: var(--green); }
 .v3-est-line { background: #fff; border-radius: 9px; padding: 7px 9px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
 .v3-est-line.prov { box-shadow: inset 3px 0 0 #f0c060; }
 .v3-est-line.un { background: #fff7e8; }
+.v3-est-pending { margin: 8px 0 2px; padding: 10px; border-radius: 10px; background: #fff7e8; border: 1px solid #f0d9a4; font-size: 12px; }
+.v3-est-pending h4 { margin: 0 0 3px; font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.v3-est-pending h4 span { font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 6px; background: #f6c453; color: #4a3500; }
+.v3-est-pending p { margin: 0 0 7px; color: var(--sub); line-height: 1.5; }
+.v3-est-pending .list { display: flex; flex-direction: column; gap: 4px; max-height: 190px; overflow-y: auto; margin-bottom: 8px; }
+.v3-est-pending .row { display: flex; align-items: center; gap: 6px; }
+.v3-est-pending .lbl { flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 8px; border: 0; background: #fff; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; color: var(--ink); text-align: left; }
+.v3-est-pending .lbl i { font-style: normal; color: var(--sub); }
+.v3-est-pending select { height: 34px; min-width: 96px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 12.5px; }
 .v3-est-line .top { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .v3-est-line .sp { flex: 1; }
 .v3-est-line .lbl { border: 0; background: none; padding: 0; font-size: 12.5px; font-weight: 600; color: var(--ink); text-align: left; text-decoration: underline dotted #b9c2bd; text-underline-offset: 3px; }

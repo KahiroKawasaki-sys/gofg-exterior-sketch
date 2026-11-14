@@ -63,11 +63,14 @@ it('非表示の部品・非表示のレイヤー・自作部品は立ち上げ�
   expect(buildScene({ ...off, layers: off.layers.map(l => ({ ...l, visible: false })) }, lib).solids).toEqual([]);
 });
 
-it('サンプル邸：建物1棟・塀・車と自転車が立ち上がる', () => {
+it('サンプル邸：建物1棟・門袖の塀・フェンス・車2台・カーポートが立ち上がり、敷地の線は立たない', () => {
   const { solids } = buildScene(sampleDoc(), lib);
   expect(solids.filter(s => s.kind === 'building')).toHaveLength(1);
-  expect(solids.some(s => s.kind === 'wall')).toBe(true);
-  expect(solids.filter(s => s.kind === 'car')).toHaveLength(1);
+  expect(solids.filter(s => s.kind === 'wall')).toEqual([expect.objectContaining({ h: 1.4, mat: 'plaster' })]);
+  expect(solids.filter(s => s.kind === 'fence')).toHaveLength(2);
+  expect(solids.filter(s => s.kind === 'car')).toHaveLength(2);
+  expect(solids.filter(s => s.kind === 'carport')).toHaveLength(1);
+  expect(solids.filter(s => s.kind === 'gatepost')).toHaveLength(1);
 });
 
 it('線ごとに選んだ種類で立ち上がる：フェンス・門扉・建物・地面のまま', () => {

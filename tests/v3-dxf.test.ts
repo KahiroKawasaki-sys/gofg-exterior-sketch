@@ -42,8 +42,8 @@ it('線は3Dと同じ判定でレイヤー分けされる', () => {
 
 it('部品はブロックとして置かれ、名前も文字で入る。ファイルは Shift_JIS で書く', () => {
   const s = buildDxf(sampleDoc(), lib);
-  expect(entities(s, 'INSERT')).toBe(4);
-  expect(entities(s, 'TEXT')).toBe(4);
+  expect(entities(s, 'INSERT')).toBe(23);
+  expect(entities(s, 'TEXT')).toBe(23);
   expect(s).toContain('P_AQUA');
   expect(s).toContain('アクア（自動車）');
   expect([...encodeSjis('芝a㎡')]).toEqual([0x8e, 0xc5, 0x61, 0x87, 0x75]);

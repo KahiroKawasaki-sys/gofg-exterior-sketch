@@ -49,7 +49,7 @@ function solidObject(s: Solid): THREE.Object3D {
 
 // ウッドデッキ：塗った範囲（輪郭）を 0.4m の高さに持ち上げ、上面に木目
 async function deckObjects(d: Doc): Promise<THREE.Object3D[]> {
-  const decks = d.layers.flatMap(l => l.visible ? l.items.filter(i => i.type === 'texture' && i.tex === 'deck') : []);
+  const decks = d.layers.flatMap(l => l.visible ? l.items.filter(i => i.type === 'texture' && (i.tex === 'b:deck' || i.tex === 'deck')) : []);
   if (!decks.length) return [];
   const loops = await textureContours(d, 600);
   const k = d.mmPerPx / 1000, out: THREE.Object3D[] = [];

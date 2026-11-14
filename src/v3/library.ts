@@ -2,7 +2,8 @@
 import { type LibItem } from './types';
 import { rng } from './textures';
 
-export const CATEGORIES = ['未分類', '植栽', '乗り物', 'カーポート', '照明', 'その他', 'ガーデンファニチャー', '下草', '低木', '景石', 'キャラクター'];
+// 「未分類」は自分で登録した部品の置き場（内蔵の部品は入れない）
+export const CATEGORIES = ['植栽', '乗り物', '門まわり・設備', 'カーポート', '照明', 'その他', 'ガーデンファニチャー', '下草', '低木', '景石', 'キャラクター', '未分類'];
 
 const f = (v: number) => Math.round(v * 10) / 10;
 const LINE = 'fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"';
@@ -239,11 +240,11 @@ function carport(id: string, name: string, w: number, h: number): LibItem {
 
 function misc(): LibItem[] {
   const out: LibItem[] = [];
-  out.push(item('gatepost', '門柱 1200', '未分類', 120, 24, `<rect x="1" y="1" width="118" height="22" fill="#d8d5cf" stroke="currentColor" stroke-width="1.2"/><rect x="88" y="6" width="22" height="12" fill="#fff" stroke="currentColor" stroke-width="0.8"/>`));
-  out.push(item('funcpost', '機能門柱', '未分類', 50, 22, `<rect x="1" y="1" width="48" height="20" rx="2" fill="#4c4c4c" stroke="currentColor" stroke-width="1"/><rect x="8" y="6" width="14" height="10" fill="#fff"/><circle cx="36" cy="11" r="4" fill="#fff"/>`));
-  out.push(item('faucet', '立水栓', '未分類', 22, 22, `<rect x="2" y="2" width="18" height="18" fill="#bfb9ad" stroke="currentColor" stroke-width="1"/><circle cx="11" cy="11" r="4" fill="#fff" stroke="currentColor" stroke-width="0.8"/>`));
-  out.push(item('ac', '室外機', '未分類', 80, 30, `<rect x="1" y="1" width="78" height="28" fill="#fff" stroke="currentColor" stroke-width="1.2"/><circle cx="28" cy="15" r="11" fill="none" stroke="currentColor" stroke-width="0.8"/><path d="M50 7L72 7M50 12L72 12M50 17L72 17M50 22L72 22" stroke="currentColor" stroke-width="0.6"/>`));
-  out.push(item('meter', '量水器', '未分類', 30, 20, `<rect x="1" y="1" width="28" height="18" fill="#fff" stroke="currentColor" stroke-width="1"/><path d="M1 1L29 19M29 1L1 19" stroke="currentColor" stroke-width="0.6"/>`));
+  out.push(item('gatepost', '門柱 1200', '門まわり・設備', 120, 24, `<rect x="1" y="1" width="118" height="22" fill="#d8d5cf" stroke="currentColor" stroke-width="1.2"/><rect x="88" y="6" width="22" height="12" fill="#fff" stroke="currentColor" stroke-width="0.8"/>`));
+  out.push(item('funcpost', '機能門柱', '門まわり・設備', 50, 22, `<rect x="1" y="1" width="48" height="20" rx="2" fill="#4c4c4c" stroke="currentColor" stroke-width="1"/><rect x="8" y="6" width="14" height="10" fill="#fff"/><circle cx="36" cy="11" r="4" fill="#fff"/>`));
+  out.push(item('faucet', '立水栓', '門まわり・設備', 22, 22, `<rect x="2" y="2" width="18" height="18" fill="#bfb9ad" stroke="currentColor" stroke-width="1"/><circle cx="11" cy="11" r="4" fill="#fff" stroke="currentColor" stroke-width="0.8"/>`));
+  out.push(item('ac', '室外機', '門まわり・設備', 80, 30, `<rect x="1" y="1" width="78" height="28" fill="#fff" stroke="currentColor" stroke-width="1.2"/><circle cx="28" cy="15" r="11" fill="none" stroke="currentColor" stroke-width="0.8"/><path d="M50 7L72 7M50 12L72 12M50 17L72 17M50 22L72 22" stroke="currentColor" stroke-width="0.6"/>`));
+  out.push(item('meter', '量水器', '門まわり・設備', 30, 20, `<rect x="1" y="1" width="28" height="18" fill="#fff" stroke="currentColor" stroke-width="1"/><path d="M1 1L29 19M29 1L1 19" stroke="currentColor" stroke-width="0.6"/>`));
   out.push(item('shed', '物置 2000×900', 'その他', 200, 90, `<rect x="1" y="1" width="198" height="88" fill="#efefec" stroke="currentColor" stroke-width="1.3"/><path d="M1 1L199 89M199 1L1 89" stroke="currentColor" stroke-width="0.5"/>`));
   out.push(item('cycleport', 'サイクルポート', 'その他', 220, 200, `<rect x="1" y="1" width="218" height="198" fill="#e3ecef" fill-opacity="0.35" stroke="currentColor" stroke-width="1.3"/><path d="M1 40L219 40" stroke="currentColor" stroke-width="0.6" stroke-dasharray="4 3"/><rect x="4" y="4" width="9" height="9" fill="currentColor"/><rect x="207" y="4" width="9" height="9" fill="currentColor"/>`));
   out.push(item('dryer', '物干し', 'その他', 180, 40, `<path d="M8 20L172 20M8 12L8 28M172 12L172 28" stroke="currentColor" stroke-width="1.2"/><rect x="2" y="14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="0.8"/><rect x="166" y="14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="0.8"/>`));

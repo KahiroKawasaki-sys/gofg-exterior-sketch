@@ -8,7 +8,8 @@ export type RenderView = 'bird' | 'top' | 'eye';
 export const RENDER_STYLES: [RenderStyle, string, string][] = [['day', '昼', '明るい自然光'], ['dusk', '夕方', '灯りがともる夕暮れ'], ['night', '夜', '照明が映える夜景']];
 export type Render = { id: string; docId: string; at: string; view: RenderView; style: RenderStyle; note: string; src: string; ms?: number };
 
-export const RENDER_COST_NOTE = '1枚 30秒〜1分・約8円';
+// お客様と一緒に見る画面なので、原価（1枚 約8円）は出さない。待ち時間だけ伝える
+export const RENDER_COST_NOTE = '1枚 30秒〜1分';
 export const RENDER_NOTE_PLACEHOLDER = '例：塀は黒いタイル、芝は人工芝、門柱は木目';
 
 // 画像AIが受け付ける縦横比のうち、3D画面に一番近いもの

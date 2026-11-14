@@ -1,7 +1,7 @@
 // 概算見積の表示：集計×単価表。数量・単価はこの図面だけ手直しでき、品目の選び直しは単価表に覚える
 import { useRef, useState } from 'react';
 import { FileSpreadsheet, Upload, Download, Plus, Trash2, FileText, Copy } from 'lucide-react';
-import { type DocEstimate, uid } from './types';
+import { type DocEstimate, type Role3, uid } from './types';
 import { type QtyRow } from './quantities';
 import { type PriceBook, type Estimate, type EstLine, isProvisional } from './estimate';
 import { compareRows } from './estimatePdf';
@@ -25,9 +25,12 @@ function ItemSelect({ book, value, onChange, label, placeholder }: { book: Price
   );
 }
 
-export function EstView({ e, book, est, onBook, onEst, onPick, onCsv, onImport, onExportBook, others, onCompare, onPdf, onDuplicate }: {
+// 種類を決めていない線に付けられる種類（見積の言葉で）
+const PENDING_ROLES: [Role3, string][] = [['wall', '塀'], ['fence', 'フェンス'], ['gate', '門扉'], ['ground', '数えない']];
+
+export function EstView({ e, book, est, onBook, onEst, onPick, onSetRole, onCsv, onImport, onExportBook, others, onCompare, onPdf, onDuplicate }: {
   e: Estimate; book: PriceBook; est: DocEstimate; onBook: (b: PriceBook) => void; onEst: (est: DocEstimate) => void;
-  onPick: (ids: string[]) => void; onCsv: () => void; onImport: (f: File) => void; onExportBook: () => void;
+  onPick: (ids: string[]) => void; onSetRole: (ids: string[], role: Role3) => void; onCsv: () => void; onImport: (f: File) => void; onExportBook: () => void;
   others: { id: string; name: string }[]; onCompare: (id: string) => Promise<Estimate>; onPdf: (cmp?: { name: string; e: Estimate }) => void; onDuplicate: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -68,7 +71,29 @@ export function EstView({ e, book, est, onBook, onEst, onPick, onCsv, onImport, 
         </div>
       </div>
 
-      {!e.lines.length && !e.unpriced.length && <p className="v3-note pad">まだ見積に入るものがありません。素材を塗る・部品を置く・実線を引くと、ここに金額が出ます。</p>}
+      {e.pending.map(r => (
+        <section key={r.key} className="v3-est-pending" aria-label="種類を決めていない線">
+          <h4>種類を決めていない線 {r.ids.length}本<span>金額に入っていません</span></h4>
+          <p>塀・フェンスは種類を選ぶと金額に入ります。敷地や道路の線は「数えない」に。</p>
+          <div className="list">
+            {(r.parts || []).map((p, i) => (
+              <div key={p.id} className="row">
+                <button className="lbl" onClick={() => onPick([p.id])} title="図面で選ぶ">線{i + 1}<i>{p.qty.toLocaleString('ja-JP')} m</i></button>
+                <select aria-label={`線${i + 1}の種類`} value="" onChange={ev => ev.target.value && onSetRole([p.id], ev.target.value as Role3)}>
+                  <option value="">種類…</option>
+                  {PENDING_ROLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+          {r.ids.length > 1 && <div className="v3-row wrap">
+            <button className="v3-btn" onClick={() => onSetRole(r.ids, 'wall')}>すべて塀にする</button>
+            <button className="v3-btn" onClick={() => onSetRole(r.ids, 'ground')}>すべて数えない</button>
+          </div>}
+        </section>
+      ))}
+
+      {!e.lines.length && !e.unpriced.length && !e.pending.length && <p className="v3-note pad">まだ見積に入るものがありません。素材を塗る・部品を置く・実線を引くと、ここに金額が出ます。</p>}
       {groups.map(([g, ls]) => (
         <section key={g} className="v3-qty-group">
           <h4>{g === '素材' ? '素材' : g === '線' ? '塀・フェンス・門扉' : '部品'}</h4>
@@ -158,7 +183,7 @@ export function EstView({ e, book, est, onBook, onEst, onPick, onCsv, onImport, 
         <button className="v3-btn primary" onClick={() => onPdf(cmp?.e ? { name: cmp.name, e: cmp.e } : undefined)} disabled={!e.lines.length}><FileText size={14} />見積書PDF{cmp?.e ? '（比較つき）' : ''}</button>
         <button className="v3-btn" onClick={onCsv} disabled={!e.lines.length}><FileSpreadsheet size={14} />CSVで保存</button>
       </div>
-      <p className="v3-note pad">数量は図面からの概算です。数量・単価を直すとこの図面だけに効きます。品目を選び直すと単価表に覚えるので、ほかの図面にも同じ品目が使われます。単価表はこの端末に保存されます。</p>
+      <p className="v3-note pad">数量は図面からの概算です。種類を決めていない線は金額に入りません。数量・単価を直すとこの図面だけに効きます。品目を選び直すと単価表に覚えるので、ほかの図面にも同じ品目が使われます。単価表はこの端末に保存されます。</p>
     </div>
   );
 }

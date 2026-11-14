@@ -40,12 +40,12 @@ export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet, e
           <button role="tab" aria-selected={tab === 'board'} className={tab === 'board' ? 'on' : ''} onClick={() => setTab('board')}>仕様書</button>
         </div> : <b>集計</b>}
         <span className="sp" />
-        {tab === 'qty' && <button className="v3-btn" onClick={() => onCsv(rows)} disabled={!rows.length}><FileSpreadsheet size={14} />CSV</button>}
+        {tab === 'qty' && <button className="v3-btn" title="数量をCSVで保存" onClick={() => onCsv(rows)} disabled={!rows.length}><FileSpreadsheet size={14} />CSV</button>}
         <button className="v3-ib" onClick={onClose} aria-label="集計を閉じる"><X size={16} /></button>
       </div>
       {tab === 'est' && estp && (() => {
         const e = buildEstimate(rows, estp.book, doc.est);
-        return <EstView e={e} book={estp.book} est={doc.est || {}} onBook={estp.onBook} onEst={estp.onEst} onPick={onPick}
+        return <EstView e={e} book={estp.book} est={doc.est || {}} onBook={estp.onBook} onEst={estp.onEst} onPick={onPick} onSetRole={onSetRole}
           onCsv={() => estp.onEstCsv(e)} onImport={estp.onImport} onExportBook={estp.onExportBook}
           others={estp.others} onCompare={estp.onCompare} onPdf={cmp => estp.onPdf(e, cmp)} onDuplicate={estp.onDuplicate} />;
       })()}
@@ -62,9 +62,9 @@ export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet, e
           <section key={g} className="v3-qty-group">
             <h4>{g === '素材' ? '素材（面積）' : g === '線' ? '線（長さ）' : '部品（数）'}</h4>
             {rs.map(r => (
-              <div key={r.key} className={'v3-qty-row' + (r.role === 'ground' ? ' warn' : '')}>
+              <div key={r.key} className={'v3-qty-row' + (r.pending ? ' warn' : '')}>
                 <button className="v3-qty-main" onClick={() => onPick(r.ids)} title="図面で選ぶ">
-                  <span className="nm">{r.name}{r.auto && <em className="auto">自動判定</em>}</span>
+                  <span className="nm">{r.name}{r.pending ? <em className="auto">金額に入れていません</em> : r.auto && <em className="auto">自動判定</em>}</span>
                   <span className="q"><b>{fmt(r)}</b> {r.unit}</span>
                 </button>
                 {g === '線' && (
@@ -78,7 +78,7 @@ export function QtyPanel({ doc, lib, onPick, onSetRole, onCsv, onClose, sheet, e
           </section>
         );
       })}
-      <p className="v3-note pad">行を押すと図面でその箇所を選びます。「自動判定」は種類を選んでいない実線を、塀・建物と見なして数えたものです。点線・手描きの線は、種類を選んだときだけ数えます。車と人は数えません。面積は塗った範囲からの概算です。</p>
+      <p className="v3-note pad">行を押すと図面でその箇所を選びます。種類を決めていない実線は、右の「種類…」で塀・フェンスなどを選ぶと金額に入ります（20㎡以上の囲みは建物と自動判定）。点線・手描きの線は、種類を選んだときだけ数えます。車と人は数えません。面積は塗った範囲からの概算です。</p>
       </>}
     </div>
   );

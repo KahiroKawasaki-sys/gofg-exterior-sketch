@@ -66,7 +66,7 @@ const DRAW: { label: string; icon: ReactNode; tool: Tool; patch?: Partial<ToolOp
 ];
 const WIDTHS: [string, number][] = [['細', 3], ['中', 6], ['太', 12]];
 const COLORS: [string, string][] = [['黒', '#2f3b38'], ['赤', '#c4473d'], ['青', '#3f7fbf'], ['茶', '#a35a1f']];
-const PART_ORDER = ['乗り物', '植栽', '低木', '下草', 'カーポート', '照明', 'ガーデンファニチャー', '景石', 'その他', '未分類', 'キャラクター'];
+const PART_ORDER = ['乗り物', '植栽', '低木', '下草', '門まわり・設備', 'カーポート', '照明', 'ガーデンファニチャー', '景石', 'その他', '未分類', 'キャラクター'];
 
 export type DockProps = {
   step: Step; setStep: (s: Step) => void;

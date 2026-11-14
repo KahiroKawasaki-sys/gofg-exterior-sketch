@@ -14,7 +14,7 @@ export type EstLine = {
   row?: string; item?: string; ids?: string[]; auto?: boolean; prov?: boolean; edited?: boolean; extra?: boolean; byArea?: boolean;
 };
 export type Estimate = {
-  lines: EstLine[]; unpriced: QtyRow[]; subtotal: number; overheadPct: number; overhead: number;
+  lines: EstLine[]; unpriced: QtyRow[]; pending: QtyRow[]; subtotal: number; overheadPct: number; overhead: number;
   discount: number; taxPct: number; tax: number; total: number;
 };
 
@@ -46,9 +46,10 @@ export function linkFor(book: PriceBook, row: QtyRow): string[] {
 
 export function buildEstimate(rows: QtyRow[], book: PriceBook, est: DocEstimate = {}): Estimate {
   const items = new Map(book.items.map(i => [i.id, i]));
-  const lines: EstLine[] = [], unpriced: QtyRow[] = [];
+  const lines: EstLine[] = [], unpriced: QtyRow[] = [], pending: QtyRow[] = [];
   for (const row of rows) {
     if (row.role === 'building') continue; // 建物は工事の対象外
+    if (row.pending) { pending.push(row); continue; } // 種類を決めていない線は金額に入れない
     const linked = linkFor(book, row).map(id => items.get(id)).filter((i): i is PriceItem => !!i);
     if (!linked.length) { unpriced.push(row); continue; }
     for (const it of linked) {
@@ -66,7 +67,7 @@ export function buildEstimate(rows: QtyRow[], book: PriceBook, est: DocEstimate 
   const overheadPct = est.overheadPct ?? book.overheadPct, overhead = yen(subtotal * overheadPct / 100);
   const discount = Math.max(0, est.discount || 0), taxPct = book.taxPct;
   const base = Math.max(0, subtotal + overhead - discount), tax = Math.floor(base * taxPct / 100);
-  return { lines, unpriced, subtotal, overheadPct, overhead, discount, taxPct, tax, total: base + tax };
+  return { lines, unpriced, pending, subtotal, overheadPct, overhead, discount, taxPct, tax, total: base + tax };
 }
 
 // ---- 仮の単価表（一般的な目安。会社の単価表を読み込むまでの仮置き） ----

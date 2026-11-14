@@ -6,15 +6,17 @@ import { TEXTURES } from './textures';
 
 export type QtyGroup = '素材' | '部品' | '線';
 // cat：部品の分類（植栽など）。area：塀・フェンスの立面の面積（長さ×高さ、㎡単価の品目に使う）
-export type QtyRow = { key: string; group: QtyGroup; name: string; qty: number; unit: string; ids: string[]; auto?: boolean; role?: Role3; note?: string; cat?: string; area?: number };
+// pending：種類を決めていない線。塀かどうか分からないので金額には入れない（parts＝1本ずつの長さ）
+export type QtyRow = { key: string; group: QtyGroup; name: string; qty: number; unit: string; ids: string[]; auto?: boolean; role?: Role3; note?: string; cat?: string; area?: number; pending?: boolean; parts?: { id: string; qty: number }[] };
+export const PENDING_KEY = 'line:unset';
 
 // 高さを指定していない塀・フェンスは3Dの標準と同じ 1.2m とみなす
 export const DEFAULT_WALL_H = 1.2;
 
 // 施工の対象ではない部品（車・人）は数えない
 const SKIP_CATS = new Set(['乗り物', 'キャラクター']);
-const UNIT_BY_CAT: Record<string, string> = { 植栽: '本', 低木: '本', 下草: '株', 景石: '個', カーポート: '基', 照明: '台' };
-const ROLE_NAME: Record<string, string> = { wall: '塀', fence: 'フェンス', gate: '門扉', building: '建物', ground: '未分類の線' };
+const UNIT_BY_CAT: Record<string, string> = { 植栽: '本', 低木: '本', 下草: '株', 景石: '個', カーポート: '基', 照明: '台', '門まわり・設備': '基' };
+const ROLE_NAME: Record<string, string> = { wall: '塀', fence: 'フェンス', gate: '門扉', building: '建物' };
 
 export const texDisplayName = (it: Item & { type: 'texture' }) =>
   (it.tex.startsWith('b:') && TEXTURES.find(t => t.id === it.tex.slice(2))?.name) || it.texName || '素材';
@@ -56,6 +58,14 @@ export function quantities(doc: Doc, lib: LibItem[], areas: Map<string, number> 
         // 点線・破線・手描きで種類を付けていないものは、下書きや補助線とみなして数えない
         const explicit = !!it.role3 && it.role3 !== 'auto', role = resolveRole(it, doc.mmPerPx);
         if (!explicit && (it.dash !== 'solid' || it.type === 'stroke')) continue;
+        if (explicit && role === 'ground') continue; // 「地面のまま（数えない）」と決めた線
+        // 種類を決めていない実線は、塀とは限らない（敷地の線・道路の線など）。別枠にして金額に入れない
+        if (!explicit && role !== 'building') {
+          const len = itemLength(it, doc.mmPerPx);
+          add(PENDING_KEY, { group: '線', name: '種類を決めていない線', unit: 'm', pending: true }, len, it.id);
+          const r = rows.get(PENDING_KEY)!; (r.parts ||= []).push({ id: it.id, qty: Math.round(len * 10) / 10 });
+          continue;
+        }
         const key = 'line:' + role, name = ROLE_NAME[role] || '線';
         if (role === 'building') add(key, { group: '線', name, unit: '棟', role }, 1, it.id);
         else if (role === 'gate') add(key, { group: '線', name, unit: '箇所', role }, 1, it.id);
@@ -77,7 +87,7 @@ export function quantities(doc: Doc, lib: LibItem[], areas: Map<string, number> 
 // Excel でそのまま開けるCSV（先頭にBOM）
 export function quantitiesCsv(rows: QtyRow[], title: string): string {
   const q = (s: string) => /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  const lines = [`# ${title}`, '区分,品目,数量,単位,備考', ...rows.map(r => [r.group, r.name, String(r.qty), r.unit, r.auto ? '自動判定を含む' : ''].map(q).join(','))];
+  const lines = [`# ${title}`, '区分,品目,数量,単位,備考', ...rows.map(r => [r.group, r.name, String(r.qty), r.unit, r.pending ? '種類未定（金額に入れていません）' : r.auto ? '自動判定を含む' : ''].map(q).join(','))];
   return '﻿' + lines.join('\r\n') + '\r\n';
 }
 

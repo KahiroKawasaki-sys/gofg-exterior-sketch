@@ -27,6 +27,15 @@ it('仮の単価で金額を出す（塀は長さ×高さの㎡、植栽は分�
   expect(e.total).toBe(496000 + 49600 + e.tax);
 });
 
+it('種類を決めていない線は金額に入れず、確認待ちとして返す', () => {
+  const pend = row('line:unset', '線', '種類を決めていない線', 86.3, 'm', { pending: true, parts: [{ id: 'a', qty: 86.3 }] });
+  const e = buildEstimate([rows[0], pend], defaultBook());
+  expect(e.lines.map(l => l.label)).toEqual(['土間コンクリート']);
+  expect(e.pending).toEqual([pend]);
+  expect(e.unpriced).toEqual([]);
+  expect(e.subtotal).toBe(220000);
+});
+
 it('図面ごとの手直し（数量・単価・追加項目・値引き・諸経費）が効く', () => {
   const key = 'mat:土間コンクリート|p-concrete';
   const e = buildEstimate(rows.slice(0, 1), defaultBook(), { qty: { [key]: 25 }, price: { [key]: 10000 }, extras: [{ id: 'a', name: '残土処分', unit: '㎥', qty: 3, price: 8000 }], discount: 20000, overheadPct: 0 });
