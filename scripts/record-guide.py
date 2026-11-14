@@ -140,6 +140,14 @@ def open_sample(r: Rec):
     r.p.wait_for_timeout(900)
     if r.p.locator('.sx-seg').count():
         r.p.locator('.sx-seg button', has_text='中').click()
+    # 見本の図面を右へ寄せ、左に練習用の空きを広く取る（中ボタンのドラッグ＝画面の移動。録画の前なので映らない）
+    sx, sy, sw, sh = r.stage()
+    cx, cy, dx = sx + sw * 0.5, sy + sh * 0.5, 140 if r.flash else 110
+    r.p.mouse.move(cx, cy)
+    r.p.mouse.down(button='middle')
+    r.p.mouse.move(cx + dx, cy, steps=5)
+    r.p.mouse.up(button='middle')
+    r.p.wait_for_timeout(200)
 
 
 def parking(r: Rec):

@@ -263,7 +263,7 @@ def paint(r):
     r.p.wait_for_timeout(500)
     r.tap_el(r.p.locator('.v3-side .v3-pbtn', has_text='なぞって追加'), .3)
     r.drag([(x1 + 30, y0 + 40), (x1 + 120, y0 + 50), (x1 + 120, y0 + 90), (x1 + 30, y0 + 100)], 900, .4)
-    r.tap_el(r.p.locator('.v3-side .v3-texgrid button', has_text='芝'), 1.8)
+    r.tap_el(r.p.locator('.v3-side .v3-texgrid button', has_text='芝').first, 1.8)  # 「芝」と「芝生」の2つが当たるので先頭
     r.uncap()
 
 
@@ -284,6 +284,14 @@ def underlay(r):
     r.p.wait_for_timeout(1500)
     if r.p.locator('.v3-modal', has_text='ページを選ぶ').count():
         r.tap_el(r.p.locator('.v3-modal button[type=submit]'), 1.2)
+    # 下絵から始めると「立面図はありますか？」と聞かれる（Proだけ）。ここでは「あとで」
+    ask = r.p.locator('.v3-modal', has_text='立面図はありますか')
+    try:
+        ask.wait_for(timeout=5000)
+        r.cap('立面図があれば、ここで読み込むと家が3Dで立つ', .3, 'top')
+        r.tap_el(ask.locator('button', has_text='あとで'), .8)
+    except Exception:
+        pass
     r.cap('「設定」で下絵の濃さを調整', .3, 'top')
     r.tap_el(top(r, '設定'), .6)
     slide(r, r.p.locator('.v3-side .v3-slider', has_text='濃さ').locator('input'), 30)
