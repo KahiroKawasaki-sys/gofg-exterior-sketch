@@ -109,7 +109,7 @@ export function sampleDoc(): Doc {
     const l = lib.find(v => v.id === ref)!; return { id: uid(), type: 'obj', ref, name: l.name, x: x - l.w / 2, y: y - l.h / 2, w: l.w, h: l.h, rot, flip: false, color: null };
   };
   const parts = [
-    obj('b-carport1', 200, 2040), obj('b-aqua', 200, 2050), obj('b-kei3500', 500, 2060),
+    obj('b-carport1', 200, 2040), { ...obj('b-car4900', 200, 2045), color: '#30353c' }, obj('b-vezel', 500, 2060),
     obj('b-bicycle', 745, 1900), obj('b-bicycle', 800, 1900),
     obj('b-wc-tree-m', 725, 1560), obj('b-wc-olive', 105, 1500),
     obj('b-wc-shrub', 300, 1690), obj('b-wc-azalea', 400, 1690), obj('b-wc-shrub', 500, 1690), obj('b-wc-shrub-d', 600, 1690),

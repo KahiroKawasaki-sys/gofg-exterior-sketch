@@ -44,8 +44,8 @@ it('部品はブロックとして置かれ、名前も文字で入る。ファ�
   const s = buildDxf(sampleDoc(), lib);
   expect(entities(s, 'INSERT')).toBe(23);
   expect(entities(s, 'TEXT')).toBe(23);
-  expect(s).toContain('P_AQUA');
-  expect(s).toContain('アクア（自動車）');
+  expect(s).toContain('P_CAR4900');
+  expect(s).toContain('普通車1800×4900');
   expect([...encodeSjis('芝a㎡')]).toEqual([0x8e, 0xc5, 0x61, 0x87, 0x75]);
   expect([...encodeSjis('😀')]).toEqual([0x3f]);
 });
