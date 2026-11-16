@@ -33,7 +33,7 @@ describe('AIパース',()=>{
   expect(body.input[0].text).toContain('eye level');
   expect(body.input[0].text).toContain('blue hour');
   expect(body.input[0].text).toContain('塀は黒いタイル');
-  expect(body.input[0].text).toContain('Never turn the surroundings into a meadow'); // 敷地の外を草原にしない
+  expect(body.input[0].text).toContain('Do NOT add neighbouring houses'); // 敷地の外に隣家・街並みを描かない（草原にもしない）
   expect(body.input[0].text).toContain('follow the site plan drawn on the ground');
   expect(body.generation_config).toBeUndefined();
  });
