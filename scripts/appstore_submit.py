@@ -397,13 +397,14 @@ def pricing(api, app):
 def availability(api, app):
     cur = api.get(f'/apps/{app["id"]}/appAvailabilityV2', {'include': 'territoryAvailabilities', 'limit[territoryAvailabilities]': 50}, ok404=True)
     if not cur or not cur.get('data'):
-        # 要確認：インライン作成の id 書式（${local-id}）と、列挙しなかった地域が「配信しない」になるか
-        api.write('配信地域：日本のみ・新しい地域に自動で広げない', 'POST', '/v2/appAvailabilities', {
+        # Apple は全地域の列挙を求める（省くと 409）。全地域を取り、日本だけ「配信する」にして作る
+        every = [t['id'] for t in api.get('/territories', {'limit': 200})['data']]
+        api.write(f'配信地域：日本のみ（全{len(every)}地域を列挙）・新しい地域に自動で広げない', 'POST', '/v2/appAvailabilities', {
             'data': {'type': 'appAvailabilities', 'attributes': {'availableInNewTerritories': False},
                      'relationships': {'app': rel('apps', app['id']),
-                                       'territoryAvailabilities': {'data': [{'type': 'territoryAvailabilities', 'id': f'${{{t}}}'} for t in TERRITORIES]}}},
-            'included': [{'type': 'territoryAvailabilities', 'id': f'${{{t}}}', 'attributes': {'available': True},
-                          'relationships': {'territory': rel('territories', t)}} for t in TERRITORIES]})
+                                       'territoryAvailabilities': {'data': [{'type': 'territoryAvailabilities', 'id': f'${{{t}}}'} for t in every]}}},
+            'included': [{'type': 'territoryAvailabilities', 'id': f'${{{t}}}', 'attributes': {'available': t in TERRITORIES},
+                          'relationships': {'territory': rel('territories', t)}} for t in every]})
         return
     a = cur['data']['attributes']
     url, items = f'/v2/appAvailabilities/{cur["data"]["id"]}/territoryAvailabilities', []
