@@ -1,0 +1,35 @@
+name: Check license flow
+# 本番で「キー登録 → 確認 → AI 呼び出し」が通るかを、審査用キーで確かめる（値は出さない）
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Activate, check and call AI with the review key
+        env:
+          ID: ${{ secrets.AI_ACCESS_CLIENT_ID }}
+          SECRET: ${{ secrets.AI_ACCESS_CLIENT_SECRET }}
+          KEY: ${{ secrets.REVIEW_LICENSE_KEY }}
+        run: |
+          set -e
+          base=https://gofg-exterior-sketch.kawakahi135.workers.dev
+          dev=ci-check-device-0001
+          hdr=(-H "Content-Type: application/json" -H "X-Sketch-Client: 2" -H "CF-Access-Client-Id: $ID" -H "CF-Access-Client-Secret: $SECRET")
+          [ -n "$KEY" ] || { echo "REVIEW_LICENSE_KEY が未登録です"; exit 1; }
+          body=$(python3 -c "import json,os;print(json.dumps({'key':os.environ['KEY'],'deviceId':'$dev','deviceName':'CI check'}))")
+          code=$(curl -s -o act.json -w "%{http_code}" -X POST "$base/api/license/activate" "${hdr[@]}" -d "$body")
+          echo "activate: $code"
+          [ "$code" = "200" ] || { head -c 300 act.json; echo; exit 1; }
+          token=$(python3 -c "import json;print(json.load(open('act.json'))['token'])")
+          echo "::add-mask::$token"
+          python3 -c "import json;d=json.load(open('act.json'));print('client:',d.get('clientName'),'/ plan:',d.get('plan'),'/ expires:',d.get('expiresAt'))"
+          code=$(curl -s -o chk.json -w "%{http_code}" -X POST "$base/api/license/check" "${hdr[@]}" -d "{\"token\":\"$token\",\"deviceId\":\"$dev\"}")
+          echo "check: $code"; [ "$code" = "200" ]
+          code=$(curl -s -o ai.txt -w "%{http_code}" -X POST "$base/api/ai/meeting" "${hdr[@]}" -H "X-License-Token: $token" -H "X-Device-Id: $dev" -d '{}')
+          echo "ai with license: $code (400＝会話なしで断られる、が正常)"; head -c 200 ai.txt; echo
+          [ "$code" = "400" ]
+          code=$(curl -s -o no.txt -w "%{http_code}" -X POST "$base/api/ai/meeting" "${hdr[@]}" -d '{}')
+          echo "ai without license: $code (401 が正常)"; [ "$code" = "401" ]
+          curl -s -o /dev/null -X POST "$base/api/license/release" "${hdr[@]}" -d "{\"token\":\"$token\",\"deviceId\":\"$dev\"}"
+          echo "released"
