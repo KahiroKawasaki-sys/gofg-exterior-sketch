@@ -13,6 +13,11 @@ on:
         options: [sketch, pro]
         required: true
         default: sketch
+      store:
+        description: App Store の審査へ出せるビルドにする（オフ＝内部テスト専用）
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -58,6 +63,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GOFG_UPLOAD: ${{ inputs.upload }}
           GOFG_EDITION: ${{ inputs.edition }}
+          GOFG_STORE: ${{ inputs.store }}
         run: python3 scripts/distribute.py
       - name: Add the uploaded build to internal TestFlight groups
         if: inputs.upload

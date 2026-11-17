@@ -136,9 +136,12 @@ def main():
         archive_info['ApplicationProperties'].update({'Team': team, 'SigningIdentity': '-'})
         archive_info_path.write_bytes(plistlib.dumps(archive_info))
         options = work/'ExportOptions.plist'
+        # 「内部テスト専用」で書き出したビルドは App Store の審査に出せない。審査へ出すビルドは GOFG_STORE=true で作る
+        store = os.environ.get('GOFG_STORE', 'false')
+        require(store in ('true', 'false'), 'Invalid store selection')
         options.write_bytes(plistlib.dumps({'method': 'app-store-connect', 'destination': 'export', 'teamID': team,
             'signingStyle': 'automatic', 'manageAppVersionAndBuildNumber': False,
-            'uploadSymbols': True, 'testFlightInternalTestingOnly': True}))
+            'uploadSymbols': True, 'testFlightInternalTestingOnly': store != 'true'}))
         run(['xcodebuild', '-quiet', '-exportArchive', '-archivePath', archive,
              '-exportOptionsPlist', options, '-exportPath', exported, *auth])
         ipas = list(exported.glob('*.ipa'))
