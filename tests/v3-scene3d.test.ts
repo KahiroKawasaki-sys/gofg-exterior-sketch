@@ -151,3 +151,14 @@ it('折れ線の塀・フェンスは角でつながる（最後の線分は、�
   const closed = buildScene(withItems([line([[0, 0], [200, 0], [200, 200], [0, 200], [0, 0]])]), lib).solids as Extract<Solid, { kind: 'wall' }>[];
   expect(closed.map(s => !!s.join)).toEqual([true, true, true, true]);
 });
+
+it('AIパースに渡す部品の一覧：サンプル邸は濃いグレーのセダンと白いSUV（軽は置いた時だけ）', async () => {
+  const { renderParts } = await import('../src/v3/render');
+  const t = renderParts(sampleDoc(), lib);
+  expect(t).toContain('1 dark grey sedan');
+  expect(t).toContain('1 white SUV');
+  expect(t).toContain('2 bicycle');
+  expect(t).toContain('1 carport');
+  expect(t).not.toContain('kei');
+  expect(renderParts(withItems([obj('b-kei3500', 0, 0)]), lib)).toBe('1 white small kei car');
+});

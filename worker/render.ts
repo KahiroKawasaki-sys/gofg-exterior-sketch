@@ -25,10 +25,12 @@ const VIEW:Record<RenderView,string>={
  eye:'The camera is at a standing person\'s eye level from the road. Keep this eye-level perspective.',
 };
 
-type Body={image?:unknown;view?:unknown;style?:unknown;note?:unknown;aspect?:unknown;size?:unknown};
+type Body={image?:unknown;view?:unknown;style?:unknown;note?:unknown;aspect?:unknown;size?:unknown;parts?:unknown};
+// 部品の一覧は画面側が作る決まった英語だけ（数字・英字・カンマ・ハイフン）。それ以外の文字は落とす
+export const cleanParts=(v:unknown)=>typeof v==='string'?v.replace(/[^A-Za-z0-9\s,-]/g,'').replace(/\s+/g,' ').trim().slice(0,600):'';
 
 // 画像モデルへの指示（英語のほうが安定する）。note は現場の希望（「塀は黒いタイル」など）
-export function renderPrompt(view:RenderView,style:RenderStyle,note:string){
+export function renderPrompt(view:RenderView,style:RenderStyle,note:string,parts=''){
  return [
   'This image is a simple 3D model of a Japanese detached house and its exterior / garden design (外構). Turn it into a photorealistic architectural visualization photograph.',
   'Rules:',
@@ -36,7 +38,8 @@ export function renderPrompt(view:RenderView,style:RenderStyle,note:string){
   '- Keep the shape, position, size and count of every element exactly as in the image: the house (its walls, roof, windows), block walls, fences, gate posts, gates, carport, shed, planting, paving and the site boundary. Inside the site boundary do not add buildings, cars, people, furniture, plants or objects that are not in the image, and do not remove anything that is in the image.',
   '- Outside the site boundary, follow the site plan drawn on the ground: where a road is drawn, paint a paved asphalt road with curbs; everywhere else keep an empty, plain, flat light-grey ground that fades softly into the sky at the horizon, like an architectural model photographed on a clean studio base. Do NOT add neighbouring houses, other buildings, streets that are not drawn, utility poles, power lines, parked cars, trees, hedges or fences outside the site boundary, even where neighbouring lots are drawn. Never turn the surroundings into a town, a meadow, field, lawn, open grassland or countryside. The sky stays a natural sky.',
   '- Replace the simple geometry with realistic materials: the house keeps the colors shown; walls and fences become the products they represent (block wall, plastered wall, wooden or aluminum fence); the ground becomes real paving, concrete, gravel, lawn or soil following the areas shown; plants become real lush but tidy garden plants of the same size.',
-  '- Cars keep the position, size, colour and body type shown (sedan, SUV, hatchback or small kei car). Render sedans and SUVs as sleek, modern, premium European-style cars with clean lines and no brand logos or badges; never turn a sedan or an SUV into a kei car, a van or a truck.',
+  '- Cars keep the position, size, colour and body type of the model. A sedan stays a sedan, an SUV stays an SUV, a hatchback stays a hatchback and a small kei car stays a kei car; never swap one type for another or turn a car into a van or truck. Sedans, SUVs and hatchbacks are clean modern cars with no brand logos or badges.',
+  parts?'- The designer placed exactly these objects on the site (use this list to recognise each object in the image and draw it as that kind of object; do not add objects that are not listed): '+parts+'.':'',
   '- '+STYLE[style],
   note?'- Customer request (follow it only where it does not change shapes or positions): '+note:'',
   '- No text, no labels, no watermark, no border, no people.',
@@ -90,7 +93,7 @@ export async function render(req:Request,env:RenderEnv,app=false,ctx?:Pick<Execu
  const aspect=(ASPECTS as readonly string[]).includes(String(b.aspect))?String(b.aspect):'16:9';
  const size=(SIZES as readonly string[]).includes(String(b.size))?String(b.size):'2K';
  const model=env.RENDER_MODEL||RENDER_MODEL;
- const body:Record<string,unknown>={model,input:[{type:'text',text:renderPrompt(view,style,note)},{type:'image',mime_type:inMime,data:image}],
+ const body:Record<string,unknown>={model,input:[{type:'text',text:renderPrompt(view,style,note,cleanParts(b.parts))},{type:'image',mime_type:inMime,data:image}],
   response_format:{type:'image',mime_type:'image/jpeg',aspect_ratio:aspect,image_size:size}};
  if(env.RENDER_THINKING)body.generation_config={thinking_level:env.RENDER_THINKING};
  const started=Date.now();

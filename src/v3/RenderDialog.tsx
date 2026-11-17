@@ -5,7 +5,8 @@ import { X, Sparkles, Download, RefreshCw, Trash2, ChevronLeft } from 'lucide-re
 import { type Doc } from './types';
 import { listRenders, saveRender, deleteRender } from './store';
 import { saveFile } from './platform';
-import { RENDER_STYLES, RENDER_COST_NOTE, RENDER_NOTE_PLACEHOLDER, type Render, type RenderStyle, type RenderView, nearestAspect, shrinkToJpeg, requestRender, newRender, renderFileName, dataUrlBlob } from './render';
+import { builtinLibrary } from './library';
+import { RENDER_STYLES, RENDER_COST_NOTE, RENDER_NOTE_PLACEHOLDER, type Render, type RenderStyle, type RenderView, nearestAspect, shrinkToJpeg, requestRender, renderParts, newRender, renderFileName, dataUrlBlob } from './render';
 
 const VIEW_LABEL: Record<RenderView, string> = { bird: '斜め上', top: '真上', eye: '人の目線' };
 const fmtAt = (iso: string) => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -32,7 +33,7 @@ export function RenderDialog({ snap, doc, view, onClose }: { snap: Blob; doc: Do
     setBusy(true); setErr(null);
     try {
       const { dataUrl, w, h } = await shrinkToJpeg(snap);
-      const res = await requestRender({ image: dataUrl, view, style, note: note.trim(), aspect: nearestAspect(w, h) });
+      const res = await requestRender({ image: dataUrl, view, style, note: note.trim(), aspect: nearestAspect(w, h), parts: renderParts(doc, builtinLibrary()) });
       const r = newRender(doc.id, view, style, note.trim(), res.image, res.ms);
       await saveRender(r).catch(() => {});
       if (!alive.current) return;
