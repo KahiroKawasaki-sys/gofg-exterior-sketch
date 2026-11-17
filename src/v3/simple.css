@@ -216,3 +216,5 @@
 @media (max-width: 1000px) and (min-width: 521px) { .sx-row.center { width: 100%; flex-wrap: wrap; justify-content: center; } }
 /* 上の帯：保存の状態は折らない */
 .sx-name em { white-space: nowrap; }
+/* 使い方：3D・AIパースの画面の「動画」から開いても、その上に出す */
+.v3-modal-bg.sx-help-bg { z-index: 70; }

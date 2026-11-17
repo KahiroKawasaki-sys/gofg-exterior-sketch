@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { X, Camera, RotateCcw, ImagePlus, Sparkles } from 'lucide-react';
+import { X, Camera, RotateCcw, ImagePlus, Sparkles, Play } from 'lucide-react';
 import { type Role3, type Mat3, type ElevFace, type Elevation } from './types';
 import { type Doc, type LibItem, pointInPoly } from './types';
 import { readSource } from './source';
@@ -226,7 +226,7 @@ type Api = { setView: (v: ViewKind) => void; build: (d: Doc, o: SceneOpts) => Pr
 // 選んだ線の種類ごとの高さの範囲（m）
 const H_RANGE: Record<string, [number, number, number]> = { wall: [0.4, 2.4, 0.1], fence: [0.6, 2.4, 0.1], gate: [0.8, 2.0, 0.1], building: [3, 9, 0.5] };
 
-export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc: Doc; lib: LibItem[]; ctx: RenderCtx; onClose: () => void; onRaise?: (id: string, v: Raise3Change) => void; onDoc?: (f: (d: Doc) => Doc, label: string) => void }) {
+export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc, onVideo }: { doc: Doc; lib: LibItem[]; ctx: RenderCtx; onClose: () => void; onRaise?: (id: string, v: Raise3Change) => void; onDoc?: (f: (d: Doc) => Doc, label: string) => void; onVideo?: (id: string) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const api = useRef<Api | null>(null);
   const docRef = useRef(doc); docRef.current = doc;
@@ -464,6 +464,7 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
         </div>
       ) : (
         <div className="v3-3d-panel">
+          {onVideo && <div className="v3-3d-ph"><b>3Dの使い方</b><button className="sx-vbtn" onClick={() => onVideo('f-3d')}><Play size={12} />動画</button></div>}
           <label>塀・フェンスの高さ <b>{opts.wallH.toFixed(1)} m</b>
             <input type="range" min={0.4} max={2.4} step={0.1} value={opts.wallH} onChange={e => setOpts({ ...opts, wallH: +e.target.value })} aria-label="塀の高さ" />
           </label>
@@ -499,7 +500,7 @@ export default function View3D({ doc, lib, ctx, onClose, onRaise, onDoc }: { doc
           onDoc(d => { const b = contentBox(d, 0); return withElevations(d, e, { x: b.x + b.w / 2, y: b.y + b.h / 2 }, rectId); }, '立面図を取り込み');
           if (auto && fp && u) findFootprintOnUnderlay(u, fp.w, fp.d, d0.mmPerPx).then(at => { if (at) onDoc(d => placeBuilding(d, rectId, at), '建物の位置合わせ'); }).catch(() => {});
         }} />}
-      {renderSnap && <RenderDialog snap={renderSnap} doc={doc} view={viewKind} onClose={() => setRenderSnap(null)} />}
+      {renderSnap && <RenderDialog snap={renderSnap} doc={doc} view={viewKind} onClose={() => setRenderSnap(null)} onVideo={onVideo && (() => onVideo('f-render'))} />}
     </div>
   );
 }

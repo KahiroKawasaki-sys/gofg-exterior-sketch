@@ -20,6 +20,10 @@ import outMp4 from './guide/out.mp4';
 import undoMp4 from './guide/undo.mp4';
 import meetingMp4 from './guide/f-meeting.mp4';
 import meetingJpg from './guide/f-meeting.jpg';
+import view3dMp4 from './guide/f-3d.mp4';
+import view3dJpg from './guide/f-3d.jpg';
+import renderMp4 from './guide/f-render.mp4';
+import renderJpg from './guide/f-render.jpg';
 
 export type Step = 'draw' | 'parts' | 'paint' | 'out';
 export type ExportKind = 'png' | 'a4' | 'a3' | 'json' | 'dxf';
@@ -319,6 +323,11 @@ export const HELP: HelpItem[] = [
   { demo: 'pinch', title: '拡大・移動', text: '2本指で広げる・ずらす' },
   // Pro だけ：打ち合わせ（録音→文字→議事録）。詳細モードと同じ動画（旧版のまま）
   ...(PRO ? [{ title: '⑤ 打ち合わせ', text: '録音→全部を文字に→AIが議事録に', video: meetingMp4, poster: meetingJpg }] : []),
+  // Pro だけ：3D・AIパース（詳細モードと同じ動画）
+  ...(PRO ? [
+    { title: '3Dで見る', text: '上の「3D」→ 回す・寄る。立面図で家が立つ', video: view3dMp4, poster: view3dJpg },
+    { title: 'AIパース', text: '3Dの「AIパース」→ 写真のような絵に', video: renderMp4, poster: renderJpg },
+  ] : []),
 ];
 
 // 詳細モードの解説動画（guideFull.ts）。サムネイル画像つき
@@ -337,7 +346,7 @@ export function HelpSheet({ items, full, tab: tab0 = 'simple', open, onClose, on
   const idx = playing ? playing.list.findIndex(x => x.src === playing.src && x.title === playing.title) : -1;
   const next = playing && idx >= 0 && idx < playing.list.length - 1 ? playing.list[idx + 1] : null;
   return (
-    <div className="v3-modal-bg" onPointerDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="v3-modal-bg sx-help-bg" onPointerDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sx-help" role="dialog" aria-label="使い方">
         <div className="sx-hhead"><b>使い方</b>
           <div className="sx-tabs" role="tablist">

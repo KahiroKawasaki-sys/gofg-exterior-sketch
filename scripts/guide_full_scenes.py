@@ -5,6 +5,7 @@ r は record-guide.py の Rec。押すボタンは枠で光らせ、下に一言
 import pathlib
 
 from guide_meeting_scene import meeting as f_meeting  # noqa: E402
+from guide_3d_scene import view3d as f_3d, render as f_render, open_house  # noqa: E402
 
 FIXTURE = pathlib.Path(__file__).resolve().parent.parent / 'tests' / 'fixtures' / 'site-plan.pdf'
 
@@ -349,6 +350,8 @@ def save(r):
 FULL_SCENES = {
     'f-screen': screen, 'f-pen': pen, 'f-dim': dim, 'f-select': select, 'f-objects': objects,
     'f-layers': layers, 'f-guides': guides, 'f-paint': paint, 'f-underlay': underlay, 'f-save': save,
-    'f-meeting': f_meeting,
+    'f-meeting': f_meeting, 'f-3d': f_3d, 'f-render': f_render,
 }
-FULL_OPEN = {'f-underlay': open_underlay}
+FULL_OPEN = {'f-underlay': open_underlay, 'f-render': open_house}
+# サムネイルにする位置（動画の長さに対する割合。既定 0.6）。f-3d は6割が一覧の画面なので、家が立った後にする
+FULL_POSTER = {'f-3d': 0.86}

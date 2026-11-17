@@ -174,11 +174,25 @@ def s_3d_render(p, url):
     s_3d(p, url); p.get_by_role('button', name='AIパースを作る').click(); p.wait_for_timeout(700)
 
 
+def s_help_full(p, url):
+    open_sample(p, url, 'full'); p.locator('.sx-modebtn', has_text='使い方').click(); p.locator('.sx-help .sx-vcard').first.wait_for(); p.wait_for_timeout(500)
+
+
+def s_help_simple(p, url):
+    open_sample(p, url, 'simple'); p.get_by_role('button', name='使い方').first.click(); p.locator('.sx-help .sx-hcard').first.wait_for(); p.wait_for_timeout(500)
+
+
+def s_help_3d(p, url):
+    """3D画面の「動画」から使い方を開く（3Dの上に出るか）"""
+    s_3d(p, url); p.locator('.v3-3d-panel .sx-vbtn').click(); p.locator('.sx-help .sx-player').wait_for(); p.wait_for_timeout(500)
+
+
 SCENES = {
     'home': s_home, 'full': s_full, 'full-select': s_full_select, 'full-select-layers': s_full_select_layers, 'full-objects': s_full_objects,
     'full-paint': s_full_paint, 'full-qty': s_full_qty, 'full-est': s_full_est, 'full-board': s_full_board, 'full-settings': s_full_settings,
     'simple': s_simple, 'simple-select': s_simple_select, 'simple-parts': s_simple_parts, 'simple-paint': s_simple_paint, 'simple-out': s_simple_out,
     'meeting': s_meeting, '3d': s_3d, '3d-wall': s_3d_wall, '3d-render': s_3d_render,
+    'help-full': s_help_full, 'help-simple': s_help_simple, 'help-3d': s_help_3d,
 }
 
 

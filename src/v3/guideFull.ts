@@ -23,8 +23,15 @@ import saveMp4 from './guide/f-save.mp4';
 import saveJpg from './guide/f-save.jpg';
 import meetingMp4 from './guide/f-meeting.mp4';
 import meetingJpg from './guide/f-meeting.jpg';
+import view3dMp4 from './guide/f-3d.mp4';
+import view3dJpg from './guide/f-3d.jpg';
+import renderMp4 from './guide/f-render.mp4';
+import renderJpg from './guide/f-render.jpg';
 
-export { meetingMp4, meetingJpg };
+export { meetingMp4, meetingJpg, view3dMp4, view3dJpg, renderMp4, renderJpg };
+
+// Pro だけの機能（2D版 sketch には画面が無い）の動画
+export const PRO_ONLY = ['f-meeting', 'f-3d', 'f-render'];
 
 export const GUIDE_FULL: GuideVideo[] = [
   { id: 'f-screen', title: '画面の見方', text: '2段の道具・左のボタン・右のパネル', video: screenMp4, poster: screenJpg },
@@ -39,4 +46,7 @@ export const GUIDE_FULL: GuideVideo[] = [
   { id: 'f-save', title: '保存・書き出し・履歴', text: '別名保存、PDF・編集データ、履歴で戻す', video: saveMp4, poster: saveJpg },
   // Pro だけ：打ち合わせ（録音→文字→議事録）。動画は旧版（要望カード・反映）のまま。撮り直しは別途
   { id: 'f-meeting', title: '打ち合わせ（録音→議事録）', text: '録音して止めると全部が文字になり、AIが議事録にまとめる。全文と議事録はコピー・保存できる', video: meetingMp4, poster: meetingJpg },
-].filter(v => PRO || v.id !== 'f-meeting');
+  // Pro だけ：3D・AIパース
+  { id: 'f-3d', title: '3Dで見る', text: '回す・寄る・視点の切り替え、線の種類と高さ。立面図を読み込むと家が立つ', video: view3dMp4, poster: view3dJpg },
+  { id: 'f-render', title: 'AIパース', text: '3Dを写真のような絵に。時間帯と希望を選んで作り、元の3Dと見比べて保存', video: renderMp4, poster: renderJpg },
+].filter(v => PRO || !PRO_ONLY.includes(v.id));

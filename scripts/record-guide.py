@@ -21,7 +21,7 @@ import imageio_ffmpeg
 from playwright.sync_api import Page, sync_playwright
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from guide_full_scenes import FULL_OPEN, FULL_SCENES  # noqa: E402
+from guide_full_scenes import FULL_OPEN, FULL_POSTER, FULL_SCENES  # noqa: E402
 
 W, H = 1180, 820
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -272,12 +272,12 @@ def to_mp4(src: pathlib.Path, dst: pathlib.Path, start: float):
                     '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', str(dst)], check=True)
 
 
-def poster(src: pathlib.Path, dst: pathlib.Path):
-    """一覧に出すサムネイル（動画の6割あたりの1コマ）"""
+def poster(src: pathlib.Path, dst: pathlib.Path, at: float = 0.6):
+    """一覧に出すサムネイル（既定は動画の6割あたりの1コマ）"""
     ff = imageio_ffmpeg.get_ffmpeg_exe()
     info = subprocess.run([ff, '-i', str(src)], capture_output=True, text=True, encoding='utf-8', errors='replace').stderr
     h, m, sec = info.split('Duration: ')[1].split(',')[0].split(':')
-    t = (int(h) * 3600 + int(m) * 60 + float(sec)) * 0.6
+    t = (int(h) * 3600 + int(m) * 60 + float(sec)) * at
     subprocess.run([ff, '-y', '-loglevel', 'error', '-ss', f'{t:.2f}', '-i', str(src), '-frames:v', '1',
                     '-vf', 'scale=480:-2', '-q:v', '5', str(dst)], check=True)
 
@@ -288,7 +288,9 @@ def main():
     names = ARGS.only or list(SCENES)
     with sync_playwright() as pw, tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         # 偽マイク：打ち合わせの録音を実際に動かす
-        browser = pw.chromium.launch(args=['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'])
+        # GPU：既定（SwiftShader）だと3Dが毎秒6コマほどで、3Dの動画がコマ送りになり途中で落ちることもある
+        browser = pw.chromium.launch(args=['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream',
+                                           '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=d3d11'])
         for name in names:
             ctx = browser.new_context(viewport={'width': W, 'height': H}, record_video_dir=tmp,
                                       record_video_size={'width': W, 'height': H}, accept_downloads=True)
@@ -318,7 +320,7 @@ def main():
             dst = out_dir / f'{name}.mp4'
             to_mp4(webm, dst, start)
             if full:
-                poster(dst, out_dir / f'{name}.jpg')
+                poster(dst, out_dir / f'{name}.jpg', FULL_POSTER.get(name, 0.6))
             print(f'{name}: {dst} ({dst.stat().st_size // 1024} KB)')
         browser.close()
 

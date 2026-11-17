@@ -1,7 +1,7 @@
 // AIパース：3Dの写しから写真調のパースを作り、保存・共有・見比べる画面。
 // 作った絵は端末（renders）に残り、同じ図面を開けばまた見られる。
 import { useEffect, useRef, useState } from 'react';
-import { X, Sparkles, Download, RefreshCw, Trash2, ChevronLeft } from 'lucide-react';
+import { X, Sparkles, Download, RefreshCw, Trash2, ChevronLeft, Play } from 'lucide-react';
 import { type Doc } from './types';
 import { listRenders, saveRender, deleteRender } from './store';
 import { saveFile } from './platform';
@@ -11,7 +11,7 @@ import { RENDER_STYLES, RENDER_COST_NOTE, RENDER_NOTE_PLACEHOLDER, type Render, 
 const VIEW_LABEL: Record<RenderView, string> = { bird: '斜め上', top: '真上', eye: '人の目線' };
 const fmtAt = (iso: string) => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
-export function RenderDialog({ snap, doc, view, onClose }: { snap: Blob; doc: Doc; view: RenderView; onClose: () => void }) {
+export function RenderDialog({ snap, doc, view, onClose, onVideo }: { snap: Blob; doc: Doc; view: RenderView; onClose: () => void; onVideo?: () => void }) {
   const [style, setStyle] = useState<RenderStyle>('day');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -71,7 +71,7 @@ export function RenderDialog({ snap, doc, view, onClose }: { snap: Blob; doc: Do
             <span>元の3D（{VIEW_LABEL[view]}）{cur ? '・タップで見比べ' : ''}</span>
           </div>
           <div className="v3-render-opt">
-            <b>時間帯</b>
+            <div className="v3-render-oh"><b>時間帯</b>{onVideo && <button className="sx-vbtn" onClick={onVideo}><Play size={12} />動画</button>}</div>
             <div className="v3-3d-roles" role="group" aria-label="時間帯">
               {RENDER_STYLES.map(([k, l, d]) => <button key={k} className={style === k ? 'on' : ''} onClick={() => setStyle(k)} title={d} disabled={busy}>{l}</button>)}
             </div>
