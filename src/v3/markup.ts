@@ -4,8 +4,18 @@ import { textureSrc } from './textures';
 
 export type RenderCtx = { mmPerPx: number; unit: string };
 
-const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const n = (v: number) => Math.round(v * 100) / 100;
+// 読み込んだ編集データは細工されている可能性がある。SVG文字列へ入れる値は必ずここを通す
+export const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+// 数値以外（文字列など）が来ても属性を壊さない
+const n = (v: number) => { const x = Math.round(Number(v) * 100) / 100; return Number.isFinite(x) ? x : 0; };
+// id（url(#...) や href="#..." で参照する）。英数字と - 以外は _xx_ に置き換える（同じ入力は同じ結果。別の入力が同じにならない）
+export const svgId = (s: unknown) => String(s ?? '').replace(/[^A-Za-z0-9-]/g, c => '_' + c.codePointAt(0)!.toString(16) + '_');
+// 色：#rgb・色名・rgb()/hsl() だけ。それ以外は既定色
+const COLOR = /^(#[0-9a-f]{3,8}|[a-z]{3,24}|(rgb|hsl)a?\([0-9.,%\s/deg]{1,60}\))$/i;
+export const isColor = (v: unknown): v is string => typeof v === 'string' && COLOR.test(v.trim());
+const col = (v: unknown, fallback = '#2f3b38') => isColor(v) ? esc(v.trim()) : fallback;
+// 画像：埋め込み（data:）と端末内（blob:）だけ
+const img = (v: unknown) => typeof v === 'string' && /^(data:image\/|blob:)/i.test(v) ? esc(v) : '';
 export const FONT = `'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP','Yu Gothic UI','Meiryo',sans-serif`;
 
 function dashAttr(d: Dash, w: number) {
@@ -49,7 +59,7 @@ export function penOutline(pts: Pt[], width: number): string {
 }
 
 function strokeMarkup(s: StrokeItem): string {
-  const c = esc(s.color);
+  const c = col(s.color);
   if (s.brush === 'pen' && s.dash === 'solid') return `<path d="${penOutline(s.pts, s.width)}" fill="${c}"/>`;
   const d = smoothPath(s.pts);
   if (s.brush === 'marker') return `<path d="${d}" fill="none" stroke="${c}" stroke-width="${n(s.width * 2.6)}" stroke-linecap="square" stroke-linejoin="round" opacity="0.5"${dashAttr(s.dash, s.width * 2.6)}/>`;
@@ -70,28 +80,29 @@ export function dimMarkup(a: Pt, b: Pt, color: string, width: number, label: str
   const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   let deg = ang * 180 / Math.PI; if (deg > 90 || deg < -90) deg += 180;
   const fs = size;
-  return `<g class="dim"><path d="M${n(a.x)} ${n(a.y)}L${n(b.x)} ${n(b.y)}${tick(a)}${tick(b)}" stroke="${esc(color)}" stroke-width="${n(Math.max(0.8, width * 0.4))}" fill="none"/>`
-    + `<text transform="translate(${n(mid.x + nx * -fs * 0.45)} ${n(mid.y + ny * -fs * 0.45)}) rotate(${n(deg)})" text-anchor="middle" font-size="${fs}" font-family="${FONT}" fill="${esc(color)}" stroke="#fff" stroke-width="${n(fs * 0.22)}" paint-order="stroke">${esc(label)}</text></g>`;
+  return `<g class="dim"><path d="M${n(a.x)} ${n(a.y)}L${n(b.x)} ${n(b.y)}${tick(a)}${tick(b)}" stroke="${col(color)}" stroke-width="${n(Math.max(0.8, width * 0.4))}" fill="none"/>`
+    + `<text transform="translate(${n(mid.x + nx * -fs * 0.45)} ${n(mid.y + ny * -fs * 0.45)}) rotate(${n(deg)})" text-anchor="middle" font-size="${n(fs)}" font-family="${FONT}" fill="${col(color)}" stroke="#fff" stroke-width="${n(fs * 0.22)}" paint-order="stroke">${esc(label)}</text></g>`;
 }
 
 export function textMarkup(t: TextItem): string {
-  const s = textSize(t), pad = t.bg || t.border ? t.size * 0.3 : 0, rows = t.text.split('\n');
+  const s = textSize(t), pad = t.bg || t.border ? t.size * 0.3 : 0, rows = String(t.text ?? '').split('\n');
   const c = { x: t.x + s.w / 2, y: t.y + s.h / 2 };
   let out = `<g transform="rotate(${n(t.rot)} ${n(c.x)} ${n(c.y)})">`;
-  if (t.bg || t.border) out += `<rect x="${n(t.x)}" y="${n(t.y)}" width="${n(s.w)}" height="${n(s.h)}" rx="${n(t.size * 0.15)}" fill="${t.bg ? esc(t.bg) : 'none'}" stroke="${t.border ? esc(t.border) : 'none'}" stroke-width="${n(Math.max(1, t.size * 0.06))}"/>`;
+  if (t.bg || t.border) out += `<rect x="${n(t.x)}" y="${n(t.y)}" width="${n(s.w)}" height="${n(s.h)}" rx="${n(t.size * 0.15)}" fill="${t.bg ? col(t.bg, 'none') : 'none'}" stroke="${t.border ? col(t.border, 'none') : 'none'}" stroke-width="${n(Math.max(1, t.size * 0.06))}"/>`;
   rows.forEach((r, i) => {
-    out += `<text x="${n(t.x + pad)}" y="${n(t.y + pad * 0.66 + t.size * (1.25 * i + 0.98))}" font-size="${n(t.size)}" font-family="${FONT}" fill="${esc(t.color)}">${esc(r) || ' '}</text>`;
+    out += `<text x="${n(t.x + pad)}" y="${n(t.y + pad * 0.66 + t.size * (1.25 * i + 0.98))}" font-size="${n(t.size)}" font-family="${FONT}" fill="${col(t.color)}">${esc(r) || ' '}</text>`;
   });
   return out + '</g>';
 }
 
 // テクスチャ：マスク画像で切り抜いたパターン＋色調補正フィルター
 export function textureDefs(t: TextureItem): string {
-  const tile = 128 * t.scale, src = esc(textureSrc(t.tex));
+  // 組み込みの素材（b:）は同梱の画像、それ以外は読み込んだ画像（data:）だけ
+  const tile = 128 * t.scale, src = typeof t.tex === 'string' && t.tex.startsWith('b:') ? esc(textureSrc(t.tex)) : img(t.tex), id = svgId(t.id);
   const sat = t.sat / 100, br = t.bright / 100, ct = t.contrast / 100, ic = n(0.5 * (1 - ct));
-  return `<mask id="mk-${t.id}" maskUnits="userSpaceOnUse" x="${n(t.x)}" y="${n(t.y)}" width="${n(t.w)}" height="${n(t.h)}"><image href="${esc(t.mask)}" x="${n(t.x)}" y="${n(t.y)}" width="${n(t.w)}" height="${n(t.h)}" preserveAspectRatio="none"/></mask>`
-    + `<pattern id="pt-${t.id}" patternUnits="userSpaceOnUse" width="${n(tile)}" height="${n(tile)}" patternTransform="rotate(${n(t.rot)})"><image href="${src}" width="${n(tile)}" height="${n(tile)}" preserveAspectRatio="none"/></pattern>`
-    + `<filter id="ft-${t.id}" color-interpolation-filters="sRGB"><feColorMatrix type="hueRotate" values="${n(t.hue)}"/><feColorMatrix type="saturate" values="${n(sat)}"/>`
+  return `<mask id="mk-${id}" maskUnits="userSpaceOnUse" x="${n(t.x)}" y="${n(t.y)}" width="${n(t.w)}" height="${n(t.h)}"><image href="${img(t.mask)}" x="${n(t.x)}" y="${n(t.y)}" width="${n(t.w)}" height="${n(t.h)}" preserveAspectRatio="none"/></mask>`
+    + `<pattern id="pt-${id}" patternUnits="userSpaceOnUse" width="${n(tile)}" height="${n(tile)}" patternTransform="rotate(${n(t.rot)})"><image href="${src}" width="${n(tile)}" height="${n(tile)}" preserveAspectRatio="none"/></pattern>`
+    + `<filter id="ft-${id}" color-interpolation-filters="sRGB"><feColorMatrix type="hueRotate" values="${n(t.hue)}"/><feColorMatrix type="saturate" values="${n(sat)}"/>`
     + `<feComponentTransfer><feFuncR type="linear" slope="${n(br * ct)}" intercept="${ic}"/><feFuncG type="linear" slope="${n(br * ct)}" intercept="${ic}"/><feFuncB type="linear" slope="${n(br * ct)}" intercept="${ic}"/></feComponentTransfer></filter>`;
 }
 
@@ -100,12 +111,12 @@ export function itemMarkup(it: Item, ctx: RenderCtx): string {
     case 'stroke': return strokeMarkup(it);
     case 'line': {
       const w = n(it.width * 0.8);
-      let d = `<path d="M${it.pts.map(p => `${n(p.x)} ${n(p.y)}`).join('L')}" fill="none" stroke="${esc(it.color)}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"${dashAttr(it.dash, it.width)}/>`;
-      if (it.kind === 'arrow' && it.pts.length > 1) d += arrowHead(it.pts[it.pts.length - 2], it.pts[it.pts.length - 1], it.width * 0.8, esc(it.color));
+      let d = `<path d="M${it.pts.map(p => `${n(p.x)} ${n(p.y)}`).join('L')}" fill="none" stroke="${col(it.color)}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"${dashAttr(it.dash, it.width)}/>`;
+      if (it.kind === 'arrow' && it.pts.length > 1) d += arrowHead(it.pts[it.pts.length - 2], it.pts[it.pts.length - 1], it.width * 0.8, col(it.color));
       return d;
     }
     case 'shape': {
-      const cx = it.x + it.w / 2, cy = it.y + it.h / 2, common = `fill="none" stroke="${esc(it.color)}" stroke-width="${n(it.width * 0.8)}"${dashAttr(it.dash, it.width)} transform="rotate(${n(it.rot)} ${n(cx)} ${n(cy)})"`;
+      const cx = it.x + it.w / 2, cy = it.y + it.h / 2, common = `fill="none" stroke="${col(it.color)}" stroke-width="${n(it.width * 0.8)}"${dashAttr(it.dash, it.width)} transform="rotate(${n(it.rot)} ${n(cx)} ${n(cy)})"`;
       if (it.shape === 'rect') return `<rect x="${n(it.x)}" y="${n(it.y)}" width="${n(it.w)}" height="${n(it.h)}" ${common}/>`;
       return `<ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(it.w / 2)}" ry="${n(it.h / 2)}" ${common}/>`;
     }
@@ -115,10 +126,11 @@ export function itemMarkup(it: Item, ctx: RenderCtx): string {
       if (it.hidden) return '';
       const cx = it.x + it.w / 2, cy = it.y + it.h / 2;
       const tf = `rotate(${n(it.rot)} ${n(cx)} ${n(cy)})${it.flip ? ` translate(${n(2 * cx)} 0) scale(-1 1)` : ''}`;
-      return `<use href="#lib-${esc(it.ref)}" x="${n(it.x)}" y="${n(it.y)}" width="${n(it.w)}" height="${n(it.h)}" transform="${tf}"${it.color ? ` style="color:${esc(it.color)}"` : ''}/>`;
+      return `<use href="#lib-${svgId(it.ref)}" x="${n(it.x)}" y="${n(it.y)}" width="${n(it.w)}" height="${n(it.h)}" transform="${tf}"${isColor(it.color) ? ` style="color:${col(it.color)}"` : ''}/>`;
     }
     case 'texture':
-      return `<defs>${textureDefs(it)}</defs><g mask="url(#mk-${it.id})"><rect x="${n(it.x)}" y="${n(it.y)}" width="${n(it.w)}" height="${n(it.h)}" fill="url(#pt-${it.id})" filter="url(#ft-${it.id})"/></g>`;
+    { const id = svgId(it.id);
+      return `<defs>${textureDefs(it)}</defs><g mask="url(#mk-${id})"><rect x="${n(it.x)}" y="${n(it.y)}" width="${n(it.w)}" height="${n(it.h)}" fill="url(#pt-${id})" filter="url(#ft-${id})"/></g>`; }
   }
 }
 

@@ -30,7 +30,8 @@ export function blobBase64(blob: Blob): Promise<string> {
   });
 }
 
-export async function saveFile(blob: Blob, fileName: string): Promise<'saved' | 'cancelled'> {
+// title：アプリの共有シートの題（省略時は「図面を保存・共有」）
+export async function saveFile(blob: Blob, fileName: string, title = '図面を保存・共有'): Promise<'saved' | 'cancelled'> {
   if (!isNativeApp()) {
     const url = URL.createObjectURL(blob), a = document.createElement('a');
     a.href = url; a.download = fileName; document.body.appendChild(a);
@@ -45,7 +46,7 @@ export async function saveFile(blob: Blob, fileName: string): Promise<'saved' | 
   const path = `${folder}/${name}`;
   try {
     const { uri } = await Filesystem.writeFile({ directory: Directory.Cache, path, data: await blobBase64(blob), recursive: true });
-    await Share.share({ title: name, files: [uri], dialogTitle: '図面を保存・共有' });
+    await Share.share({ title: name, files: [uri], dialogTitle: title });
     return 'saved';
   } catch (error) {
     if (/cancel|キャンセル|取消/i.test(error instanceof Error ? error.message : String(error))) return 'cancelled';
@@ -57,17 +58,19 @@ export async function saveFile(blob: Blob, fileName: string): Promise<'saved' | 
 
 // サーバーのAPIを呼ぶ。Webは同じサイトへ普通に送る。アプリはWeb画面の外（端末の通信）から本番サーバーへ送る
 export const API_ORIGIN = 'https://gofg-exterior-sketch.kawakahi135.workers.dev';
-export async function apiPost(path: string, body: unknown): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
+// o.readTimeoutMs：アプリで返事を待つ長さ（既定120秒。議事録など時間のかかる呼び出しだけ長くする）
+export async function apiPost(path: string, body: unknown, o: { readTimeoutMs?: number } = {}): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Sketch-Client': '2' };
   if (!isNativeApp()) {
     const r = await fetch(path, { method: 'POST', headers, credentials: 'same-origin', body: JSON.stringify(body) });
     return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
   }
   const { appAuthHeaders } = await import('./appAuth');
-  const r = await CapacitorHttp.post({ url: API_ORIGIN + path, headers: { ...headers, ...await appAuthHeaders() }, data: body, connectTimeout: 30000, readTimeout: 120000 });
+  const r = await CapacitorHttp.post({ url: API_ORIGIN + path, headers: { ...headers, ...await appAuthHeaders() }, data: body, connectTimeout: 30000, readTimeout: o.readTimeoutMs ?? 120000 });
   // ログイン画面（HTML）が返ってきたときは、通行証が通っていない
   const data = r.data && typeof r.data === 'object' ? r.data as Record<string, unknown> : {};
   const ok = r.status >= 200 && r.status < 300 && typeof r.data === 'object';
+  if (r.status === 401) (await import('./appAuth')).afterAppResponse(path, r.status, data); // ライセンスで断られたら確認し直す
   return { ok, status: ok ? r.status : r.status < 300 ? 401 : r.status, data };
 }
 

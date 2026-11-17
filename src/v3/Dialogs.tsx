@@ -37,7 +37,8 @@ export function TextDialog({ initial, onOk, onCancel, onDelete }: { initial: Tex
 }
 
 export type Field = { key: string; label: string; type?: 'text' | 'number' | 'select' | 'checkbox'; value: string | number | boolean; options?: string[]; suffix?: string };
-export function PromptDialog({ title, fields, note, okLabel = 'OK', cancelLabel = 'キャンセル', onOk, onCancel }: { title: string; fields: Field[]; note?: string; okLabel?: string; cancelLabel?: string; onOk: (v: Record<string, string | number | boolean>) => void; onCancel: () => void }) {
+// altLabel/onAlt：キャンセルの代わりに出す別の選択（例：「このまま作る」）。× で閉じたときは onCancel
+export function PromptDialog({ title, fields, note, okLabel = 'OK', cancelLabel = 'キャンセル', altLabel, onAlt, onOk, onCancel }: { title: string; fields: Field[]; note?: string; okLabel?: string; cancelLabel?: string; altLabel?: string; onAlt?: () => void; onOk: (v: Record<string, string | number | boolean>) => void; onCancel: () => void }) {
   const [vals, setVals] = useState<Record<string, string | number | boolean>>(Object.fromEntries(fields.map(f => [f.key, f.value])));
   const first = useRef<HTMLInputElement>(null);
   useEffect(() => { first.current?.focus(); first.current?.select(); }, []);
@@ -54,7 +55,7 @@ export function PromptDialog({ title, fields, note, okLabel = 'OK', cancelLabel 
           </label>
         ))}
         {note && <p className="v3-note">{note}</p>}
-        <div className="v3-actions"><span className="sp" /><button type="button" className="v3-btn" onClick={onCancel}>{cancelLabel}</button><button type="submit" className="v3-btn primary">{okLabel}</button></div>
+        <div className="v3-actions"><span className="sp" />{altLabel && onAlt ? <button type="button" className="v3-btn" onClick={onAlt}>{altLabel}</button> : <button type="button" className="v3-btn" onClick={onCancel}>{cancelLabel}</button>}<button type="submit" className="v3-btn primary">{okLabel}</button></div>
       </form>
     </Modal>
   );

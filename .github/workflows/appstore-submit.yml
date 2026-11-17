@@ -1,0 +1,52 @@
+name: App Store submission (Pro)
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: true＝読むだけ（書き込む予定を一覧表示）／false＝App Store Connect に書き込む
+        type: boolean
+        required: true
+        default: true
+      build:
+        description: 紐付けるビルド番号（CFBundleVersion。例 1.27.1）。空なら紐付けない
+        type: string
+        required: false
+        default: ''
+      submit:
+        description: true のときだけ審査へ提出（dry_run=true なら無視）
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: gofg-appstore-submit
+  cancel-in-progress: false
+jobs:
+  submit:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check metadata and screenshots (no network)
+        run: python3 scripts/appstore_submit.py --check-only
+        env:
+          APPSTORE_SUPPORT_URL: ${{ vars.APPSTORE_SUPPORT_URL }}
+          APPSTORE_PRIVACY_URL: ${{ vars.APPSTORE_PRIVACY_URL }}
+      - name: Prepare App Store version${{ inputs.dry_run && ' (dry run)' || '' }}
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          REVIEW_LICENSE_KEY: ${{ secrets.REVIEW_LICENSE_KEY }}
+          REVIEW_CONTACT_PHONE: ${{ secrets.REVIEW_CONTACT_PHONE }}
+          REVIEW_CONTACT_EMAIL: ${{ secrets.REVIEW_CONTACT_EMAIL }}
+          APPSTORE_SUPPORT_URL: ${{ vars.APPSTORE_SUPPORT_URL }}
+          APPSTORE_PRIVACY_URL: ${{ vars.APPSTORE_PRIVACY_URL }}
+          APPSTORE_DRY_RUN: ${{ inputs.dry_run }}
+          APPSTORE_BUILD: ${{ inputs.build }}
+          APPSTORE_SUBMIT: ${{ inputs.submit }}
+        run: python3 scripts/appstore_submit.py

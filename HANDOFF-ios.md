@@ -212,3 +212,27 @@ TestFlight の Pro ビルドで、次を順に確認する。Web版（iPad Safar
 - 立面図つきの建物を回転すると屋根・窓がずれる。画像（PDFでない）の配置図は敷地が幅12m固定。L字・寄棟・下屋。
 - 立面図の GL の線が地面より少し上に出る（切り出しの余白ぶん）。
 - 部品の高さは種類ごとに固定（大きさを変えても背は変わらない）。部品は3D画面で選べない。
+
+## ライセンスキーと同時1端末（2026-11-17・Pro）
+
+**仕組み**：埋め込みの Access サービストークンは「Access を通る通行証」のまま。その内側で Worker（`worker/license.ts`）がクライアントごとのキーと端末を確かめる。ネイティブの Pro 版は起動時にキー入力画面（`src/v3/LicenseGate.tsx`）。Web・sketch 版は変わらない（開発サーバーだけ `?license=1` で画面を確認できる）。
+
+- キー：`GS-XXXX-XXXX-XXXX-XXXX`（0/O/1/I/L なし）。D1 には SHA-256 だけ。キー本体は発行時に一度だけ表示。
+- 同時1端末（`max_devices`）。別の端末で入れると「この端末に切り替えますか？」→ 切り替えは月2回まで（超えたら管理者へ）。前の端末は次の確認（起動時・画面復帰時・AI 呼び出し時）でロック。
+- 通信できなくても最後の確認から7日間は描く・保存・書き出しができる。7日超は通信して確認するまでロック。図面データは消さない。
+- AI の月上限：AIパース 300回、文字起こし 1200分（キーごとに変更可）。超えると 429「今月の上限に達しました」。
+- 端末ID：iOS はキーチェーン（`SketchViewController.swift` の DevicePlugin `GofgDevice`）。入れ直しても同じ端末扱い。
+- 設定パネルに「ライセンス」欄（会社名・有効期限・この端末の登録を外す）。価格・購入・申込みの案内は画面に置かない（App Store 3.1.3）。
+
+**本番反映の手順**
+1. `npm run cf:storage:migrate`（`migrations/0003_licenses.sql` を本番 D1 に適用）。
+2. 署名鍵を登録：`npx wrangler secret put LICENSE_SIGNING_KEY --config .wrangler/deploy.wrangler.jsonc --profile gofg-kawakahi`（値は32バイト以上のランダム。チャットに貼らない）。**未設定のままだとアプリの AI は全部 503**。
+3. `npm run cf:deploy`。配信設定（`.wrangler/deploy.wrangler.jsonc`）は D1（`DB`・`migrations_dir`）が入っているので変更不要。
+4. キー発行（下）→ アプリ（Pro）をビルドして TestFlight／審査へ。
+
+**キー発行・管理**（`scripts/license_admin.py`。既定は SQL を表示するだけ、`--apply remote` で本番 D1 に流す）
+- 発行：`python scripts/license_admin.py new --client "山田外構" --plan pro --expires 2027-03-31 --apply remote`
+- 一覧：`python scripts/license_admin.py list --apply remote`
+- 停止／再開：`suspend --id 3`／`resume --id 3`
+- 端末の紐付けを全部外す（機種変更・切り替え回数の超過）：`reset-device --id 3`
+- **App Store 審査用**は `--max-devices 5` など多めにしたキーを発行し、App Review の「サインイン情報」欄にキーを書く（審査員が複数端末で開くため）。審査後は `suspend`。

@@ -44,10 +44,10 @@ describe('AIパース',()=>{
   expect(big.status).toBe(413);
   expect(fetchMock).not.toHaveBeenCalled();
  });
- it('アプリ（サービストークン）からも使える',async()=>{
+ it('アプリ（サービストークン）はライセンスが要る（署名鍵が無ければ503。通る流れは worker-license.test.js）',async()=>{
   jwtVerify.mockResolvedValue({payload:{common_name:'app-token'}});
   const r=await worker.fetch(new Request('https://app.example.test/api/ai/render',{method:'POST',headers:{'Cf-Access-Jwt-Assertion':'t','X-Sketch-Client':'2','Content-Type':'application/json'},body:JSON.stringify({image:png})}),env());
-  expect(r.status).toBe(200);
+  expect(r.status).toBe(503);expect(fetchMock).not.toHaveBeenCalled();
  });
  it('混雑（429）は 503、画像が返らなければ AI の説明つきで 502',async()=>{
   fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({error:{message:'quota'}}),{status:429}));

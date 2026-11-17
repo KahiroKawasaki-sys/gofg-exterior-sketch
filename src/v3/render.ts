@@ -84,9 +84,10 @@ export function renderParts(doc: Doc, lib: LibItem[]): string {
   return [...count].map(([w, n]) => `${n} ${w}`).join(', ').slice(0, 600);
 }
 
-// サーバーにパースを頼む
+// サーバーにパースを頼む。サーバーは画像AIを最大170秒待つ（worker/render.ts の TIMEOUT_MS）ので、アプリはそれより長く待つ
+export const RENDER_TIMEOUT_MS = 185_000;
 export async function requestRender(p: { image: string; view: RenderView; style: RenderStyle; note: string; aspect: string; parts?: string }): Promise<{ image: string; text?: string; ms?: number }> {
-  const r = await apiPost('/api/ai/render', { ...p, size: '2K' });
+  const r = await apiPost('/api/ai/render', { ...p, size: '2K' }, { readTimeoutMs: RENDER_TIMEOUT_MS });
   const data = r.data as { image?: string; text?: string; ms?: number; error?: string };
   if (!r.ok || !data.image) throw Error(data.error || (r.status === 401 || r.status === 403 ? (isNativeApp() ? 'AIの通行証が通りませんでした。アプリを最新版にしてください' : 'ログインし直してください') : '画像AIにつながりませんでした'));
   return { image: data.image, text: data.text, ms: data.ms };

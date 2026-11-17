@@ -25,9 +25,13 @@ class DistributionTests(unittest.TestCase):
     def test_pro_edition_is_a_separate_app(self):
         bundle, display = EDITIONS['pro']
         info, ent, profile, team, build, now = self.fixture()
-        info.update(CFBundleIdentifier=bundle, CFBundleDisplayName=display)
+        info.update(CFBundleIdentifier=bundle, CFBundleDisplayName=display, UIDeviceFamily=[2])
         ent['application-identifier'] = f'{team}.{bundle}'; profile['Entitlements'] = dict(ent)
         check_distribution(info, ent, profile, team, build, now, bundle, display)
+        # Pro は iPad 専用。iPhone も含むビルドは断る
+        info['UIDeviceFamily'] = [1, 2]
+        with self.assertRaisesRegex(ValueError, 'device family'):
+            check_distribution(info, ent, profile, team, build, now, bundle, display)
         with self.assertRaisesRegex(ValueError, 'bundle ID'):
             check_distribution(*self.fixture()[:6], bundle, display)
 

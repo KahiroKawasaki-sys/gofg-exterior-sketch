@@ -1,6 +1,7 @@
 // 標準の登録オブジェクト（平面図記号）。寸法は図面px（1px=10mm）。線は currentColor で色替えできる。
 import { type LibItem } from './types';
 import { rng } from './textures';
+import { svgId } from './markup';
 
 // 「未分類」は自分で登録した部品の置き場（内蔵の部品は入れない）
 export const CATEGORIES = ['植栽', '乗り物', '門まわり・設備', 'カーポート', '照明', 'その他', 'ガーデンファニチャー', '下草', '低木', '景石', 'キャラクター', '未分類'];
@@ -335,6 +336,7 @@ export function builtinLibrary(): LibItem[] {
   return L;
 }
 
+// id は markup.ts の svgId で、置く側（<use href="#lib-...">）と同じ形にそろえる
 export function symbolMarkup(l: LibItem) {
-  return `<symbol id="lib-${l.id}" viewBox="0 0 ${f(l.vw)} ${f(l.vh)}" overflow="visible">${l.svg}</symbol>`;
+  return `<symbol id="lib-${svgId(l.id)}" viewBox="0 0 ${f(l.vw)} ${f(l.vh)}" overflow="visible">${l.svg}</symbol>`;
 }

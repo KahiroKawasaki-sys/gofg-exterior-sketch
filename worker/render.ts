@@ -94,7 +94,9 @@ export async function render(req:Request,env:RenderEnv,app=false,ctx?:Pick<Execu
  const size=(SIZES as readonly string[]).includes(String(b.size))?String(b.size):'2K';
  const model=env.RENDER_MODEL||RENDER_MODEL;
  const body:Record<string,unknown>={model,input:[{type:'text',text:renderPrompt(view,style,note,cleanParts(b.parts))},{type:'image',mime_type:inMime,data:image}],
-  response_format:{type:'image',mime_type:'image/jpeg',aspect_ratio:aspect,image_size:size}};
+  response_format:{type:'image',mime_type:'image/jpeg',aspect_ratio:aspect,image_size:size},
+  // Google 側に入出力を残さない（既定は保存）。お客様宅の画像なので保存させない
+  store:false};
  if(env.RENDER_THINKING)body.generation_config={thinking_level:env.RENDER_THINKING};
  const started=Date.now();
  const ac=new AbortController();const timer=setTimeout(()=>ac.abort(),TIMEOUT_MS);

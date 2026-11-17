@@ -37,6 +37,6 @@ export const GUIDE_FULL: GuideVideo[] = [
   { id: 'f-paint', title: '塗る（砂利・芝・ウッド）', text: '囲まれた所をタップして素材を選ぶ、大きさ・向きの調整', video: paintMp4, poster: paintJpg },
   { id: 'f-underlay', title: '下絵と縮尺合わせ', text: 'PDFを敷く、濃さ、2点で実寸に合わせる', video: underlayMp4, poster: underlayJpg },
   { id: 'f-save', title: '保存・書き出し・履歴', text: '別名保存、PDF・編集データ、履歴で戻す', video: saveMp4, poster: saveJpg },
-  // Pro だけ：打ち合わせ（録音→文字→AIが要望に）
-  { id: 'f-meeting', title: '打ち合わせ（録音→AIが要望に）', text: '録音して止めると文字になり、AIが要望をカードに。図面・見積へ反映', video: meetingMp4, poster: meetingJpg },
+  // Pro だけ：打ち合わせ（録音→文字→議事録）。動画は旧版（要望カード・反映）のまま。撮り直しは別途
+  { id: 'f-meeting', title: '打ち合わせ（録音→議事録）', text: '録音して止めると全部が文字になり、AIが議事録にまとめる。全文と議事録はコピー・保存できる', video: meetingMp4, poster: meetingJpg },
 ].filter(v => PRO || v.id !== 'f-meeting');

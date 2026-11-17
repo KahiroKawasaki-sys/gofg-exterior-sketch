@@ -30,7 +30,8 @@ describe('文字起こし',()=>{
  it('アプリ（サービストークン）からも使える。他のAPIは使えない',async()=>{
   jwtVerify.mockResolvedValue({payload:{common_name:'app-token.access'}});
   const appReq=(path)=>new Request('https://app.example.test'+path,{method:'POST',headers:{'Cf-Access-Jwt-Assertion':'test-only','X-Sketch-Client':'2','Content-Type':'application/json'},body:JSON.stringify({audio})});
-  expect((await worker.fetch(appReq('/api/ai/transcribe'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(200);
+  // ライセンス必須（通る流れは worker-license.test.js）。署名鍵が未設定なら安全側の503
+  expect((await worker.fetch(appReq('/api/ai/transcribe'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(503);
   expect((await worker.fetch(appReq('/api/docs'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(403);
  });
  it('入力の確認：音声なし・長すぎ・準備なし・別画面',async()=>{

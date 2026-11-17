@@ -1,7 +1,7 @@
 // v0.3 キャンバスのクラウド保存（Web版）。端末保存（IndexedDB）を正とし、裏でクラウドへ送る・受け取る。
 // サーバーは v0.2 と同じ Cloudflare Worker + D1。ファイルの分割保存・本人確認・容量上限も共通。
 import { type Doc, uid } from './types';
-import { listDocs, loadDoc, saveDoc, deleteDoc, getMeta, setMeta, deleteMeta, listMeta, validDoc } from './store';
+import { listDocs, loadDoc, saveDoc, deleteDoc, deleteRendersOf, getMeta, setMeta, deleteMeta, listMeta, validDoc } from './store';
 import { isNativeApp } from './platform';
 
 const CHUNK = 1024 * 1024, ASSET = 'gofg-asset:', SYNC = 'cloud-sync:', DEL = 'cloud-delete:';
@@ -126,7 +126,7 @@ export async function synchronize(pull = true): Promise<{ forked: number; pendin
       if (head.revision === (s?.cloudRevision || 0)) continue;
       if (head.deleted) {
         // 他の端末で削除済み。手元で編集していなければ消し、編集していればその版を送り直して残す
-        if (rec && !dirty) await deleteDoc(head.id);
+        if (rec && !dirty) { await deleteDoc(head.id); await deleteRendersOf(head.id).catch(() => {}); }
         await setMeta(SYNC + head.id, { cloudRevision: head.revision, syncedUpdatedAt: dirty ? s?.syncedUpdatedAt || '' : '', payload: head.payload } satisfies SyncState);
         continue;
       }

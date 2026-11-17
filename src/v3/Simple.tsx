@@ -317,8 +317,8 @@ export const HELP: HelpItem[] = [
   { demo: 'move', title: '動かす', text: '「動かす」で選んでドラッグ', video: partsMp4 },
   { demo: 'undo', title: '間違えたら', text: '上の「戻す」で1つ前へ', video: undoMp4 },
   { demo: 'pinch', title: '拡大・移動', text: '2本指で広げる・ずらす' },
-  // Pro だけ：打ち合わせ（録音→文字→AIが要望に）。詳細モードと同じ動画
-  ...(PRO ? [{ title: '⑤ 打ち合わせ', text: '録音→AIが要望に→図面・見積へ', video: meetingMp4, poster: meetingJpg }] : []),
+  // Pro だけ：打ち合わせ（録音→文字→議事録）。詳細モードと同じ動画（旧版のまま）
+  ...(PRO ? [{ title: '⑤ 打ち合わせ', text: '録音→全部を文字に→AIが議事録に', video: meetingMp4, poster: meetingJpg }] : []),
 ];
 
 // 詳細モードの解説動画（guideFull.ts）。サムネイル画像つき

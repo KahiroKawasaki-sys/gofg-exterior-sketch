@@ -456,6 +456,12 @@ button.v3-mono:hover { color: var(--green); }
 .v3-meet-log p.ed input { flex: 1; height: 28px; border: 1px solid var(--green); border-radius: 7px; padding: 0 8px; font-size: 12px; }
 .v3-meet-pill.busy { color: #8a6200; }
 .v3-meet-pill.busy .dot { background: #d9a400; }
+.v3-meet .v3-meet-share { flex-wrap: wrap; gap: 6px; }
+.v3-meet-consent { margin: 2px 0 4px; font-size: 11px; line-height: 1.5; color: var(--sub); }
+.v3-meet-minutes h4 small { font-weight: 400; color: var(--sub); margin-left: 4px; }
+.v3-meet-doc { white-space: pre-wrap; background: #fff; border-radius: 9px; padding: 9px 11px; font-size: 12.5px; line-height: 1.6; max-height: 320px; overflow-y: auto; user-select: text; -webkit-user-select: text; }
+.v3-meet-minedit textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--green); border-radius: 9px; padding: 8px 10px; font-size: 12.5px; line-height: 1.6; font-family: inherit; resize: vertical; }
+.v3-meet .v3-meet-log { max-height: 260px; user-select: text; -webkit-user-select: text; }
 
 /* 3D：見た目・立面図 */
 .v3-3d-roles.mats { grid-template-columns: repeat(4, 1fr); }

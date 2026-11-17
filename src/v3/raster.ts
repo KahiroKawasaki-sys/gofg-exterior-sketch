@@ -1,6 +1,6 @@
 // SVGの画像化・閉じた輪郭の塗りつぶし判定・書き出し
 import { type Doc, type LibItem, type Box, type Pt, type Layer, itemBox, unionBox } from './types';
-import { layerMarkup, SHARED_DEFS, type RenderCtx } from './markup';
+import { layerMarkup, esc, SHARED_DEFS, type RenderCtx } from './markup';
 import { symbolMarkup } from './library';
 
 export function contentBox(doc: Doc, pad = 40): Box {
@@ -23,8 +23,9 @@ export function docSVG(doc: Doc, lib: LibItem[], ctx: RenderCtx, box: Box, opt: 
   let body = '';
   if (opt.background) body += `<rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" fill="${opt.background}"/>`;
   const u = doc.underlay;
-  if (u && u.visible && opt.underlay !== false) body += `<image href="${u.src}" x="${u.x}" y="${u.y}" width="${u.w}" height="${u.h}" opacity="${u.opacity}" preserveAspectRatio="none"/>`;
-  for (const l of layers) body += `<g opacity="${l.opacity}">${layerMarkup(l, ctx)}</g>`;
+  // 読み込んだデータの値は esc を通す（画像化は <img> 経由でスクリプトは動かないが、属性が壊れないように）
+  if (u && u.visible && opt.underlay !== false) body += `<image href="${esc(u.src)}" x="${esc(u.x)}" y="${esc(u.y)}" width="${esc(u.w)}" height="${esc(u.h)}" opacity="${esc(u.opacity)}" preserveAspectRatio="none"/>`;
+  for (const l of layers) body += `<g opacity="${esc(l.opacity)}">${layerMarkup(l, ctx)}</g>`;
   const w = opt.pxW ?? box.w, h = opt.pxH ?? box.h;
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="${box.x} ${box.y} ${box.w} ${box.h}"><defs>${SHARED_DEFS}${usedSymbols(layers, lib)}</defs>${body}</svg>`;
 }

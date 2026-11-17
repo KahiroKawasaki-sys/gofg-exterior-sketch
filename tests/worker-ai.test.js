@@ -12,9 +12,10 @@ describe('打ち合わせAI',()=>{
   globalThis.fetch=vi.fn(async()=>new Response(JSON.stringify({content:[{type:'tool_use',name:'record_requests',input:{requests:[]}}]}),{status:200}));
   jwtVerify.mockResolvedValue({payload:{common_name:'app-token.access'}});
   const appReq=(path)=>new Request('https://app.example.test'+path,{method:'POST',headers:{'Cf-Access-Jwt-Assertion':'test-only','X-Sketch-Client':'2','Content-Type':'application/json'},body:JSON.stringify({transcript:'駐車場2台'})});
-  expect((await worker.fetch(appReq('/api/ai/meeting'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(200);
+  // アプリは通行証の内側でライセンスも要る（署名鍵が無ければ503、トークンが無ければ401。通る流れは worker-license.test.js）
+  expect((await worker.fetch(appReq('/api/ai/meeting'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(503);
   expect((await worker.fetch(appReq('/api/docs'),env({APP_SERVICE_TOKEN_ID:'app-token.access'}))).status).toBe(403);
-  expect((await worker.fetch(appReq('/api/ai/meeting'),env())).status).toBe(200);
+  expect((await worker.fetch(appReq('/api/ai/meeting'),env({LICENSE_SIGNING_KEY:'k',DB:{}}))).status).toBe(401);
   jwtVerify.mockResolvedValue({payload:{}});
   expect((await worker.fetch(appReq('/api/ai/meeting'),env())).status).toBe(403);
   jwtVerify.mockResolvedValue({payload:{common_name:'app-token.access'}});
@@ -48,6 +49,24 @@ describe('打ち合わせAI',()=>{
   globalThis.fetch=vi.fn(async()=>new Response(JSON.stringify({content:[{type:'text',text:'…'}],usage:{input_tokens:1,output_tokens:1}}),{status:200}));
   r=await worker.fetch(req({transcript:'a'}),env());
   expect(r.status).toBe(200);expect((await r.json()).requests).toEqual([]);expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+ });
+ it('議事録（mode:minutes）：ツールなしで全文を渡し、返ってきた文章をそのまま返す',async()=>{
+  globalThis.fetch=vi.fn(async()=>new Response(JSON.stringify({content:[{type:'thinking',thinking:'…'},{type:'text',text:'【打ち合わせ議事録】\n日時：2026/11/17 10:30\n【決まったこと】\n・駐車場は2台'}],usage:{input_tokens:900,output_tokens:150}}),{status:200}));
+  const r=await worker.fetch(req({mode:'minutes',transcript:'[10:30:05 / 0:05] 駐車場は2台ほしいです',name:'山田様邸',date:'2026/11/17 10:30'}),env());
+  expect(r.status).toBe(200);
+  expect(await r.json()).toEqual({minutes:'【打ち合わせ議事録】\n日時：2026/11/17 10:30\n【決まったこと】\n・駐車場は2台',usage:{input:900,output:150}});
+  expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  const sent=JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+  expect(sent.model).toBe('claude-opus-5-5');expect(sent.tools).toBeUndefined();expect(sent.tool_choice).toBeUndefined();expect(sent.output_config).toEqual({effort:'low'});
+  expect(sent.system).toContain('議事録');expect(sent.system).toContain('宿題');expect(sent.system).not.toContain('record_requests');
+  expect(sent.messages).toHaveLength(1);
+  expect(sent.messages[0].content).toContain('日時：2026/11/17 10:30');expect(sent.messages[0].content).toContain('山田様邸');expect(sent.messages[0].content).toContain('[10:30:05 / 0:05] 駐車場は2台ほしいです');
+  globalThis.fetch=vi.fn(async()=>new Response(JSON.stringify({content:[],usage:{input_tokens:1,output_tokens:0}}),{status:200}));
+  expect((await worker.fetch(req({mode:'minutes',transcript:'a'}),env())).status).toBe(502);
+  globalThis.fetch=vi.fn(async()=>new Response('{}',{status:529}));
+  const busy=await worker.fetch(req({mode:'minutes',transcript:'a'}),env());expect(busy.status).toBe(503);expect((await busy.json()).error).toContain('混み合って');
+  globalThis.fetch=vi.fn();
+  expect((await worker.fetch(req({mode:'minutes',transcript:' '}),env())).status).toBe(400);expect(globalThis.fetch).not.toHaveBeenCalled();
  });
  it('モデルは設定で変えられる。キー間違い・混雑は分かる言葉で返す',async()=>{
   globalThis.fetch=vi.fn(async()=>new Response('{}',{status:401}));

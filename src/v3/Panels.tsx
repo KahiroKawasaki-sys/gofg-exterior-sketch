@@ -3,6 +3,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Plus, Copy, ArrowDownToLine, Combine, Trash2, Eye, EyeOff, Lock, LockOpen, GripVertical, X, CircleMinus, Pencil, Play, Images } from 'lucide-react';
 import { type Doc, type Layer, type LibItem, type Guide, type GuideType, type ObjItem, type TextureItem, type TextItem, type Pt, dist, deg, rad, fmtLen, PALETTE } from './types';
 import { CATEGORIES } from './library';
+import { svgId } from './markup';
 import { TEXTURES, textureSrc, texLabel } from './textures';
 import { type HistEntry } from './useDoc';
 import { type Tool } from './Canvas';
@@ -107,7 +108,7 @@ export function LayerPanel({ e }: { e: EditorApi }) {
 // ---------------- オブジェクト ----------------
 export function Thumb({ l, size = 26 }: { l: LibItem; size?: number }) {
   const k = Math.min(size / l.vw, size / l.vh);
-  return <svg className="v3-thumb" width={size} height={size} viewBox={`${-(size / k - l.vw) / 2} ${-(size / k - l.vh) / 2} ${size / k} ${size / k}`}><use href={`#lib-${l.id}`} /></svg>;
+  return <svg className="v3-thumb" width={size} height={size} viewBox={`${-(size / k - l.vw) / 2} ${-(size / k - l.vh) / 2} ${size / k} ${size / k}`}><use href={`#lib-${svgId(l.id)}`} /></svg>;
 }
 
 export function ObjectPanel({ e }: { e: EditorApi }) {

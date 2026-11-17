@@ -22,6 +22,7 @@ import { TextDialog, PromptDialog, Menu, type Field, type TextValue } from './Di
 import { readSource } from './source';
 import { isNativeApp, saveFile } from './platform';
 import { PRO } from './edition';
+import { VERSION_LABEL } from './version';
 import { schedulePush } from './cloudSync';
 import { SimpleTop, SimpleDock, Tour, HelpSheet, HELP, simpleHint, type Step, type TourStep, type HelpTab } from './Simple';
 import { GUIDE_FULL } from './guideFull';
@@ -34,12 +35,12 @@ import { withElevations, hasBuilding, footprintFromElevations, placeBuilding } f
 import { findFootprintOnUnderlay } from './footprint';
 import { type TextItem as ElevText, underlayWidthPx } from './elevLabels';
 import { quantities, quantitiesCsv, textureAreas, type QtyRow } from './quantities';
+import { LicenseCard } from './LicenseGate';
 import { buildEstimate, defaultBook, estimateCsv, importItems, parseCsv, parsePriceTable, priceBookCsv, type Estimate, type PriceBook } from './estimate';
 
 // three.js は大きいので、3Dを開いたときだけ読み込む
 const View3D = lazy(() => import('./View3D'));
 
-const VERSION = 'ver 2026.11.14-02 (3d-parts)';
 type PanelId = 'objects' | 'layers' | 'guides' | 'paint' | 'settings' | 'history' | 'qty' | null;
 
 // CSVは UTF-8 か Shift_JIS（Excelの既定）のどちらか
@@ -75,7 +76,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const [show3d, setShow3d] = useState(false);
   const [menu, setMenu] = useState<{ id: string; rect: DOMRect } | null>(null);
   const [textDlg, setTextDlg] = useState<{ p: Pt; edit?: TextItem } | null>(null);
-  const [prompt, setPrompt] = useState<{ title: string; fields: Field[]; note?: string; ok: string; cancel?: string; run: (v: Record<string, string | number | boolean>) => void } | null>(null);
+  const [prompt, setPrompt] = useState<{ title: string; fields: Field[]; note?: string; ok: string; cancel?: string; alt?: string; onAlt?: () => void; run: (v: Record<string, string | number | boolean>) => void } | null>(null);
   const [saved, setSaved] = useState<'saved' | 'saving' | 'error'>('saved');
   const stageRef = useRef<HTMLDivElement>(null), fileRef = useRef<HTMLInputElement>(null), imgRef = useRef<HTMLInputElement>(null), camRef = useRef<HTMLInputElement>(null), jsonRef = useRef<HTMLInputElement>(null), elevRef = useRef<HTMLInputElement>(null);
   // 立面図（Pro）：読み込んだ用紙の絵。枠を合わせて3Dの建物に貼る
@@ -208,7 +209,8 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const exportAs = async (kind: 'png' | 'a4' | 'a3' | 'json' | 'dxf') => {
     setMenu(null);
     try {
-      if (kind === 'json') return await saveFile(new Blob([JSON.stringify({ ...doc, view })], { type: 'application/json' }), safeName(doc.name) + '.garden3.json');
+      // 編集データには打ち合わせの記録（会話の文字・議事録）を入れない。人に渡すことがあるため。端末内の保存とクラウドには残る
+      if (kind === 'json') return await saveFile(new Blob([JSON.stringify({ ...doc, view, meeting: undefined })], { type: 'application/json' }), safeName(doc.name) + '.garden3.json');
       toast('書き出し中…');
       if (kind === 'dxf') {
         // DXFの処理は書き出すときだけ読み込む
@@ -253,6 +255,17 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
   const [others, setOthers] = useState<{ id: string; name: string }[]>([]);
   const refreshOthers = useCallback(() => listDocs().then(ds => setOthers(ds.filter(d => d.id !== doc.id).map(d => ({ id: d.id, name: d.name })))).catch(() => {}), [doc.id]);
   useEffect(() => { if (panel === 'qty' || qtyOpen) refreshOthers(); }, [panel, qtyOpen, refreshOthers]);
+  // 見積書・仕様書：会社名が空なら、作る前に一言きく（入れて作る／このまま作る）
+  const withCompany = (make: (company: string) => void) => {
+    const company = (book.company || '').trim();
+    if (company) return make(company);
+    setPrompt({
+      title: '会社名が入っていません。設定しますか？', fields: [{ key: 'company', label: '会社名', value: '' }],
+      note: '見積書・仕様書の右上に載ります。ここで入れると次からも使います。', ok: '設定して作る', alt: 'このまま作る',
+      onAlt: () => { setPrompt(null); make(''); },
+      run: v => { const c = String(v.company || '').trim(); setPrompt(null); if (c) setBook({ ...book, company: c }); make(c); },
+    });
+  };
   const estp = {
     book, onBook: setBook, others,
     onCompare: async (id: string) => {
@@ -265,25 +278,25 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       schedulePush(); await refreshOthers();
       toast(`「${name}」を作りました。一覧から開いて描き変えると、ここで金額を比べられます`);
     },
-    onPdf: async (e: Estimate, cmp?: { name: string; e: Estimate }) => {
+    onPdf: (e: Estimate, cmp?: { name: string; e: Estimate }) => withCompany(async company => {
       try {
         toast('見積書を作っています…');
         const P = await import('./estimatePdf');
         const png = await exportImage(doc, lib, ctx, 2400), plan = await createImageBitmap(png);
-        const pages = P.drawEstimatePages(e, { client: doc.name, company: book.company || '', date: new Date() }, plan, cmp && { aName: doc.name, bName: cmp.name, a: e, b: cmp.e });
+        const pages = P.drawEstimatePages(e, { client: doc.name, company, date: new Date() }, plan, cmp && { aName: doc.name, bName: cmp.name, a: e, b: cmp.e });
         const r = await saveFile(await P.estimatePdf(pages), `${safeName(doc.name)}_御見積書.pdf`);
         toast(r === 'cancelled' ? '保存をキャンセルしました' : '見積書PDFを保存しました');
       } catch (err) { toast('見積書を作れませんでした：' + (err as Error).message); }
-    },
-    onBoardPdf: async (cards: BoardCard[]) => {
+    }),
+    onBoardPdf: (cards: BoardCard[]) => withCompany(async company => {
       try {
         toast('仕様書を作っています…');
         const [B, P] = await Promise.all([import('./boardPdf'), import('./estimatePdf')]);
-        const pages = B.drawBoardPages(cards, { client: doc.name, company: book.company || '', date: new Date() }, await B.loadBoardPics(cards, lib));
+        const pages = B.drawBoardPages(cards, { client: doc.name, company, date: new Date() }, await B.loadBoardPics(cards, lib));
         const r = await saveFile(await P.estimatePdf(pages), `${safeName(doc.name)}_仕様書.pdf`);
         toast(r === 'cancelled' ? '保存をキャンセルしました' : '仕様書PDFを保存しました');
       } catch (err) { toast('仕様書を作れませんでした：' + (err as Error).message); }
-    },
+    }),
     onToast: toast,
     onEst: (est: DocEstimate) => D.set(d => ({ ...d, est }), '見積を調整'),
     onEstCsv: (e: Estimate) => csvOut(estimateCsv(e, doc.name), `${safeName(doc.name)}_概算見積.csv`, '見積をCSVで保存しました'),
@@ -433,7 +446,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
           <i className="sep" />
           <button className={'v3-tl' + P('objects')} aria-label="部品" title="部品（車・植栽など）" onClick={panelBtn('objects')}><LayoutGrid size={16} />部品</button>
           <button className={'v3-tl' + P('paint')} aria-label="塗る" title="塗る（砂利・芝・ウッドなど）" onClick={() => { if (panel === 'paint') return setPanel(null); setPanel('paint'); setTool('aiFill'); }}><PaintBucket size={16} />塗る</button>
-          {PRO && <><button className={'v3-tl' + (meet === 'open' ? ' on' : '')} aria-label="打ち合わせ" title="打ち合わせ（会話を聞いてAIが要望をまとめる）" onClick={() => setMeet(v => v === 'open' ? 'min' : 'open')}><Mic size={16} />打ち合わせ</button>
+          {PRO && <><button className={'v3-tl' + (meet === 'open' ? ' on' : '')} aria-label="打ち合わせ" title="打ち合わせ（録音して文字にし、AIが議事録にまとめる）" onClick={() => setMeet(v => v === 'open' ? 'min' : 'open')}><Mic size={16} />打ち合わせ</button>
           <button className={'v3-tl' + P('qty')} aria-label="集計" title="集計・概算見積（面積・長さ・数と金額）" onClick={panelBtn('qty')}><Calculator size={16} />集計・見積</button></>}
           <button className={'v3-tl' + P('layers')} aria-label="レイヤー" title="レイヤー" onClick={panelBtn('layers')}><Layers size={16} />レイヤー</button>
           <button className={'v3-tl' + P('guides')} aria-label="ガイド線" title="ガイド線" onClick={panelBtn('guides')}><Ruler size={16} />ガイド</button>
@@ -532,7 +545,7 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
       {PRO && show3d && <Suspense fallback={<div className="v3-3d"><div className="v3-3d-msg">3Dを準備しています…</div></div>}><View3D doc={doc} lib={lib} ctx={ctx} onClose={() => setShow3d(false)} onDoc={D.set} onRaise={(id, v) => D.set(d => updateItem(d, id, it => ({ ...it, ...v }) as Item), '3Dの種類を変更')} /></Suspense>}
       {tour && simple && <Tour steps={tourSteps} onDone={endTour} />}
       {help && <HelpSheet items={HELP} full={GUIDE_FULL} tab={help.tab} open={help.open} onClose={() => setHelp(null)} onTour={() => { setHelp(null); setUi('simple'); setTour(true); }} />}
-      {prompt && <PromptDialog title={prompt.title} fields={prompt.fields} note={prompt.note} okLabel={prompt.ok} cancelLabel={prompt.cancel} onOk={prompt.run} onCancel={() => { setPrompt(null); if (tool === 'calib') setTool('select'); }} />}
+      {prompt && <PromptDialog title={prompt.title} fields={prompt.fields} note={prompt.note} okLabel={prompt.ok} cancelLabel={prompt.cancel} altLabel={prompt.alt} onAlt={prompt.onAlt} onOk={prompt.run} onCancel={() => { setPrompt(null); if (tool === 'calib') setTool('select'); }} />}
       {PRO && elevSheet && <ElevationDialog sheet={elevSheet} onCancel={() => setElevSheet(null)}
         onSave={e => {
           setElevSheet(null);
@@ -597,7 +610,10 @@ export function Editor({ initial, onHome }: { initial: Doc; onHome: () => void }
         <section className="v3-card"><h4>書き出し</h4>
           <div className="v3-row wrap"><button className="v3-btn" onClick={() => exportAs('png')}>PNG</button><button className="v3-btn" onClick={() => exportAs('a4')}>PDF A4</button><button className="v3-btn" onClick={() => exportAs('a3')}>PDF A3</button>{PRO && <button className="v3-btn" onClick={() => exportAs('dxf')}>DXF</button>}<button className="v3-btn" onClick={() => exportAs('json')}>編集データ</button><button className="v3-btn" onClick={() => jsonRef.current?.click()}>編集データを読み込む</button></div>
         </section>
-        <section className="v3-card"><h4>このアプリ</h4><p className="v3-note">{VERSION}　保存先：この端末（クラウド同期は停止中。端末間は編集データで引き継ぎ）</p></section>
+        <LicenseCard />
+        <section className="v3-card"><h4>このアプリ</h4><p className="v3-note">{VERSION_LABEL}</p><p className="v3-note">{isNativeApp()
+          ? 'このアプリのデータはこの端末の中だけに保存されます。機種変更の前に「編集データ」を書き出してください。'
+          : '保存先：この端末とクラウド（自動で同期。状態はホーム画面の右上に表示）。ほかの端末でも同じ図面を開けます。'}</p></section>
         {!isNativeApp() && <section className="v3-card"><h4>旧バージョン</h4><p className="v3-note">v0.2（下絵の原本保管・クラウド同期つき）は <a href="?v=2">こちら</a> から開けます。</p></section>}
       </div>
     );

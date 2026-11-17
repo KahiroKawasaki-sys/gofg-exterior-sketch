@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, FileUp, Trees, FolderOpen, Trash2, PenTool, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import { type Doc, newDoc } from './types';
-import { listDocs, loadDoc, saveDoc, deleteDoc, validDoc, type DocMeta } from './store';
+import { listDocs, loadDoc, saveDoc, deleteDoc, deleteRendersOf, validDoc, type DocMeta } from './store';
+import { VERSION_LABEL } from './version';
 import { sampleDoc } from './useDoc';
 import { syncNow, onCloudState, markDeleted, schedulePush, clearForkNotice, type CloudState } from './cloudSync';
 import { Editor } from './Editor';
@@ -45,7 +46,7 @@ export default function App3() {
     <div className="v3-home">
       <input ref={pdfRef} type="file" hidden accept="application/pdf,image/png,image/jpeg,image/webp" onChange={e => { fromFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={jsonRef} type="file" hidden accept="application/json,.json" onChange={e => { fromJson(e.target.files?.[0]); e.target.value = ''; }} />
-      <header className="v3-hhead"><span className="logo"><PenTool size={18} /></span><b>外構スケッチ</b><span className="v3-mono">ver 2026.11.14-02 (3d-parts)</span><span className="sp" /><button className={'v3-cloud ' + cloud.phase} title={cloud.detail || cloud.message} onClick={() => syncNow(true).then(refresh)} disabled={cloud.phase === 'syncing'}>{cloud.phase === 'syncing' ? <RefreshCw size={14} /> : cloud.phase === 'synced' || cloud.phase === 'pending' ? <Cloud size={14} /> : <CloudOff size={14} />}<span>{cloud.message}</span></button></header>
+      <header className="v3-hhead"><span className="logo"><PenTool size={18} /></span><b>外構スケッチ</b><span className="v3-mono">{VERSION_LABEL}</span><span className="sp" /><button className={'v3-cloud ' + cloud.phase} title={cloud.detail || cloud.message} onClick={() => syncNow(true).then(refresh)} disabled={cloud.phase === 'syncing'}>{cloud.phase === 'syncing' ? <RefreshCw size={14} /> : cloud.phase === 'synced' || cloud.phase === 'pending' ? <Cloud size={14} /> : <CloudOff size={14} />}<span>{cloud.message}</span></button></header>
       <main>
         <h1>キャンバス</h1>
         <p className="lead">平面図の上で、手描き → 清書 → 部品・植栽 → 素材の塗り分け → 寸法まで。</p>
@@ -64,7 +65,7 @@ export default function App3() {
             <div key={d.id} className="v3-doc" onClick={() => loadDoc(d.id).then(x => x && setOpen(x))}>
               <div className="th">{d.thumb ? <img src={d.thumb} alt="" /> : <PenTool size={26} />}</div>
               <b>{d.name}</b><span>{new Date(d.updatedAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-              <button className="v3-ib del" aria-label="削除" onClick={e => { e.stopPropagation(); if (confirm(`「${d.name}」を削除しますか？`)) deleteDoc(d.id).then(() => markDeleted(d.id)).then(() => { refresh(); schedulePush(); }); }}><Trash2 size={15} /></button>
+              <button className="v3-ib del" aria-label="削除" onClick={e => { e.stopPropagation(); if (confirm(`「${d.name}」を削除しますか？`)) deleteDoc(d.id).then(() => deleteRendersOf(d.id).catch(() => {})).then(() => markDeleted(d.id)).then(() => { refresh(); schedulePush(); }); }}><Trash2 size={15} /></button>
             </div>
           ))}
           {!docs.length && <p className="v3-note">まだ保存したキャンバスはありません。</p>}

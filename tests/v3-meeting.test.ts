@@ -1,5 +1,7 @@
-import { it, expect } from 'vitest';
-import { mergeRequests, applyAction, actionLabel, summaryText, unreadCount } from '../src/v3/meeting';
+import { it, expect, vi } from 'vitest';
+import { mergeRequests, applyAction, actionLabel, summaryText, unreadCount, timedTranscript, transcriptExport, exportFileName, makeMinutes } from '../src/v3/meeting';
+
+// 要望の読み取り・反映（一旦停止中。コードは残しているので、壊れていないことだけ確かめる）
 import { defaultBook } from '../src/v3/estimate';
 import { newDoc, uid, type Doc, type Item } from '../src/v3/types';
 
@@ -56,4 +58,41 @@ it('まとめ：決定→要望→検討中の順に箇条書き。予算と見�
   expect(summaryText({ lines: [], requests: [] }, { now: new Date(2026, 10, 8) })).toContain('要望はまだありません');
   expect(unreadCount({ lines: [{ t: '', text: 'a' }, { t: '', text: 'b' }], requests: [] }, 1)).toBe(1);
   expect(unreadCount({ lines: [{ t: '', text: 'a' }], requests: [] }, 5)).toBe(0);
+});
+
+it('文字起こしの全文：行ごとに[時:分:秒 / 録音からの時間]。メモは「メモ」。ファイル名は使えない文字を除く', () => {
+  const t0 = new Date(2026, 10, 17, 10, 30, 0);
+  const at = (s: number) => new Date(t0.getTime() + s * 1000).toISOString();
+  const m = { startedAt: t0.toISOString(), requests: [], lines: [
+    { t: at(5), text: '駐車場は2台ほしいです', from: 5, to: 8 },
+    { t: at(75), text: '芝生にしたい' },
+    { t: at(125), text: '予算は300万円くらい', from: 125.4, to: 130 },
+  ] };
+  expect(timedTranscript(m).split('\n')).toEqual([
+    '[10:30:05 / 0:05] 駐車場は2台ほしいです',
+    '[10:31:15 / メモ] 芝生にしたい',
+    '[10:32:05 / 2:05] 予算は300万円くらい',
+  ]);
+  const all = transcriptExport(m, { name: '山田様邸' }).split('\n');
+  expect(all[0]).toBe('【打ち合わせ 文字起こし（全文）】 山田様邸');
+  expect(all[1]).toBe('開始：2026/11/17 10:30　行数：3');
+  expect(all.slice(-3)).toEqual(timedTranscript(m).split('\n'));
+  expect(exportFileName('議事録', '山田/様:邸', t0)).toBe('山田_様_邸_議事録_20261117-1030.txt');
+  expect(exportFileName('文字起こし', '', t0)).toBe('打ち合わせ_文字起こし_20261117-1030.txt');
+});
+
+it('議事録：同じ口に mode:minutes で時刻つきの全文を送り、返ってきた文章を使う', async () => {
+  const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ minutes: '  【打ち合わせ議事録】\n日時：2026/11/17 10:30  ', usage: { input: 10, output: 5 } }), { status: 200 }));
+  const t0 = new Date(2026, 10, 17, 10, 30, 0);
+  const m = { startedAt: t0.toISOString(), requests: [], lines: [{ t: new Date(t0.getTime() + 5000).toISOString(), text: '駐車場は2台', from: 5 }] };
+  const r = await makeMinutes(m, { name: '山田様邸' });
+  expect(r.minutes).toBe('【打ち合わせ議事録】\n日時：2026/11/17 10:30');
+  const [url, init] = spy.mock.calls[0];
+  expect(url).toBe('/api/ai/meeting');
+  expect(JSON.parse(String((init as RequestInit).body))).toEqual({ mode: 'minutes', transcript: '[10:30:05 / 0:05] 駐車場は2台', name: '山田様邸', date: '2026/11/17 10:30' });
+  spy.mockResolvedValue(new Response(JSON.stringify({ error: 'AIが混み合っています' }), { status: 503 }));
+  await expect(makeMinutes(m)).rejects.toThrow('混み合って');
+  spy.mockResolvedValue(new Response(JSON.stringify({ minutes: '' }), { status: 200 }));
+  await expect(makeMinutes(m)).rejects.toThrow('議事録を作れませんでした');
+  spy.mockRestore();
 });

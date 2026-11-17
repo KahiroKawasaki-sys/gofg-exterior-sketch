@@ -17,6 +17,8 @@ EDITIONS = {
     'pro': ('com.kawakahi.gofgsketch.pro', '外構スケッチ Pro'),
 }
 ICONS = {'sketch': 'AppIcon', 'pro': 'AppIconPro'}
+# 対応端末（TARGETED_DEVICE_FAMILY）：外構スケッチは iPhone・iPad、Pro は iPad 専用。Xcode のターゲットは共通なのでビルド時に上書きする
+DEVICE_FAMILY = {'sketch': '1,2', 'pro': '2'}
 BUNDLE = EDITIONS['sketch'][0]
 
 def edition():
@@ -48,12 +50,16 @@ def normalize_private_key(text):
 
 
 
+def device_family_of(bundle):
+    name = next((k for k, v in EDITIONS.items() if v[0] == bundle), 'sketch')
+    return {int(x) for x in DEVICE_FAMILY[name].split(',')}
+
 def check_distribution(info, signed, profile, team, build, now, bundle=BUNDLE, display=EDITIONS['sketch'][1]):
     require(info.get('CFBundleIdentifier') == bundle, 'Unexpected bundle ID')
     require(info.get('CFBundleVersion') == build, 'Build number mismatch')
     require(info.get('CFBundleDisplayName') == display, 'Unexpected app name')
     require(info.get('DTPlatformName') == 'iphoneos', 'Not an iPhone build')
-    require(set(info.get('UIDeviceFamily', [])) == {1, 2}, 'Universal iPad/iPhone support missing')
+    require(set(info.get('UIDeviceFamily', [])) == device_family_of(bundle), 'Unexpected device family (sketch: iPhone+iPad, Pro: iPad only)')
     require(float(info.get('MinimumOSVersion', '0')) >= 17, 'iOS 17 deployment target missing')
     require(info.get('UIRequiresFullScreen') is not True, 'iPad multitasking must stay available')
     for purpose in ('NSCameraUsageDescription', 'NSPhotoLibraryUsageDescription', 'NSPhotoLibraryAddUsageDescription',
@@ -115,6 +121,7 @@ def main():
              f'DEVELOPMENT_TEAM={team}', f'CURRENT_PROJECT_VERSION={build}',
              f'PRODUCT_BUNDLE_IDENTIFIER={bundle}', f'GOFG_DISPLAY_NAME={display}',
              f'ASSETCATALOG_COMPILER_APPICON_NAME={icon}',
+             f'TARGETED_DEVICE_FAMILY={DEVICE_FAMILY[edition()]}',
              'CODE_SIGNING_ALLOWED=NO', 'archive'], cwd=root)
         app = archive/'Products/Applications/App.app'
         entitlements = work/'App.entitlements'
@@ -146,7 +153,7 @@ def main():
         check_distribution(info, signed, profile, team, build, dt.datetime.now(dt.UTC).replace(tzinfo=None), bundle, display)
         require((app/'PrivacyInfo.xcprivacy').is_file(), 'Privacy manifest missing')
         require((app/'public/index.html').is_file(), 'Bundled app entry missing')
-        print('Signature, App Store profile, permissions and Universal support verified.', flush=True)
+        print('Signature, App Store profile, permissions and device family verified.', flush=True)
         if upload == 'true':
             # altool reads its private key from this temporary directory, never from an argument.
             common = ['-f', ipas[0], '-t', 'ios', '--apiKey', key_id, '--apiIssuer', issuer]

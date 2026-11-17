@@ -1,0 +1,18 @@
+/* ライセンス画面（LicenseGate.tsx）。style3.css の色を使う */
+.lic-screen { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; overflow: auto;
+  padding: calc(16px + var(--v3-safe-top, 0px)) calc(16px + var(--v3-safe-right, 0px)) calc(16px + var(--v3-safe-bottom, 0px)) calc(16px + var(--v3-safe-left, 0px));
+  background: var(--bg, #f5f5f3); color: var(--ink, #2f3432); font-family: var(--sans, system-ui, sans-serif); user-select: none; -webkit-user-select: none; }
+.lic-screen.over { background: rgba(40, 44, 42, .45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.lic-card { width: min(420px, 100%); background: var(--card, #fff); border: 1px solid var(--line, #e1e1dd); border-radius: 18px; padding: 24px 22px; box-shadow: 0 18px 50px rgba(0, 0, 0, .12); }
+.lic-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; font-size: 15px; }
+.lic-logo { width: 30px; height: 30px; border-radius: 9px; background: var(--green, #2e5747); color: #fff; display: grid; place-items: center; }
+.lic-form { display: flex; flex-direction: column; gap: 10px; }
+.lic-form h1 { margin: 0 0 4px; font-size: 17px; line-height: 1.5; display: flex; align-items: center; gap: 8px; }
+.lic-lead { margin: 0; font-size: 14px; line-height: 1.7; }
+.lic-note { margin: 4px 0 0; font-size: 12px; line-height: 1.7; color: var(--sub, #6d716f); }
+.lic-err { margin: 0; font-size: 13px; line-height: 1.6; color: var(--danger, #c4473d); background: #fbeeec; border-radius: 9px; padding: 8px 10px; }
+.lic-input { height: 48px; border: 1px solid #cfcfca; border-radius: 11px; padding: 0 14px; font-family: var(--mono, monospace); font-size: 17px; letter-spacing: .06em; background: #fff; user-select: text; -webkit-user-select: text; }
+.lic-input:focus { outline: 2px solid var(--green2, #2e7d6b); outline-offset: 1px; border-color: transparent; }
+.lic-btn { min-height: 46px; border: 1px solid #dadad6; background: #fff; border-radius: 11px; padding: 0 16px; font-size: 15px; font-weight: 600; }
+.lic-btn.primary { background: var(--green, #2e5747); border-color: var(--green, #2e5747); color: #fff; }
+.lic-settings .v3-note { line-height: 1.8; }

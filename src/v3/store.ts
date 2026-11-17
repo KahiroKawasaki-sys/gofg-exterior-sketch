@@ -42,8 +42,5 @@ export const deleteRender = (id: string) => tx<void>('renders', 'readwrite', s =
 export const deleteRendersOf = async (docId: string) => { for (const r of await listRenders(docId)) await deleteRender(r.id); };
 export const listMeta = async <T,>(prefix: string) => ((await tx<{ id: string; value: T }[]>('meta', 'readonly', s => s.getAll())) || []).filter(m => m.id.startsWith(prefix));
 
-export function validDoc(v: unknown): Doc {
-  const d = v as Doc;
-  if (!d || d.schema !== 3 || typeof d.id !== 'string' || !Array.isArray(d.layers) || !Array.isArray(d.guides)) throw Error('このファイルは外構スケッチv0.3の編集データではありません');
-  return d;
-}
+// 読み込み時の検査は docCheck.ts（型・文字の種類・長さ）
+export { validDoc } from './docCheck';

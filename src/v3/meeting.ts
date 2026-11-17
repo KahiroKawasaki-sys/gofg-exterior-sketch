@@ -1,6 +1,7 @@
-// 打ち合わせAI（画面側）：iPadの音声認識で会話を文字にし、サーバーのAIに要望を読み取らせる。
-// 読み取った要望はカードにして、押すと図面（塀・フェンスの高さ）や見積（追加項目・予算）に反映する。
-import { type Doc, type Item, type DocEstimate, type AiAction, type MeetRequest, type Meeting, uid } from './types';
+// 打ち合わせAI（画面側）：録音を文字にした全文から、サーバーのAIに議事録を作らせる。
+// 全文（時刻つき）と議事録は、コピー・共有・ファイル保存できる（打ち合わせのサンプル回収にも使う）。
+// 下の「要望の読み取り・図面／見積への反映」（readRequests・applyAction・summaryText など）は一旦停止中。画面からは呼ばない。
+import { type Doc, type Item, type DocEstimate, type AiAction, type MeetRequest, type Meeting, type MeetLine, uid } from './types';
 import { canRaise, resolveRole } from './scene3d';
 import { type PriceBook } from './estimate';
 import { apiPost, isNativeApp, nativeSpeech } from './platform';
@@ -11,6 +12,46 @@ const KINDS = ['駐車場', '舗装・素材', '塀・フェンス', '門まわ�
 const STATUS = ['要望', '決定', '検討中', '不要'] as const;
 
 export const transcriptText = (m: Meeting) => m.lines.map(l => l.text).join('\n');
+
+// ---- 文字起こしの全文（時刻つき）と議事録 ----
+const pad = (n: number) => String(n).padStart(2, '0');
+const clock = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? '--:--:--' : `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const elapsed = (sec: number) => { const s = Math.max(0, Math.round(sec)); return `${Math.floor(s / 60)}:${pad(s % 60)}`; };
+export const dateLabel = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${pad(d.getMinutes())}`;
+const startOf = (m: Meeting, now?: Date) => m.startedAt ? new Date(m.startedAt) : m.lines[0] ? new Date(m.lines[0].t) : now || new Date();
+// 1行：[時:分:秒 / 録音を始めてからの時間] 文字。手で足したメモは [時:分:秒 / メモ]
+export const lineStamp = (l: MeetLine) => `[${clock(l.t)} / ${l.from != null ? elapsed(l.from) : 'メモ'}]`;
+export const timedTranscript = (m: Meeting) => m.lines.map(l => `${lineStamp(l)} ${l.text}`).join('\n');
+
+// ファイル・共有に出す全文（見出しつき）
+export function transcriptExport(m: Meeting, o: { name?: string; now?: Date } = {}): string {
+  return [
+    `【打ち合わせ 文字起こし（全文）】${o.name ? ` ${o.name}` : ''}`,
+    `開始：${dateLabel(startOf(m, o.now))}　行数：${m.lines.length}`,
+    '時刻の見方：[時:分:秒 / 録音を始めてからの時間]（「メモ」は手で足した行）',
+    '',
+    timedTranscript(m),
+  ].join('\n');
+}
+
+// ファイル名（例：山田様邸_文字起こし_20261117-1030.txt）。使えない文字は _ にする
+export function exportFileName(kind: '文字起こし' | '議事録', name: string | undefined, d: Date): string {
+  const base = (name || '打ち合わせ').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 60);
+  return `${base}_${kind}_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.txt`;
+}
+
+// 議事録は長い打ち合わせだと時間がかかるので、アプリで返事を待つ長さを延ばす（既定は120秒）
+export const MINUTES_TIMEOUT_MS = 240000;
+// サーバーのAIに議事録を作らせる（同じ口 /api/ai/meeting を mode:'minutes' で使う）
+export async function makeMinutes(m: Meeting, o: { name?: string; now?: Date } = {}): Promise<{ minutes: string; usage?: { input: number; output: number } }> {
+  const r = await apiPost('/api/ai/meeting', { mode: 'minutes', transcript: timedTranscript(m), name: o.name || '', date: dateLabel(startOf(m, o.now)) }, { readTimeoutMs: MINUTES_TIMEOUT_MS });
+  const data = r.data as { minutes?: unknown; error?: string; usage?: { input: number; output: number } };
+  if (!r.ok) throw Error(data.error || (r.status === 401 || r.status === 403 ? (isNativeApp() ? 'AIの通行証が通りませんでした。アプリを最新版にしてください' : 'ログインし直してください') : 'AIにつながりませんでした'));
+  if (typeof data.minutes !== 'string' || !data.minutes.trim()) throw Error('議事録を作れませんでした。もう一度押してください');
+  return { minutes: data.minutes.trim(), usage: data.usage };
+}
+
+// ---- ここから下は一旦停止中（要望の読み取り・図面／見積への反映）。戻すときのために残す ----
 
 // AIの返事を確かめながら取り込む。同じidの要望は「反映済み」を引き継ぎ、新しい要望にはidを振る
 export function mergeRequests(prev: MeetRequest[], incoming: unknown[]): MeetRequest[] {

@@ -1,4 +1,6 @@
-// 打ち合わせAI：文字にした会話から、お客様の要望を読み取って返す。
+// 打ち合わせAI：文字にした会話から議事録を作る（mode:'minutes'。今の画面はこちらだけを使う）。
+// 要望の読み取り（ツールで分類して図面へ反映する提案を返す）は、打ち合わせのサンプルを見て仕様を決めるまで一旦止めている。
+// 画面からは呼ばれないが、戻せるように残す（mode を付けずに呼ぶと従来どおり要望を返す）。
 // キー（ANTHROPIC_API_KEY）はサーバーの秘密の設定にだけ置き、画面には渡さない。録音・会話は保存しない。
 import {error,json,readJSON} from './cloud';
 import {anthropicEvent,reportUsage,type UsageEnv} from './usage';
@@ -41,7 +43,24 @@ export const SYSTEM=`あなたは外構工事（駐車場・塀・フェンス�
 
 最後に必ず record_requests ツールを1回だけ呼んで記録してください。本文の文章は書かないでください。`;
 
-type Body={transcript?:unknown;previous?:unknown;items?:unknown};
+// 議事録：文字起こしの全文から、素直な議事録（プレーンテキスト）を作る。分類やツールは使わない
+export const MINUTES_SYSTEM=`あなたは外構工事（駐車場・塀・フェンス・門まわり・植栽など）の打ち合わせの議事録を書くアシスタントです。
+営業担当とお客様の会話の文字起こし（音声認識なので誤字があり、話した人の区別はありません。行頭は時刻）から、あとで読み返して分かる議事録を日本語で書いてください。
+
+形式（この見出しの順。プレーンテキストで、見出しは【】、項目は「・」で始める。表や太字などの記号は使わない）：
+【打ち合わせ議事録】
+日時：（与えられた日時をそのまま書く）
+【決まったこと】
+【宿題・次回までにやること】（誰がやるか分かるときは書く）
+【話題ごとの要点】（話した順に、話題の名前と要点を短く）
+【確認が必要なこと】（聞き取れなかった・決まっていない・食い違っている点）
+
+- 会話に出てこないことは書かない。推測で数字や品名を作らない。該当がない見出しは「・なし」と書く。
+- 金額・寸法・台数・日付は、会話に出たとおりに書く。
+- 音声認識の誤りで外構用語が別の語になっていることがあるので、文脈から読み替える（例：加工ポート→カーポート、インター六→インターロッキング、土間婚→土間コン、卵形石→乱形石、立水線→立水栓、目隠し変数→目隠しフェンス、暴走シート→防草シート、文中→門柱、教会→境界、人口芝→人工芝）。いちはちまる＝1,800mm、へーべー＝㎡。
+- あいさつや雑談は省く。むずかしい言い回しを避け、短い文で書く。`;
+
+type Body={transcript?:unknown;previous?:unknown;items?:unknown;mode?:unknown;name?:unknown;date?:unknown};
 const str=(v:unknown,max:number)=>typeof v==='string'?v.slice(0,max):'';
 
 export function buildPrompt(b:Body){
@@ -55,7 +74,17 @@ export function buildPrompt(b:Body){
  ].filter(Boolean).join('\n\n');
 }
 
-type Content={type:string;name?:string;input?:{requests?:unknown}};
+const MINUTES_MAX=120000;
+export function buildMinutesPrompt(b:Body){
+ const name=str(b.name,80).trim(),date=str(b.date,60).trim();
+ return [
+  `日時：${date||'不明'}`,
+  name?`図面の名前：${name}`:'',
+  `会話の文字起こし（全文）：\n${str(b.transcript,MINUTES_MAX).trim()}`,
+ ].filter(Boolean).join('\n\n');
+}
+
+type Content={type:string;name?:string;input?:{requests?:unknown};text?:string};
 type Usage={input_tokens?:number;output_tokens?:number;cache_read_input_tokens?:number;cache_creation_input_tokens?:number};
 type Reply={content?:Content[];usage?:Usage;stop_reason?:string};
 const addUsage=(a:Usage|undefined,b:Usage|undefined):Usage=>({input_tokens:(a?.input_tokens||0)+(b?.input_tokens||0),output_tokens:(a?.output_tokens||0)+(b?.output_tokens||0),cache_read_input_tokens:(a?.cache_read_input_tokens||0)+(b?.cache_read_input_tokens||0),cache_creation_input_tokens:(a?.cache_creation_input_tokens||0)+(b?.cache_creation_input_tokens||0)});
@@ -66,9 +95,10 @@ export async function meeting(req:Request,env:AiEnv,app=false,ctx?:Pick<Executio
  if(req.method!=='POST')return error('この操作には対応していません',405);
  if((!app&&req.headers.get('Origin')!==url.origin)||req.headers.get('X-Sketch-Client')!=='2')return error('この画面から操作をやり直してください',403);
  if(!env.ANTHROPIC_API_KEY)return error('AIのキーがまだ登録されていません',503);
- let b:Body;try{b=await readJSON(req,200000);}catch{return error('送られた内容を読めません');}
+ let b:Body;try{b=await readJSON(req,400000);}catch{return error('送られた内容を読めません');}
  if(!str(b.transcript,60000).trim())return error('会話がまだありません');
  const model=env.AI_MODEL||DEFAULT_MODEL,started=Date.now();
+ if(b.mode==='minutes')return minutes(b,env,model,started,ctx);
  const messages:{role:'user'|'assistant';content:unknown}[]=[{role:'user',content:buildPrompt(b)}];
  let usage:Usage|undefined;
  // ツールを呼ばずに文章だけ返してきたら、1回だけ言い直して呼ばせる
@@ -88,4 +118,16 @@ export async function meeting(req:Request,env:AiEnv,app=false,ctx?:Pick<Executio
   messages.push({role:'assistant',content:prior.length?prior:[{type:'text',text:'（記録なし）'}]},{role:'user',content:'record_requests ツールを呼んで記録してください。文章は不要です。'});
  }
  return error('AIから返事がありませんでした',502);
+}
+
+// 議事録を作る（ツールなし。返ってきた文章をそのまま返す）
+async function minutes(b:Body,env:AiEnv,model:string,started:number,ctx?:Pick<ExecutionContext,'waitUntil'>):Promise<Response>{
+ const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':env.ANTHROPIC_API_KEY!,'anthropic-version':'2023-06-01'},
+  body:JSON.stringify({model,max_tokens:16000,system:MINUTES_SYSTEM,output_config:{effort:'low'},messages:[{role:'user',content:buildMinutesPrompt(b)}]})});
+ if(!r.ok){reportUsage(env,ctx,anthropicEvent(model,'打ち合わせ議事録',false,undefined,Date.now()-started));const status=r.status===429||r.status===529?503:502;return error(r.status===401?'AIのキーが正しくありません':r.status===429||r.status===529?'AIが混み合っています。少し待ってからもう一度押してください':'AIから返事がありませんでした',status);}
+ const data=await r.json() as Reply;
+ reportUsage(env,ctx,anthropicEvent(model,'打ち合わせ議事録',true,data.usage,Date.now()-started));
+ const text=(data.content||[]).filter(c=>c.type==='text'&&typeof c.text==='string').map(c=>c.text).join('\n').trim();
+ if(!text)return error(data.stop_reason==='refusal'?'AIが議事録を作れませんでした':'AIから返事がありませんでした',502);
+ return json({minutes:text,usage:{input:data.usage?.input_tokens||0,output:data.usage?.output_tokens||0}});
 }

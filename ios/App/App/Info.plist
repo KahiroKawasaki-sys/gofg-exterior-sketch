@@ -71,7 +71,7 @@
 		<string>audio</string>
 	</array>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>打ち合わせの会話を文字にして、要望をまとめるために使います</string>
+	<string>打ち合わせの会話を文字にして、議事録をまとめるために使います</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>書き出した図面を写真に保存するために使います</string>
 	<key>UIUserInterfaceStyle</key>
