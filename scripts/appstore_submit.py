@@ -444,12 +444,41 @@ def submit(api, app, vid):
               {'data': {'type': 'reviewSubmissions', 'id': sub_id, 'attributes': {'submitted': True}}})
 
 
+def prepare(api, app, meta, notes, shots, build, want_submit):
+    app_level(api, app)
+    vid, released = version(api, app, meta)
+    loc = version_localization(api, vid, meta, released)
+    app_info(api, app, meta)
+    screenshots(api, loc, shots)
+    attach_build(api, app, vid, build)
+    review_detail(api, vid, notes)
+    pricing(api, app)
+    availability(api, app)
+    if want_submit:
+        submit(api, app, vid)
+    else:
+        print('SUBMIT=false なので審査へは出しません', flush=True)
+
+
+def release(api, app):
+    vs = api.get(f'/apps/{app["id"]}/appStoreVersions', {'filter[platform]': 'IOS', 'filter[versionString]': VERSION,
+                 'fields[appStoreVersions]': 'versionString,appStoreState,appVersionState'})['data']
+    require(vs, f'{VERSION} が見つかりません')
+    v = vs[0]
+    st = v['attributes'].get('appVersionState') or v['attributes'].get('appStoreState')
+    print(f'Version {VERSION}: {st}', flush=True)
+    require(st == 'PENDING_DEVELOPER_RELEASE', f'{VERSION} は {st} なのでリリースできません（承認済み・手動リリース待ちのときだけ）')
+    api.write(f'★ バージョン {VERSION} をリリースする', 'POST', '/appStoreVersionReleaseRequests',
+              {'data': {'type': 'appStoreVersionReleaseRequests', 'relationships': {'appStoreVersion': rel('appStoreVersions', v['id'])}}})
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--check-only', action='store_true', help='通信せず、字数と画像だけ確かめる')
     args = ap.parse_args()
     truthy = lambda k, d: os.environ.get(k, d).strip().lower() in ('1', 'true', 'yes')
     dry_run, want_submit = truthy('APPSTORE_DRY_RUN', 'true'), truthy('APPSTORE_SUBMIT', 'false')
+    want_release = truthy('APPSTORE_RELEASE', 'false')
     build = os.environ.get('APPSTORE_BUILD', '').strip()
     meta, notes = load_metadata()
     problems, warnings = [], []
@@ -475,21 +504,12 @@ def main():
         key.chmod(0o600)
         del key_text
         api = Api(key, os.environ['ASC_KEY_ID'].strip(), os.environ['ASC_ISSUER_ID'].strip(), dry_run)
-        print(f'=== {"DRY RUN（読むだけ）" if dry_run else "本番の書き込み"} / build={build or "なし"} / submit={want_submit} ===', flush=True)
+        print(f'=== {"DRY RUN（読むだけ）" if dry_run else "本番の書き込み"} / build={build or "なし"} / submit={want_submit} / release={want_release} ===', flush=True)
         app = find_app(api)
-        app_level(api, app)
-        vid, released = version(api, app, meta)
-        loc = version_localization(api, vid, meta, released)
-        app_info(api, app, meta)
-        screenshots(api, loc, shots)
-        attach_build(api, app, vid, build)
-        review_detail(api, vid, notes)
-        pricing(api, app)
-        availability(api, app)
-        if want_submit:
-            submit(api, app, vid)
+        if want_release:
+            release(api, app)
         else:
-            print('SUBMIT=false なので審査へは出しません', flush=True)
+            prepare(api, app, meta, notes, shots, build, want_submit)
     title = '書き込む予定（dry run・まだ何も変えていない）' if dry_run else '書き込んだ内容'
     lines = [mask(p, secret) for p in api.plan] or ['（変更なし）']
     print(f'\n=== {title} ===\n' + '\n'.join(lines), flush=True)

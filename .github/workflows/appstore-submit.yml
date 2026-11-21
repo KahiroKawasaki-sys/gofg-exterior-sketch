@@ -17,6 +17,11 @@ on:
         type: boolean
         required: true
         default: false
+      release:
+        description: true のとき、承認済み（手動リリース待ち）の版をストアへリリースするだけ（他は何もしない。dry_run=true なら予定表示のみ）
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -49,4 +54,5 @@ jobs:
           APPSTORE_DRY_RUN: ${{ inputs.dry_run }}
           APPSTORE_BUILD: ${{ inputs.build }}
           APPSTORE_SUBMIT: ${{ inputs.submit }}
+          APPSTORE_RELEASE: ${{ inputs.release }}
         run: python3 scripts/appstore_submit.py
